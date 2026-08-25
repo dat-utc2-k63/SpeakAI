@@ -26,3 +26,5 @@ ecapa-diarize/logs/
 ecapa-diarize/.pytest_cache/
 ecapa-diarize/pretrained_models/
 pretrained_models/lang-id-voxlingua107-ecapa/
+
+transformer_models/

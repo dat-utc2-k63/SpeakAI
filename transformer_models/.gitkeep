@@ -1,3 +1,0 @@
-# Place trained weights here (from Kaggle):
-#   pronunciation.pt  — SpeechOcean762 scoring model (was best_model.pt)
-#   l2_mdd.pt         — L2-ARCTIC MDD model (was l2_mdd_best.pt)
