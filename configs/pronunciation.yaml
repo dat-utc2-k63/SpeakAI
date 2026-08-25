@@ -1,0 +1,91 @@
+# Pronunciation Assessment — Colab Edition (GPU only, no HuggingFace auto-download)
+project:
+  seed: 42
+  device: cuda
+
+paths:
+  transformer_models_dir: transformer_models
+  pronunciation_checkpoint: transformer_models/pronunciation.pt
+  checkpoint_dir: checkpoints
+  log_dir: logs
+  cmudict_path: null
+
+audio_preprocess:
+  sample_rate: 16000
+  peak_normalize: true
+  target_peak: 0.95
+  highpass_hz: 80.0
+  denoise: true
+  denoise_prop: 0.75
+  speech_normalize: true
+  speech_thresh_db: -35.0
+  vad_frame_ms: 25.0
+  vad_hop_ms: 10.0
+
+inference:
+  device: cuda
+  max_audio_duration_sec: 3600
+  max_duration_sec: null
+  max_upload_mb: 300
+
+asr:
+  model_name: /content/drive/MyDrive/SpeakAI-Eval/pretrained_models/whisper-small.en
+  language: en
+  device: cuda
+  torch_dtype: float16
+  max_new_tokens: 440
+  lang_id:
+    enabled: true
+    drop_languages: [vi, vie, vietnamese]
+    min_confidence: 0.45
+    text_vi_regex: true
+
+wavlm:
+  model_name: /content/drive/MyDrive/SpeakAI-Eval/pretrained_models/wavlm-large
+  freeze: true
+  use_lora: false
+
+transformer:
+  num_layers: 3
+  num_heads: 8
+  ff_dim: 2048
+  dropout: 0.1
+  max_seq_len: 800
+
+ctc_align:
+  use_wavlm_ctc_head: true
+
+phoneme_graph:
+  hidden_dim: 256
+  num_gat_layers: 2
+  num_heads: 4
+  dropout: 0.1
+  edge_types:
+    sequential: true
+    same_word: true
+    same_syllable: false
+
+multitask:
+  hidden_dim: 256
+  dropout: 0.1
+  utterance_aspects: [accuracy, fluency, completeness, prosodic, total]
+  word_aspects: [accuracy, stress, total]
+  phoneme_aspects: [accuracy]
+  score_scale: 5.0
+
+scorer:
+  weights:
+    utterance_total: 0.4
+    word_total: 0.3
+    phoneme_accuracy: 0.3
+  phoneme_low_threshold: 1.2
+
+sentence_split:
+  min_silence_sec: 0.35
+  silence_thresh_db: -40
+  min_segment_sec: 0.2
+  max_segment_sec: null
+  padding_sec: 0.1
+  trim_edges: false
+  trim_min_sec: 0.05
+  diarization_merge_gap_sec: 0.2

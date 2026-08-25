@@ -1,0 +1,28 @@
+# Docs (binary — không push lên HF Space)
+docs/*.docx
+kaggle/*.pdf
+
+# Local data & artifacts
+data/speechocean762/
+data/l2-arctic/
+checkpoints/
+logs/
+sample_audio/
+transformer_models/*.pt
+web/uploads/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ecapa-diarize runtime outputs
+ecapa-diarize/audio_split/
+ecapa-diarize/logs/
+ecapa-diarize/.pytest_cache/
+ecapa-diarize/pretrained_models/
+pretrained_models/lang-id-voxlingua107-ecapa/

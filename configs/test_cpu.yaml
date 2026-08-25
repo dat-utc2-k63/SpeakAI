@@ -1,0 +1,90 @@
+asr:
+  device: cpu
+  lang_id:
+    drop_languages:
+    - vi
+    - vie
+    - vietnamese
+    enabled: true
+    min_confidence: 0.45
+    text_vi_regex: true
+  language: en
+  max_new_tokens: 440
+  model_name: openai/whisper-small.en
+  torch_dtype: float32
+audio_preprocess:
+  denoise: true
+  denoise_prop: 0.75
+  highpass_hz: 80.0
+  peak_normalize: true
+  sample_rate: 16000
+  speech_normalize: true
+  speech_thresh_db: -35.0
+  target_peak: 0.95
+  vad_frame_ms: 25.0
+  vad_hop_ms: 10.0
+ctc_align:
+  use_wavlm_ctc_head: true
+inference:
+  device: cpu
+  max_audio_duration_sec: 3600
+  max_duration_sec: null
+  max_upload_mb: 300
+multitask:
+  dropout: 0.1
+  hidden_dim: 256
+  phoneme_aspects:
+  - accuracy
+  score_scale: 5.0
+  utterance_aspects:
+  - accuracy
+  - fluency
+  - prosodic
+  - total
+  word_aspects:
+  - accuracy
+  - stress
+  - total
+paths:
+  checkpoint_dir: checkpoints
+  cmudict_path: null
+  log_dir: logs
+  pronunciation_checkpoint: transformer_models/pronunciation.pt
+  transformer_models_dir: transformer_models
+phoneme_graph:
+  dropout: 0.1
+  edge_types:
+    same_syllable: false
+    same_word: true
+    sequential: true
+  hidden_dim: 256
+  num_gat_layers: 2
+  num_heads: 4
+project:
+  device: cpu
+  seed: 42
+scorer:
+  phoneme_low_threshold: 1.2
+  weights:
+    phoneme_accuracy: 0.3
+    utterance_total: 0.4
+    word_total: 0.3
+sentence_split:
+  diarization_merge_gap_sec: 0.2
+  max_segment_sec: null
+  min_segment_sec: 0.2
+  min_silence_sec: 0.35
+  padding_sec: 0.1
+  silence_thresh_db: -40
+  trim_edges: false
+  trim_min_sec: 0.05
+transformer:
+  dropout: 0.1
+  ff_dim: 2048
+  max_seq_len: 800
+  num_heads: 8
+  num_layers: 3
+wavlm:
+  freeze: true
+  model_name: microsoft/wavlm-large
+  use_lora: false

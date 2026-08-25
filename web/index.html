@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="vi" data-bs-theme="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpeakAI – Đăng nhập / Đăng ký</title>
+  <meta name="description" content="Nền tảng đánh giá phát âm tiếng Anh thông minh dành cho giáo viên và học viên." />
+
+  <!-- Bootstrap 5 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body class="auth-page">
+
+  <!-- ── BACKGROUND BLOBS ─────────────────────────────── -->
+  <div class="bg-blob bg-blob-1"></div>
+  <div class="bg-blob bg-blob-2"></div>
+  <div class="bg-blob bg-blob-3"></div>
+
+  <div class="container-fluid min-vh-100 d-flex align-items-center justify-content-center py-5">
+    <div class="row w-100 justify-content-center">
+      <div class="col-12 col-md-9 col-lg-7 col-xl-5">
+
+        <!-- LOGO -->
+        <div class="text-center mb-4 animate-fadein">
+          <div class="brand-logo d-inline-flex align-items-center gap-2 mb-3">
+            <div class="brand-icon">
+              <i class="bi bi-soundwave fs-3"></i>
+            </div>
+            <span class="brand-name">SpeakAI</span>
+          </div>
+          <p class="text-muted small">Nền tảng đánh giá phát âm tiếng Anh thông minh</p>
+        </div>
+
+        <!-- CARD -->
+        <div class="glass-card p-4 p-md-5 animate-slidein">
+
+          <!-- TABS -->
+          <ul class="nav nav-pills nav-fill auth-tabs mb-4" id="authTabs">
+            <li class="nav-item">
+              <button class="nav-link active" id="tab-login" data-bs-toggle="pill" data-bs-target="#panel-login">
+                <i class="bi bi-box-arrow-in-right me-1"></i>Đăng nhập
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link" id="tab-register" data-bs-toggle="pill" data-bs-target="#panel-register">
+                <i class="bi bi-person-plus me-1"></i>Đăng ký
+              </button>
+            </li>
+          </ul>
+
+          <div class="tab-content">
+
+            <!-- ── LOGIN PANEL ─────────────────────────────── -->
+            <div class="tab-pane fade show active" id="panel-login">
+              <form id="loginForm" novalidate>
+                <div class="mb-3">
+                  <label class="form-label text-muted small">Email</label>
+                  <div class="input-group input-group-glass">
+                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                    <input type="email" class="form-control" id="loginEmail" placeholder="you@example.com" required />
+                  </div>
+                </div>
+                <div class="mb-4">
+                  <label class="form-label text-muted small">Mật khẩu</label>
+                  <div class="input-group input-group-glass">
+                    <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                    <input type="password" class="form-control" id="loginPassword" placeholder="••••••••" required />
+                    <button class="btn btn-outline-secondary" type="button" id="toggleLoginPw">
+                      <i class="bi bi-eye"></i>
+                    </button>
+                  </div>
+                </div>
+                <div id="loginError" class="alert alert-danger d-none mb-3 py-2 small"></div>
+                <button type="submit" class="btn btn-primary w-100 btn-glow" id="loginBtn">
+                  <span class="btn-text"><i class="bi bi-box-arrow-in-right me-2"></i>Đăng nhập</span>
+                  <span class="btn-loader d-none"><span class="spinner-border spinner-border-sm me-2"></span>Đang đăng
+                    nhập...</span>
+                </button>
+              </form>
+            </div>
+
+            <!-- ── REGISTER PANEL ──────────────────────────── -->
+            <div class="tab-pane fade" id="panel-register">
+              <form id="registerForm" novalidate>
+
+                <!-- ROLE SELECTOR -->
+                <div class="mb-4">
+                  <label class="form-label text-muted small">Bạn là</label>
+                  <div class="role-selector d-flex gap-3">
+                    <label class="role-option flex-fill" id="roleTeacher">
+                      <input type="radio" name="role" value="teacher" class="visually-hidden" />
+                      <div class="role-card">
+                        <i class="bi bi-person-video3 fs-3 mb-2"></i>
+                        <div class="fw-semibold">Giáo viên</div>
+                        <div class="small text-muted">Quản lý & chấm điểm</div>
+                      </div>
+                    </label>
+                    <label class="role-option flex-fill" id="roleStudent">
+                      <input type="radio" name="role" value="student" class="visually-hidden" />
+                      <div class="role-card">
+                        <i class="bi bi-mortarboard fs-3 mb-2"></i>
+                        <div class="fw-semibold">Học viên</div>
+                        <div class="small text-muted">Học & xem đánh giá</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- TEACHER SELECT (chỉ hiện khi chọn student) -->
+                <div class="mb-3 d-none" id="teacherSelectGroup">
+                  <label class="form-label text-muted small">Chọn Giáo viên</label>
+                  <div class="input-group input-group-glass">
+                    <span class="input-group-text"><i class="bi bi-person-check"></i></span>
+                    <select class="form-select" id="teacherSelect">
+                      <option value="">-- Đang tải danh sách... --</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- PERSONAL INFO -->
+                <div class="row g-3 mb-3">
+                  <div class="col-12">
+                    <label class="form-label text-muted small">Họ và tên</label>
+                    <div class="input-group input-group-glass">
+                      <span class="input-group-text"><i class="bi bi-person"></i></span>
+                      <input type="text" class="form-control" id="regFullName" placeholder="Nguyễn Văn A" required />
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label text-muted small">Email</label>
+                    <div class="input-group input-group-glass">
+                      <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                      <input type="email" class="form-control" id="regEmail" placeholder="you@example.com" required />
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label text-muted small">Số điện thoại (tuỳ chọn)</label>
+                    <div class="input-group input-group-glass">
+                      <span class="input-group-text"><i class="bi bi-phone"></i></span>
+                      <input type="tel" class="form-control" id="regPhone" placeholder="09xx..." />
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label text-muted small">Mật khẩu</label>
+                    <div class="input-group input-group-glass">
+                      <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                      <input type="password" class="form-control" id="regPassword" placeholder="Tối thiểu 6 ký tự"
+                        required />
+                      <button class="btn btn-outline-secondary" type="button" id="toggleRegPw">
+                        <i class="bi bi-eye"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="registerError" class="alert alert-danger d-none mb-3 py-2 small"></div>
+                <button type="submit" class="btn btn-primary w-100 btn-glow" id="registerBtn">
+                  <span class="btn-text"><i class="bi bi-person-plus me-2"></i>Tạo tài khoản</span>
+                  <span class="btn-loader d-none"><span class="spinner-border spinner-border-sm me-2"></span>Đang
+                    tạo...</span>
+                </button>
+              </form>
+            </div>
+          </div><!-- /tab-content -->
+        </div><!-- /card -->
+
+      </div>
+    </div>
+  </div><!-- /container -->
+
+  <!-- ── VOICE ENROLLMENT MODAL ──────────────────────── -->
+  <div class="modal fade" id="voiceModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content glass-modal">
+        <div class="modal-header border-0">
+          <div>
+            <h5 class="modal-title fw-bold">
+              <i class="bi bi-mic-fill text-primary me-2"></i>Đăng ký Mẫu Giọng Nói
+            </h5>
+            <p class="text-muted small mb-0">Giúp hệ thống nhận diện giọng nói của bạn chính xác hơn</p>
+          </div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" title="Đóng"></button>
+        </div>
+
+        <div class="modal-body">
+          <!-- TABS: upload vs record -->
+          <ul class="nav nav-pills mb-4" id="voiceTabs">
+            <li class="nav-item">
+              <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#voiceUploadPanel">
+                <i class="bi bi-upload me-1"></i>Upload file
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link" data-bs-toggle="pill" data-bs-target="#voiceRecordPanel">
+                <i class="bi bi-record-circle me-1"></i>Tự ghi âm
+              </button>
+            </li>
+          </ul>
+
+          <div class="tab-content">
+
+            <!-- UPLOAD TAB -->
+            <div class="tab-pane fade show active" id="voiceUploadPanel">
+              <div class="upload-dropzone" id="voiceDropzone">
+                <i class="bi bi-cloud-upload fs-1 text-primary mb-3"></i>
+                <p class="mb-1 fw-semibold">Kéo thả file audio vào đây</p>
+                <p class="text-muted small mb-3">hoặc nhấn để chọn file</p>
+                <p class="text-muted smaller">Hỗ trợ: .wav, .mp3, .m4a, .ogg (tối đa 10MB)</p>
+                <input type="file" id="voiceFileInput" class="visually-hidden" accept=".wav,.mp3,.m4a,.ogg,audio/*" multiple />
+              </div>
+              <div id="uploadedAudioPreview" class="mt-3 d-none">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <span class="fw-semibold text-primary" id="uploadedFileName"></span>
+                  <button class="btn btn-sm btn-outline-danger" id="removeUploadBtn"><i class="bi bi-x me-1"></i>Xóa hết</button>
+                </div>
+                <div id="uploadedFilesList" class="d-flex flex-column gap-2" style="max-height: 250px; overflow-y: auto;">
+                  <!-- List of files will be injected here -->
+                </div>
+              </div>
+            </div>
+
+            <!-- RECORD TAB -->
+            <div class="tab-pane fade" id="voiceRecordPanel">
+              <p class="text-muted small mb-3">Đọc to và rõ ràng từng câu bên dưới. Nhấn 🎙 để bắt đầu, ⏹ để dừng.</p>
+              <div id="sentencesList" class="d-flex flex-column gap-3">
+                <!-- generated by JS -->
+              </div>
+            </div>
+
+          </div><!-- /tab-content -->
+        </div><!-- /modal-body -->
+
+        <div class="modal-footer border-0 d-flex gap-2">
+          <button class="btn btn-outline-secondary flex-fill" data-bs-dismiss="modal">
+            <i class="bi bi-x-lg me-1"></i>Huỷ
+          </button>
+          <button class="btn btn-primary flex-fill btn-glow" id="saveVoiceBtn" disabled>
+            <span class="btn-text"><i class="bi bi-check-circle me-2"></i>Hoàn tất đăng ký</span>
+            <span class="btn-loader d-none"><span class="spinner-border spinner-border-sm me-2"></span>Đang
+              lưu...</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+
+  <!-- JS Logic -->
+  <script type="module">
+    import { signIn, signUp, fetchTeachers } from './js/auth.js';
+    import { supabase } from './js/supabase.js';
+    import { ENROLLMENT_SENTENCES, uploadVoiceSample, markVoiceEnrolled } from './js/voice.js';
+    import { initEcapaModel, getEmbedding, cosineSimilarity } from './js/ecapa.js';
+
+    // ── SESSION CHECK ─────────────────────────────────────────
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) window.location.href = 'dashboard.html';
+    })();
+
+    // ── PASSWORD TOGGLE ───────────────────────────────────────
+    function togglePw(inputId, btnId) {
+      const btn = document.getElementById(btnId);
+      btn.addEventListener('click', () => {
+        const input = document.getElementById(inputId);
+        const isText = input.type === 'text';
+        input.type = isText ? 'password' : 'text';
+        btn.querySelector('i').className = isText ? 'bi bi-eye' : 'bi bi-eye-slash';
+      });
+    }
+    togglePw('loginPassword', 'toggleLoginPw');
+    togglePw('regPassword', 'toggleRegPw');
+
+    // ── ROLE SELECTOR ─────────────────────────────────────────
+    let selectedRole = null;
+    document.querySelectorAll('.role-option').forEach(label => {
+      label.addEventListener('click', async () => {
+        document.querySelectorAll('.role-card').forEach(c => c.classList.remove('active'));
+        label.querySelector('.role-card').classList.add('active');
+        selectedRole = label.querySelector('input').value;
+        const teacherGroup = document.getElementById('teacherSelectGroup');
+        if (selectedRole === 'student') {
+          teacherGroup.classList.remove('d-none');
+          await loadTeachers();
+        } else {
+          teacherGroup.classList.add('d-none');
+        }
+      });
+    });
+
+    async function loadTeachers() {
+      try {
+        const teachers = await fetchTeachers();
+        const sel = document.getElementById('teacherSelect');
+        sel.innerHTML = '<option value="">-- Chọn giáo viên --</option>' +
+          teachers.map(t => `<option value="${t.id}">${t.full_name}</option>`).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // ── LOGIN ─────────────────────────────────────────────────
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      const errEl = document.getElementById('loginError');
+      setLoading(btn, true);
+      errEl.classList.add('d-none');
+      try {
+        await signIn({
+          email: document.getElementById('loginEmail').value.trim(),
+          password: document.getElementById('loginPassword').value,
+        });
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        errEl.textContent = translateAuthError(err.message);
+        errEl.classList.remove('d-none');
+        setLoading(btn, false);
+      }
+    });
+
+    // REGISTER ──────────────────────────────────────────────
+    let pendingRegistrationData = null;
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const btn = e.submitter;
+      const originalHtml = btn.innerHTML;
+      
+      if (!selectedRole) {
+        alert('Vui lòng chọn vai trò (Giáo viên / Học viên).');
+        return;
+      }
+      
+      let email = document.getElementById('regEmail').value.trim().toLowerCase();
+      const password = document.getElementById('regPassword').value;
+      const fullName = document.getElementById('regFullName').value.trim();
+      const phone = document.getElementById('regPhone').value.trim();
+      
+      if (password.length < 6) {
+          alert('Mật khẩu phải có ít nhất 6 ký tự!');
+          return;
+      }
+      
+      // Kiểm tra xem email đã tồn tại trong database chưa (pre-validation)
+      try {
+          btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Đang kiểm tra...';
+          btn.disabled = true;
+          const { data, error } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
+          if (data) {
+              alert('Email này đã được đăng ký! Vui lòng dùng email khác hoặc đăng nhập.');
+              btn.innerHTML = originalHtml;
+              btn.disabled = false;
+              return;
+          }
+      } catch (err) {
+          console.error("Pre-validation error", err);
+          alert('Không thể kiểm tra dữ liệu tài khoản lúc này, vui lòng thử lại.');
+          return;
+      } finally {
+          btn.innerHTML = originalHtml;
+          btn.disabled = false;
+      }
+
+      const teacherId = selectedRole === 'student' ? document.getElementById('teacherSelect').value || null : null;
+      pendingRegistrationData = {
+        email,
+        password,
+        fullName,
+        phone,
+        role: selectedRole,
+        teacherId,
+      };
+
+      // Show voice enrollment modal instead of signing up immediately
+      buildSentencesList();
+      new bootstrap.Modal(document.getElementById('voiceModal')).show();
+      
+      // Khởi tạo model ONNX ngầm
+      initEcapaModel().catch(e => console.log('Init ECAPA error:', e));
+    });
+
+    // ── VOICE ENROLLMENT ──────────────────────────────────────
+    // Upload file
+    const dropzone = document.getElementById('voiceDropzone');
+    const fileInput = document.getElementById('voiceFileInput');
+    let uploadedFiles = [];
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      handleFileSelect(e.dataTransfer.files);
+    });
+    fileInput.addEventListener('change', () => handleFileSelect(fileInput.files));
+    document.getElementById('removeUploadBtn').addEventListener('click', () => {
+      uploadedFiles = [];
+      document.getElementById('uploadedAudioPreview').classList.add('d-none');
+      document.getElementById('saveVoiceBtn').disabled = true;
+      fileInput.value = '';
+    });
+
+    async function handleFileSelect(files) {
+      if (!files || files.length === 0) return;
+      const validFiles = Array.from(files).filter(f => {
+          const isAudio = f.type.startsWith('audio/') || f.type === 'video/mp4' || f.name.match(/\.(wav|mp3|m4a|ogg|webm|aac)$/i);
+          return isAudio && f.size <= 10 * 1024 * 1024;
+      });
+      if (validFiles.length === 0) { alert('Vui lòng chọn file audio hợp lệ (<10MB)!'); return; }
+      
+      uploadedFiles = validFiles;
+      const titleEl = document.getElementById('uploadedFileName');
+      titleEl.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Đang kiểm tra ${validFiles.length} file...`;
+      
+      const listContainer = document.getElementById('uploadedFilesList');
+      listContainer.innerHTML = '';
+      
+      validFiles.forEach((file, index) => {
+          const url = URL.createObjectURL(file);
+          const fileHtml = `
+            <div class="d-flex align-items-center gap-3 p-2 rounded-2 border">
+              <i class="bi bi-file-music text-primary fs-5"></i>
+              <div class="flex-grow-1 overflow-hidden">
+                <div class="fw-semibold text-truncate small">${index + 1}. ${file.name}</div>
+                <audio controls class="w-100 mt-1" style="height: 30px;" src="${url}"></audio>
+              </div>
+            </div>
+          `;
+          listContainer.innerHTML += fileHtml;
+      });
+      
+      document.getElementById('uploadedAudioPreview').classList.remove('d-none');
+      document.getElementById('saveVoiceBtn').disabled = true;
+
+      // ── AI CHECK NGAY LẬP TỨC ──
+      try {
+          if (validFiles.length === 1) {
+              // Chỉ up 1 file thì mặc định làm mẫu gốc
+              await getEmbedding(validFiles[0]); // Chạy test thử xem file có lỗi ko
+              titleEl.innerHTML = `Đã chọn 1 file (Mẫu gốc) <i class="bi bi-check-circle-fill text-success"></i>`;
+              document.getElementById('saveVoiceBtn').disabled = false;
+          } else {
+              const embeddings = [];
+              for (const file of validFiles) {
+                  embeddings.push(await getEmbedding(file));
+              }
+              let totalSim = 0;
+              let count = 0;
+              for (let i = 0; i < embeddings.length; i++) {
+                  for (let j = i + 1; j < embeddings.length; j++) {
+                      totalSim += cosineSimilarity(embeddings[i], embeddings[j]);
+                      count++;
+                  }
+              }
+              const avgSim = totalSim / count;
+              const percent = Math.round(avgSim * 100);
+              
+              if (avgSim < 0.65) {
+                  titleEl.innerHTML = `<span class="text-danger">Đã chọn ${validFiles.length} file (Không khớp: ${percent}%) ❌</span>`;
+                  alert(`⚠️ Các file âm thanh không đồng nhất (Độ khớp: ${percent}%). Có thể do tiếng ồn hoặc nhiều người cùng nói. Vui lòng chọn lại!`);
+              } else {
+                  titleEl.innerHTML = `Đã chọn ${validFiles.length} file (Độ khớp: ${percent}%) <i class="bi bi-check-circle-fill text-success"></i>`;
+                  document.getElementById('saveVoiceBtn').disabled = false;
+              }
+          }
+      } catch (err) {
+          titleEl.innerHTML = `<span class="text-danger">Lỗi: File âm thanh không hợp lệ hoặc quá nhỏ! ❌</span>`;
+          alert("Lỗi kiểm tra giọng: " + err.message);
+      }
+    }
+
+    // Record
+    const recorderStates = {};
+    function buildSentencesList() {
+      const container = document.getElementById('sentencesList');
+      container.innerHTML = ENROLLMENT_SENTENCES.map((s, i) => `
+    <div class="sentence-item p-3 rounded-3" id="sentence-${i}">
+      <div class="d-flex align-items-start gap-3">
+        <div class="sentence-idx">${i + 1}</div>
+        <div class="flex-grow-1">
+          <div class="sentence-text mb-2">"${s}"</div>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-primary record-btn" data-idx="${i}">
+              <i class="bi bi-mic-fill me-1"></i>Ghi âm
+            </button>
+            <audio class="sentence-audio d-none" data-idx="${i}" controls></audio>
+            <span class="badge bg-secondary status-badge" id="status-${i}">Chưa ghi</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+      document.querySelectorAll('.record-btn').forEach(btn => {
+        btn.addEventListener('click', () => toggleRecord(parseInt(btn.dataset.idx)));
+      });
+    }
+
+    async function toggleRecord(idx) {
+      const state = recorderStates[idx];
+      const btn = document.querySelector(`.record-btn[data-idx="${idx}"]`);
+      const statusEl = document.getElementById(`status-${idx}`);
+      const audioEl = document.querySelector(`.sentence-audio[data-idx="${idx}"]`);
+      const item = document.getElementById(`sentence-${idx}`);
+
+      if (!state || state.status !== 'recording') {
+        // Start recording with WebRTC Noise Suppression & Echo Cancellation
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+              audio: {
+                  noiseSuppression: true,
+                  echoCancellation: true,
+                  autoGainControl: true
+              } 
+          });
+          const recorder = new MediaRecorder(stream);
+          const chunks = [];
+          recorder.ondataavailable = e => chunks.push(e.data);
+          recorder.onstop = async () => {
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            
+            // Progressive Check
+            btn.innerHTML = '<i class="spinner-border spinner-border-sm me-1"></i>Kiểm tra...';
+            btn.disabled = true;
+            try {
+                const emb = await getEmbedding(blob);
+                
+                const prevEmbeddings = [];
+                for (let i = 0; i < ENROLLMENT_SENTENCES.length; i++) {
+                    if (i !== idx && recorderStates[i]?.embedding) {
+                        prevEmbeddings.push(recorderStates[i].embedding);
+                    }
+                }
+                
+                let avgSim = null;
+                if (prevEmbeddings.length > 0) {
+                    let totalSim = 0;
+                    for (const prevEmb of prevEmbeddings) {
+                        totalSim += cosineSimilarity(emb, prevEmb);
+                    }
+                    avgSim = totalSim / prevEmbeddings.length;
+                    if (avgSim < 0.65) {
+                        alert(`⚠️ Giọng đọc này không giống với các câu trước đó (Độ tương đồng: ${Math.round(avgSim * 100)}%). Vui lòng đọc lại!`);
+                        delete recorderStates[idx].blob;
+                        delete recorderStates[idx].embedding;
+                        statusEl.className = 'badge bg-danger status-badge';
+                        statusEl.textContent = `Thất bại (${Math.round(avgSim * 100)}%) ❌`;
+                        item.classList.remove('recorded');
+                        btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Ghi lại';
+                        btn.className = 'btn btn-sm btn-outline-danger record-btn';
+                        btn.disabled = false;
+                        checkAllRecorded();
+                        return;
+                    }
+                }
+                
+                recorderStates[idx].blob = blob;
+                recorderStates[idx].embedding = emb;
+                audioEl.src = URL.createObjectURL(blob);
+                audioEl.classList.remove('d-none');
+                statusEl.className = 'badge bg-success status-badge';
+                if (avgSim !== null) {
+                    statusEl.textContent = `Đã ghi ✓ (Khớp ${Math.round(avgSim * 100)}%)`;
+                } else {
+                    statusEl.textContent = 'Đã ghi ✓ (Mẫu gốc)';
+                }
+                item.classList.add('recorded');
+                btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Ghi lại';
+                btn.className = 'btn btn-sm btn-outline-warning record-btn';
+            } catch (err) {
+                alert("Lỗi kiểm tra giọng: " + err.message);
+                delete recorderStates[idx].blob;
+                delete recorderStates[idx].embedding;
+                statusEl.className = 'badge bg-danger status-badge';
+                statusEl.textContent = 'Lỗi ❌';
+                btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Ghi lại';
+                btn.className = 'btn btn-sm btn-outline-danger record-btn';
+            } finally {
+                btn.disabled = false;
+                stream.getTracks().forEach(t => t.stop());
+                checkAllRecorded();
+            }
+          };
+          recorder.start();
+          recorderStates[idx] = { status: 'recording', recorder, stream };
+          btn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>Dừng';
+          btn.className = 'btn btn-sm btn-danger record-btn';
+          statusEl.className = 'badge bg-danger status-badge';
+          statusEl.textContent = '● Đang ghi...';
+        } catch (e) {
+          alert('Không thể truy cập microphone: ' + e.message);
+        }
+      } else {
+        // Stop recording
+        state.recorder.stop();
+        state.status = 'done';
+      }
+    }
+
+    function checkAllRecorded() {
+      const allDone = ENROLLMENT_SENTENCES.every((_, i) => recorderStates[i]?.blob);
+      if (allDone) document.getElementById('saveVoiceBtn').disabled = false;
+    }
+
+    // Save voice and Finish Registration
+    document.getElementById('saveVoiceBtn').addEventListener('click', async () => {
+      if (!pendingRegistrationData) return;
+      const btn = document.getElementById('saveVoiceBtn');
+      setLoading(btn, true);
+      try {
+        const isUpload = document.getElementById('voiceUploadPanel').classList.contains('show');
+        let voiceUrl;
+        let finalEmbeddings = [];
+        const tempId = 'new_user_' + Date.now();
+        
+        if (isUpload && uploadedFiles.length > 0) {
+          btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-cpu me-2"></i>Đang trích xuất...';
+          const embeddings = [];
+          for (const file of uploadedFiles) {
+              embeddings.push(await getEmbedding(file));
+          }
+          finalEmbeddings = embeddings;
+          btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-check-circle me-2"></i>Đang lưu...';
+          // Upload the first file to represent the sample
+          voiceUrl = await uploadVoiceSample(tempId, uploadedFiles[0], uploadedFiles[0].name);
+        } else {
+          // Direct Recording
+          const allBlobs = ENROLLMENT_SENTENCES.map((_, i) => recorderStates[i]?.blob).filter(Boolean);
+          finalEmbeddings = ENROLLMENT_SENTENCES.map((_, i) => recorderStates[i]?.embedding).filter(Boolean);
+          
+          btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-check-circle me-2"></i>Đang lưu...';
+          const merged = new Blob(allBlobs, { type: 'audio/webm' });
+          voiceUrl = await uploadVoiceSample(tempId, merged, 'enrollment.webm');
+        }
+        
+        // Calculate mean embedding
+        let meanEmb = new Float32Array(192);
+        if (finalEmbeddings.length > 0) {
+            for (let i = 0; i < 192; i++) {
+                let sum = 0;
+                for (const emb of finalEmbeddings) {
+                    sum += emb[i];
+                }
+                meanEmb[i] = sum / finalEmbeddings.length;
+            }
+            // L2 Normalize
+            let norm = 0;
+            for (let i = 0; i < 192; i++) {
+                norm += meanEmb[i] * meanEmb[i];
+            }
+            norm = Math.sqrt(norm);
+            if (norm > 0) {
+                for (let i = 0; i < 192; i++) {
+                    meanEmb[i] /= norm;
+                }
+            }
+        }
+        
+        pendingRegistrationData.voiceEmbeddings = Array.from(meanEmb);
+        
+        // Now do the actual Sign Up
+        pendingRegistrationData.voiceUrl = voiceUrl;
+        await signUp(pendingRegistrationData);
+
+        bootstrap.Modal.getInstance(document.getElementById('voiceModal')).hide();
+        window.location.href = 'dashboard.html';
+      } catch (e) {
+        alert('Lỗi đăng ký: ' + e.message);
+        setLoading(btn, false);
+      }
+    });
+
+    // ── HELPERS ───────────────────────────────────────────────
+    function setLoading(btn, loading) {
+      btn.querySelector('.btn-text').classList.toggle('d-none', loading);
+      btn.querySelector('.btn-loader').classList.toggle('d-none', !loading);
+      btn.disabled = loading;
+    }
+  </script>
+</body>
+
+</html>
