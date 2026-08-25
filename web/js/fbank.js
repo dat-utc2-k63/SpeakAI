@@ -1,9 +1,8 @@
 // Minimal JS implementation of STFT and Mel Filterbank for 16kHz audio
 // Matches the general shape of SpeechBrain's Fbank: 80 bins, 25ms window, 10ms hop.
 
-export function extractFbank(audioBuffer) {
-    const sampleRate = audioBuffer.sampleRate;
-    const rawData = audioBuffer.getChannelData(0);
+export function extractFbank(channelData, sampleRate = 16000) {
+    const rawData = channelData;
     
     // 0. Audio Normalization (Chuẩn hóa âm lượng)
     let maxAbs = 0;

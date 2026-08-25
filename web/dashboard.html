@@ -21,7 +21,7 @@
       <span class="visually-hidden">Loading...</span>
     </div>
     <h3 class="text-white fw-bold">Đang tải mô hình AI...</h3>
-    <p class="text-muted">Vui lòng đợi trong giây lát (Dung lượng: ~83MB)</p>
+    <p class="text-muted">Vui lòng đợi trong giây lát (Dung lượng: ~85MB)</p>
   </div>
 
   <!-- ── SIDEBAR ───────────────────────────────────────────── -->
@@ -1339,42 +1339,7 @@
                   autoGainControl: true
                 }
               });
-
-              // Apply Hardware-accelerated Web Audio filters (Aggressive Noise Reduction)
-              const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-              const source = audioCtx.createMediaStreamSource(stream);
-              
-              // 1. Cascaded Highpass: Mạnh tay cắt sạch tiếng quạt, gió rít, âm trầm (<250Hz)
-              const hp1 = audioCtx.createBiquadFilter(); hp1.type = 'highpass'; hp1.frequency.value = 250;
-              const hp2 = audioCtx.createBiquadFilter(); hp2.type = 'highpass'; hp2.frequency.value = 250;
-
-              // 2. Peaking filter: Đè bẹp tần số 400Hz (nơi tiếng ù của quạt máy thường tập trung)
-              const peak = audioCtx.createBiquadFilter(); peak.type = 'peaking'; peak.frequency.value = 400; peak.Q.value = 1; peak.gain.value = -15;
-
-              // 3. Cascaded Lowpass: Cắt tiếng xì xào, tiếng sôi micro (<5000Hz)
-              const lp1 = audioCtx.createBiquadFilter(); lp1.type = 'lowpass'; lp1.frequency.value = 5000;
-              const lp2 = audioCtx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 5000;
-              
-              // 4. Dynamics Compressor: Ép âm lượng đồng đều, làm nổi bật giọng nói thật
-              const compressor = audioCtx.createDynamicsCompressor();
-              compressor.threshold.value = -30;
-              compressor.knee.value = 10;
-              compressor.ratio.value = 12;
-              compressor.attack.value = 0;
-              compressor.release.value = 0.25;
-
-              const destination = audioCtx.createMediaStreamDestination();
-              
-              source.connect(hp1);
-              hp1.connect(hp2);
-              hp2.connect(peak);
-              peak.connect(lp1);
-              lp1.connect(lp2);
-              lp2.connect(compressor);
-              compressor.connect(destination);
-
-              stream.audioCtx = audioCtx; // Save reference to close later
-              const recorder = new MediaRecorder(destination.stream);
+              const recorder = new MediaRecorder(stream);
               const chunks = [];
               recorder.ondataavailable = e => chunks.push(e.data);
               recorder.onstop = async () => {
@@ -1439,7 +1404,6 @@
                 } finally {
                   btn.disabled = false;
                   stream.getTracks().forEach(t => t.stop());
-                  if (stream.audioCtx) stream.audioCtx.close();
                   checkAllRecorded();
                 }
               };
