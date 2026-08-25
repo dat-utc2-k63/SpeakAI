@@ -5,32 +5,31 @@ let sileroVadSession = null;
 let initPromise = null;
 
 async function downloadModelWithProgress(url, onProgress) {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`);
-    
-    const contentLength = response.headers.get('content-length');
-    const total = contentLength ? parseInt(contentLength, 10) : 0;
-    
-    let loaded = 0;
-    const reader = response.body.getReader();
-    const chunks = [];
-    
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        loaded += value.length;
-        if (onProgress) onProgress(loaded, total);
-    }
-    
-    const combined = new Uint8Array(loaded);
-    let position = 0;
-    for (const chunk of chunks) {
-        combined.set(chunk, position);
-        position += chunk.length;
-    }
-    
-    return combined.buffer;
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.responseType = 'arraybuffer';
+        
+        xhr.onprogress = (event) => {
+            if (event.lengthComputable) {
+                if (onProgress) onProgress(event.loaded, event.total);
+            } else {
+                // Nếu server không trả về Content-Length (fallback)
+                if (onProgress) onProgress(event.loaded, 0);
+            }
+        };
+        
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(xhr.response);
+            } else {
+                reject(new Error(`Failed to load ${url}: ${xhr.statusText}`));
+            }
+        };
+        
+        xhr.onerror = () => reject(new Error(`Network error while downloading ${url}`));
+        xhr.send();
+    });
 }
 
 /**
@@ -75,18 +74,18 @@ export async function initEcapaModel() {
             
             if (window.updateAiProgress) window.updateAiProgress(100, 85.2, 85.2);
             
-            console.log("Initializing InferenceSessions from memory...");
+            console.log("Initializing InferenceSessions from memory sequentially...");
             
-            const [ecapaRes, vadRes] = await Promise.all([
-                ort.InferenceSession.create(ecapaBuffer, {
-                    executionProviders: ['wasm'],
-                    graphOptimizationLevel: 'all'
-                }),
-                ort.InferenceSession.create(vadBuffer, {
-                    executionProviders: ['wasm'],
-                    graphOptimizationLevel: 'all'
-                })
-            ]);
+            // Khởi tạo từng model tuần tự để tránh quá tải bộ nhớ WebAssembly
+            const ecapaRes = await ort.InferenceSession.create(ecapaBuffer, {
+                executionProviders: ['wasm'],
+                graphOptimizationLevel: 'all'
+            });
+            
+            const vadRes = await ort.InferenceSession.create(vadBuffer, {
+                executionProviders: ['wasm'],
+                graphOptimizationLevel: 'all'
+            });
             
             ecapaSession = ecapaRes;
             sileroVadSession = vadRes;
