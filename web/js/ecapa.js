@@ -1,31 +1,34 @@
 import { extractFbank } from './fbank.js';
 
 let ecapaSession = null;
-let isInitializing = false;
+let initPromise = null;
 
 /**
  * Khởi tạo mô hình ONNX
  */
 export async function initEcapaModel() {
     if (ecapaSession) return true;
-    if (isInitializing) return false;
-    isInitializing = true;
+    if (initPromise) return initPromise;
     
-    try {
-        console.log("Loading ECAPA ONNX model...");
-        // This expects ecapa.onnx to be in /models/ecapa.onnx
-        ecapaSession = await ort.InferenceSession.create('./models/ecapa.onnx', {
-            executionProviders: ['wasm'],
-            graphOptimizationLevel: 'all'
-        });
-        console.log("ECAPA ONNX model loaded successfully!");
-        return true;
-    } catch (e) {
-        console.error("Failed to load ECAPA ONNX model:", e);
-        throw e;
-    } finally {
-        isInitializing = false;
-    }
+    initPromise = (async () => {
+        try {
+            console.log("Loading ECAPA ONNX model...");
+            // This expects ecapa.onnx to be in /models/ecapa.onnx
+            ecapaSession = await ort.InferenceSession.create('./models/ecapa.onnx', {
+                executionProviders: ['wasm'],
+                graphOptimizationLevel: 'all'
+            });
+            console.log("ECAPA ONNX model loaded successfully!");
+            return true;
+        } catch (e) {
+            console.error("Failed to load ECAPA ONNX model:", e);
+            throw e;
+        } finally {
+            initPromise = null;
+        }
+    })();
+    
+    return initPromise;
 }
 
 /**
