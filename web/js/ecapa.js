@@ -1,145 +1,141 @@
 import { extractFbank } from './fbank.js';
 
+// Đổi version này khi bạn deploy model mới -> tự động bỏ cache cũ
+const MODEL_VERSION = 'v1.0';
+const MODEL_CACHE_NAME = `ai-models-cache-${MODEL_VERSION}`;
+
+const MODEL_URLS = {
+    ecapa: `./models/ecapa.onnx`,
+    vad: `./models/silero_vad.onnx`,
+};
+
+// Kích thước ước lượng, chỉ dùng để hiện % tiến trình khi chưa biết content-length
+const MODEL_SIZE_ESTIMATE = {
+    ecapa: 83 * 1024 * 1024,
+    vad: 2.2 * 1024 * 1024,
+};
+
 let ecapaSession = null;
 let sileroVadSession = null;
 let initPromise = null;
 
 /**
- * Tải mô hình vào cache của trình duyệt để theo dõi tiến trình
- * Sử dụng XHR Blob để không chiếm dụng ArrayBuffer trong bộ nhớ JS
+ * Tải model, ưu tiên lấy từ Cache Storage của trình duyệt (persist qua các lần
+ * truy cập / reload). Nếu chưa có, fetch từ mạng, lưu vào cache song song với
+ * việc đọc để báo tiến trình, rồi trả về ArrayBuffer cho ONNX Runtime.
  */
-async function prefetchModelToCache(url, onProgress) {
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', url, true);
-        xhr.responseType = 'blob'; // Tải dưới dạng Blob để tối ưu bộ nhớ
-        
-        let hasProgress = false;
-        let timeoutTimer = setTimeout(() => {
-            if (!hasProgress) {
-                console.warn(`[Network] XHR stalled for ${url}, aborting and falling back to native fetch`);
-                xhr.abort();
-                resolve(null); // Trả về null để kích hoạt fallback
-            }
-        }, 10000); // Đợi 10 giây nếu không có chút data nào thì fallback
+async function loadModel(url, onProgress) {
+    const cache = await caches.open(MODEL_CACHE_NAME);
+    const cached = await cache.match(url);
 
-        xhr.onprogress = (event) => {
-            hasProgress = true;
-            clearTimeout(timeoutTimer);
-            if (event.lengthComputable) {
-                if (onProgress) onProgress(event.loaded, event.total);
-            } else {
-                if (onProgress) onProgress(event.loaded, 0);
-            }
-        };
-        
-        xhr.onload = () => {
-            clearTimeout(timeoutTimer);
-            if (xhr.status >= 200 && xhr.status < 300) {
-                // Tạo Blob URL từ phản hồi để truyền trực tiếp cho ONNX Runtime
-                const blobUrl = URL.createObjectURL(xhr.response);
-                resolve(blobUrl);
-            } else {
-                reject(new Error(`Failed to prefetch ${url}: ${xhr.statusText}`));
-            }
-        };
-        
-        xhr.onerror = () => {
-            clearTimeout(timeoutTimer);
-            reject(new Error(`Network error while prefetching ${url}`));
-        };
-        xhr.send();
+    if (cached) {
+        const blob = await cached.blob();
+        onProgress(blob.size, blob.size);
+        return URL.createObjectURL(blob);
+    }
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    }
+
+    // Lưu vào cache song song, không chặn việc đọc progress bên dưới.
+    cache.put(url, response.clone()).catch(err => {
+        console.warn(`[ModelCache] Không thể lưu cache cho ${url}:`, err);
     });
+
+    const total = Number(response.headers.get('content-length')) || 0;
+    const reader = response.body.getReader();
+    const chunks = [];
+    let loaded = 0;
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.length;
+        onProgress(loaded, total);
+    }
+
+    // Gộp chunks thành Blob và tạo URL để tránh tràn bộ nhớ ArrayBuffer ở JS
+    const blob = new Blob(chunks);
+    return URL.createObjectURL(blob);
 }
 
 /**
- * Khởi tạo mô hình ONNX
+ * Khởi tạo mô hình ONNX (ưu tiên lấy từ cache trình duyệt nếu đã tải trước đó)
  */
 export async function initEcapaModel() {
     if (ecapaSession && sileroVadSession) return true;
     if (initPromise) return initPromise;
-    
+
     initPromise = (async () => {
         try {
-            console.log("Prefetching AI models to browser cache...");
-            
             let ecapaLoaded = 0;
             let vadLoaded = 0;
-            let ecapaTotal = 83 * 1024 * 1024; // fallback size
-            let vadTotal = 2.2 * 1024 * 1024;
-            
+            let ecapaTotal = MODEL_SIZE_ESTIMATE.ecapa;
+            let vadTotal = MODEL_SIZE_ESTIMATE.vad;
+
             const updateProgress = () => {
                 const totalLoaded = ecapaLoaded + vadLoaded;
                 const totalSize = ecapaTotal + vadTotal;
-                const percent = Math.round((totalLoaded / totalSize) * 100);
-                const loadedMB = (totalLoaded / 1024 / 1024).toFixed(1);
-                const totalMB = (totalSize / 1024 / 1024).toFixed(1);
-                
+                const percent = Math.min(Math.round((totalLoaded / totalSize) * 100), 99);
+
                 if (window.updateAiProgress) {
-                    window.updateAiProgress(Math.min(percent, 99), loadedMB, totalMB);
+                    window.updateAiProgress(
+                        percent,
+                        (totalLoaded / 1024 / 1024).toFixed(1),
+                        (totalSize / 1024 / 1024).toFixed(1)
+                    );
                 }
             };
 
-            // Sử dụng tham số phiên bản để xóa bộ nhớ đệm (Cache Busting)
-            // Giúp giải quyết lỗi kẹt cache trên Vercel Edge sau nhiều lần deploy
-            const MODEL_VERSION = '?v=1.0';
-            const ecapaUrl = `./models/ecapa.onnx${MODEL_VERSION}`;
-            const vadUrl = `./models/silero_vad.onnx${MODEL_VERSION}`;
-
-            // Tải mô hình và lấy Blob URL
             const [ecapaBlobUrl, vadBlobUrl] = await Promise.all([
-                prefetchModelToCache(ecapaUrl, (loaded, total) => {
+                loadModel(MODEL_URLS.ecapa, (loaded, total) => {
                     ecapaLoaded = loaded;
                     if (total) ecapaTotal = total;
                     updateProgress();
                 }),
-                prefetchModelToCache(vadUrl, (loaded, total) => {
+                loadModel(MODEL_URLS.vad, (loaded, total) => {
                     vadLoaded = loaded;
                     if (total) vadTotal = total;
                     updateProgress();
-                })
+                }),
             ]);
-            
-            if (window.updateAiProgress && ecapaBlobUrl && vadBlobUrl) {
-                window.updateAiProgress(100, 85.2, 85.2);
+
+            if (window.updateAiProgress) {
+                const totalMB = ((ecapaTotal + vadTotal) / 1024 / 1024).toFixed(1);
+                window.updateAiProgress(100, totalMB, totalMB);
             }
-            
-            console.log("Initializing InferenceSessions sequentially...");
-            
-            // Khởi tạo từng model tuần tự
-            // Nếu prefetch bị lỗi hoặc timeout (blob url = null), fallback về URL gốc có cache buster
-            const ecapaSource = ecapaBlobUrl || ecapaUrl;
-            const ecapaRes = await ort.InferenceSession.create(ecapaSource, {
+
+            console.log('Initializing InferenceSessions sequentially from Blob URLs...');
+
+            // Khởi tạo tuần tự để tránh khóa (deadlock) bộ nhớ WebAssembly
+            const ecapaRes = await ort.InferenceSession.create(ecapaBlobUrl, {
                 executionProviders: ['wasm'],
-                graphOptimizationLevel: 'all'
+                graphOptimizationLevel: 'all',
             });
-            
-            // Giải phóng Blob URL ngay sau khi dùng xong
-            if (ecapaBlobUrl) URL.revokeObjectURL(ecapaBlobUrl);
-            
-            const vadSource = vadBlobUrl || vadUrl;
-            const vadRes = await ort.InferenceSession.create(vadSource, {
+            URL.revokeObjectURL(ecapaBlobUrl); // Giải phóng ngay lập tức
+
+            const vadRes = await ort.InferenceSession.create(vadBlobUrl, {
                 executionProviders: ['wasm'],
-                graphOptimizationLevel: 'all'
+                graphOptimizationLevel: 'all',
             });
-            
-            if (vadBlobUrl) URL.revokeObjectURL(vadBlobUrl);
-            
+            URL.revokeObjectURL(vadBlobUrl);
+
             ecapaSession = ecapaRes;
             sileroVadSession = vadRes;
-            
-            if (window.updateAiProgress) window.updateAiProgress(100, 85.2, 85.2);
-            
-            console.log("AI Models loaded successfully!");
+
+            console.log('AI Models loaded successfully!');
             return true;
         } catch (e) {
-            console.error("Failed to load AI models:", e);
+            console.error('Failed to load AI models:', e);
             throw e;
         } finally {
             initPromise = null;
         }
     })();
-    
+
     return initPromise;
 }
 
@@ -148,7 +144,7 @@ export async function initEcapaModel() {
  */
 async function runSileroVAD(channelData, sampleRate = 16000) {
     if (!sileroVadSession) return channelData;
-    
+
     const windowSize = 512;
     const numChunks = Math.floor(channelData.length / windowSize);
     if (numChunks === 0) return channelData;
@@ -163,26 +159,23 @@ async function runSileroVAD(channelData, sampleRate = 16000) {
         const chunk = channelData.slice(i * windowSize, (i + 1) * windowSize);
         const inputTensor = new ort.Tensor('float32', chunk, [1, windowSize]);
         const stateTensor = new ort.Tensor('float32', state, [2, 1, 128]);
-        
-        const feeds = {
-            input: inputTensor,
-            state: stateTensor,
-            sr: srTensor
-        };
-        
+
+        const feeds = { input: inputTensor, state: stateTensor, sr: srTensor };
+
         const results = await sileroVadSession.run(feeds);
         const prob = results.output.data[0];
         state = results.stateN.data;
-        
+
         if (prob > 0.5) {
             cleanAudio.push(chunk);
             keptChunks++;
         }
     }
-    
-    console.log(`Silero VAD: Kept ${keptChunks} / ${numChunks} chunks (${Math.round(keptChunks/numChunks*100)}%)`);
+
+    console.log(`Silero VAD: Kept ${keptChunks} / ${numChunks} chunks (${Math.round((keptChunks / numChunks) * 100)}%)`);
+
     if (cleanAudio.length === 0) {
-        console.warn("Silero VAD dropped all audio! Returning original.");
+        console.warn('Silero VAD dropped all audio! Returning original.');
         return channelData;
     }
 
@@ -212,7 +205,7 @@ export async function getEmbedding(audioBlob) {
 
     // 3. Extract Fbank
     const fbank = extractFbank(channelData, 16000);
-    if (fbank.frames === 0) throw new Error("Không phát hiện tiếng nói (hoặc âm lượng quá nhỏ)!");
+    if (fbank.frames === 0) throw new Error('Không phát hiện tiếng nói (hoặc âm lượng quá nhỏ)!');
 
     // Lặp (tile) hoặc cắt (truncate) frames cho đúng 300 (do lúc export bằng TorchScript bắt buộc shape cố định)
     const TARGET_FRAMES = 300;
@@ -224,15 +217,14 @@ export async function getEmbedding(audioBlob) {
         }
     }
 
-    // 3. Chuẩn bị Tensor [1, 300, 80]
+    // 4. Chuẩn bị Tensor [1, 300, 80]
     const tensor = new ort.Tensor('float32', paddedData, [1, TARGET_FRAMES, fbank.bins]);
 
-    // 4. Chạy mô hình
-    const feeds = { fbank: tensor }; // The input name in ONNX is 'fbank'
+    // 5. Chạy mô hình
+    const feeds = { fbank: tensor };
     const results = await ecapaSession.run(feeds);
-    
-    const embedding = results.embedding.data; // Float32Array(192)
-    return embedding;
+
+    return results.embedding.data; // Float32Array(192)
 }
 
 /**
