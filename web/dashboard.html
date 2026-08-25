@@ -1339,7 +1339,26 @@
                   autoGainControl: true
                 }
               });
-              const recorder = new MediaRecorder(stream);
+
+              // Apply Hardware-accelerated Web Audio filters to physically remove fan noise
+              const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+              const source = audioCtx.createMediaStreamSource(stream);
+              
+              const highpass = audioCtx.createBiquadFilter();
+              highpass.type = 'highpass';
+              highpass.frequency.value = 150; // Cut low rumble & AC/Fan noise
+
+              const lowpass = audioCtx.createBiquadFilter();
+              lowpass.type = 'lowpass';
+              lowpass.frequency.value = 7500; // Cut high hiss
+
+              const destination = audioCtx.createMediaStreamDestination();
+              source.connect(highpass);
+              highpass.connect(lowpass);
+              lowpass.connect(destination);
+
+              stream.audioCtx = audioCtx; // Save reference to close later
+              const recorder = new MediaRecorder(destination.stream);
               const chunks = [];
               recorder.ondataavailable = e => chunks.push(e.data);
               recorder.onstop = async () => {
@@ -1404,6 +1423,7 @@
                 } finally {
                   btn.disabled = false;
                   stream.getTracks().forEach(t => t.stop());
+                  if (stream.audioCtx) stream.audioCtx.close();
                   checkAllRecorded();
                 }
               };
