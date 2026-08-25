@@ -475,6 +475,7 @@
         } from './js/teacher.js';
         import { fetchStudentProfile, fetchStudentAssessments, fetchStudentStats } from './js/student.js';
         import { ENROLLMENT_SENTENCES, uploadVoiceSample, markVoiceEnrolled } from './js/voice.js';
+        import { initEcapaModel, getEmbedding, cosineSimilarity } from './js/ecapa.js';
 
         // ── AUTH GUARD ────────────────────────────────────────────
         let currentUser = null;

@@ -22,7 +22,7 @@ export async function initEcapaModel() {
         return true;
     } catch (e) {
         console.error("Failed to load ECAPA ONNX model:", e);
-        return false;
+        throw e;
     } finally {
         isInitializing = false;
     }
@@ -33,8 +33,7 @@ export async function initEcapaModel() {
  */
 export async function getEmbedding(audioBlob) {
     if (!ecapaSession) {
-        const loaded = await initEcapaModel();
-        if (!loaded) throw new Error("Mô hình ECAPA chưa được tải!");
+        await initEcapaModel();
     }
 
     // 1. Decode Audio to 16kHz AudioBuffer
