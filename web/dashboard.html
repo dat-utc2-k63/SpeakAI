@@ -21,8 +21,27 @@
       <span class="visually-hidden">Loading...</span>
     </div>
     <h3 class="text-white fw-bold">Đang tải mô hình AI...</h3>
-    <p class="text-muted">Vui lòng đợi trong giây lát (Dung lượng: ~85MB)</p>
+    <div class="w-75 mt-3 mb-2" style="max-width: 400px;">
+        <div class="progress" style="height: 10px; background-color: rgba(255,255,255,0.1);">
+            <div id="aiLoaderProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;"></div>
+        </div>
+    </div>
+    <p class="text-muted" id="aiLoaderText">Đang chuẩn bị kết nối...</p>
   </div>
+  <script>
+    window.updateAiProgress = (percent, loadedMB, totalMB) => {
+      const bar = document.getElementById('aiLoaderProgress');
+      const text = document.getElementById('aiLoaderText');
+      if (bar && text) {
+        bar.style.width = percent + '%';
+        if (totalMB > 0) {
+            text.innerHTML = `Đã tải: <b>${loadedMB}MB</b> / ${totalMB}MB (${percent}%)`;
+        } else {
+            text.innerHTML = `Đang xử lý mô hình AI... (${percent}%)`;
+        }
+      }
+    };
+  </script>
 
   <!-- ── SIDEBAR ───────────────────────────────────────────── -->
   <aside class="sidebar" id="sidebar">

@@ -4,6 +4,35 @@ let ecapaSession = null;
 let sileroVadSession = null;
 let initPromise = null;
 
+async function downloadModelWithProgress(url, onProgress) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`);
+    
+    const contentLength = response.headers.get('content-length');
+    const total = contentLength ? parseInt(contentLength, 10) : 0;
+    
+    let loaded = 0;
+    const reader = response.body.getReader();
+    const chunks = [];
+    
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.length;
+        if (onProgress) onProgress(loaded, total);
+    }
+    
+    const combined = new Uint8Array(loaded);
+    let position = 0;
+    for (const chunk of chunks) {
+        combined.set(chunk, position);
+        position += chunk.length;
+    }
+    
+    return combined.buffer;
+}
+
 /**
  * Khởi tạo mô hình ONNX
  */
@@ -13,14 +42,47 @@ export async function initEcapaModel() {
     
     initPromise = (async () => {
         try {
-            console.log("Loading ECAPA and Silero VAD ONNX models...");
+            console.log("Downloading ECAPA and Silero VAD ONNX models...");
+            let ecapaLoaded = 0;
+            let vadLoaded = 0;
+            let ecapaTotal = 83 * 1024 * 1024; // fallback size
+            let vadTotal = 2.2 * 1024 * 1024;
+            
+            const updateProgress = () => {
+                const totalLoaded = ecapaLoaded + vadLoaded;
+                const totalSize = ecapaTotal + vadTotal;
+                const percent = Math.round((totalLoaded / totalSize) * 100);
+                const loadedMB = (totalLoaded / 1024 / 1024).toFixed(1);
+                const totalMB = (totalSize / 1024 / 1024).toFixed(1);
+                
+                if (window.updateAiProgress) {
+                    window.updateAiProgress(Math.min(percent, 99), loadedMB, totalMB);
+                }
+            };
+
+            const [ecapaBuffer, vadBuffer] = await Promise.all([
+                downloadModelWithProgress('./models/ecapa.onnx', (loaded, total) => {
+                    ecapaLoaded = loaded;
+                    if (total) ecapaTotal = total;
+                    updateProgress();
+                }),
+                downloadModelWithProgress('./models/silero_vad.onnx', (loaded, total) => {
+                    vadLoaded = loaded;
+                    if (total) vadTotal = total;
+                    updateProgress();
+                })
+            ]);
+            
+            if (window.updateAiProgress) window.updateAiProgress(100, 85.2, 85.2);
+            
+            console.log("Initializing InferenceSessions from memory...");
             
             const [ecapaRes, vadRes] = await Promise.all([
-                ort.InferenceSession.create('./models/ecapa.onnx', {
+                ort.InferenceSession.create(ecapaBuffer, {
                     executionProviders: ['wasm'],
                     graphOptimizationLevel: 'all'
                 }),
-                ort.InferenceSession.create('./models/silero_vad.onnx', {
+                ort.InferenceSession.create(vadBuffer, {
                     executionProviders: ['wasm'],
                     graphOptimizationLevel: 'all'
                 })
