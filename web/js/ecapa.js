@@ -4,91 +4,107 @@ let ecapaSession = null;
 let sileroVadSession = null;
 let initPromise = null;
 
-async function downloadModelWithProgress(url, onProgress) {
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', url, true);
-        xhr.responseType = 'arraybuffer';
+/**
+ * Cài đặt hook vào window.fetch để bắt tiến trình tải của onnxruntime-web
+ * Giải pháp này tránh được lỗi Out of Memory do không lưu 83MB vào ArrayBuffer ở JS
+ */
+function setupFetchInterceptor() {
+    if (window._fetchIntercepted) return;
+    window._fetchIntercepted = true;
+    
+    const originalFetch = window.fetch;
+    
+    // Biến toàn cục để theo dõi dung lượng
+    let ecapaLoaded = 0;
+    let vadLoaded = 0;
+    let ecapaTotal = 83 * 1024 * 1024;
+    let vadTotal = 2.2 * 1024 * 1024;
+    
+    const updateProgressUI = () => {
+        const totalLoaded = ecapaLoaded + vadLoaded;
+        const totalSize = ecapaTotal + vadTotal;
+        const percent = Math.round((totalLoaded / totalSize) * 100);
+        const loadedMB = (totalLoaded / 1024 / 1024).toFixed(1);
+        const totalMB = (totalSize / 1024 / 1024).toFixed(1);
         
-        xhr.onprogress = (event) => {
-            if (event.lengthComputable) {
-                if (onProgress) onProgress(event.loaded, event.total);
-            } else {
-                // Nếu server không trả về Content-Length (fallback)
-                if (onProgress) onProgress(event.loaded, 0);
-            }
-        };
+        if (window.updateAiProgress) {
+            window.updateAiProgress(Math.min(percent, 99), loadedMB, totalMB);
+        }
+    };
+
+    window.fetch = async function(...args) {
+        const url = args[0];
+        const response = await originalFetch(...args);
         
-        xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                resolve(xhr.response);
-            } else {
-                reject(new Error(`Failed to load ${url}: ${xhr.statusText}`));
-            }
-        };
-        
-        xhr.onerror = () => reject(new Error(`Network error while downloading ${url}`));
-        xhr.send();
-    });
+        if (typeof url === 'string' && url.includes('.onnx')) {
+            const contentLength = response.headers.get('content-length');
+            const total = contentLength ? parseInt(contentLength, 10) : 0;
+            
+            const isEcapa = url.includes('ecapa');
+            if (isEcapa && total) ecapaTotal = total;
+            if (!isEcapa && total) vadTotal = total;
+            
+            let loaded = 0;
+            const reader = response.body.getReader();
+            
+            const stream = new ReadableStream({
+                async pull(controller) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        controller.close();
+                        return;
+                    }
+                    loaded += value.byteLength;
+                    
+                    if (isEcapa) {
+                        ecapaLoaded = loaded;
+                    } else {
+                        vadLoaded = loaded;
+                    }
+                    updateProgressUI();
+                    
+                    controller.enqueue(value);
+                }
+            });
+            
+            return new Response(stream, {
+                headers: response.headers,
+                status: response.status,
+                statusText: response.statusText
+            });
+        }
+        return response;
+    };
 }
 
 /**
  * Khởi tạo mô hình ONNX
  */
 export async function initEcapaModel() {
-    if (ecapaSession) return true;
+    if (ecapaSession && sileroVadSession) return true;
     if (initPromise) return initPromise;
+    
+    setupFetchInterceptor();
     
     initPromise = (async () => {
         try {
-            console.log("Downloading ECAPA and Silero VAD ONNX models...");
-            let ecapaLoaded = 0;
-            let vadLoaded = 0;
-            let ecapaTotal = 83 * 1024 * 1024; // fallback size
-            let vadTotal = 2.2 * 1024 * 1024;
-            
-            const updateProgress = () => {
-                const totalLoaded = ecapaLoaded + vadLoaded;
-                const totalSize = ecapaTotal + vadTotal;
-                const percent = Math.round((totalLoaded / totalSize) * 100);
-                const loadedMB = (totalLoaded / 1024 / 1024).toFixed(1);
-                const totalMB = (totalSize / 1024 / 1024).toFixed(1);
-                
-                if (window.updateAiProgress) {
-                    window.updateAiProgress(Math.min(percent, 99), loadedMB, totalMB);
-                }
-            };
-
-            const [ecapaBuffer, vadBuffer] = await Promise.all([
-                downloadModelWithProgress('./models/ecapa.onnx', (loaded, total) => {
-                    ecapaLoaded = loaded;
-                    if (total) ecapaTotal = total;
-                    updateProgress();
-                }),
-                downloadModelWithProgress('./models/silero_vad.onnx', (loaded, total) => {
-                    vadLoaded = loaded;
-                    if (total) vadTotal = total;
-                    updateProgress();
-                })
-            ]);
-            
-            if (window.updateAiProgress) window.updateAiProgress(100, 85.2, 85.2);
-            
-            console.log("Initializing InferenceSessions from memory sequentially...");
+            console.log("Loading AI models sequentially...");
             
             // Khởi tạo từng model tuần tự để tránh quá tải bộ nhớ WebAssembly
-            const ecapaRes = await ort.InferenceSession.create(ecapaBuffer, {
+            const ecapaRes = await ort.InferenceSession.create('./models/ecapa.onnx', {
                 executionProviders: ['wasm'],
                 graphOptimizationLevel: 'all'
             });
             
-            const vadRes = await ort.InferenceSession.create(vadBuffer, {
+            const vadRes = await ort.InferenceSession.create('./models/silero_vad.onnx', {
                 executionProviders: ['wasm'],
                 graphOptimizationLevel: 'all'
             });
             
             ecapaSession = ecapaRes;
             sileroVadSession = vadRes;
+            
+            if (window.updateAiProgress) window.updateAiProgress(100, 85.2, 85.2);
             
             console.log("AI Models loaded successfully!");
             return true;
