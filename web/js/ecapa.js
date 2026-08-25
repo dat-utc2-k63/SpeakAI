@@ -14,7 +14,18 @@ async function prefetchModelToCache(url, onProgress) {
         xhr.open('GET', url, true);
         xhr.responseType = 'blob'; // Tải dưới dạng Blob để tối ưu bộ nhớ
         
+        let hasProgress = false;
+        let timeoutTimer = setTimeout(() => {
+            if (!hasProgress) {
+                console.warn(`[Network] XHR stalled for ${url}, aborting and falling back to native fetch`);
+                xhr.abort();
+                resolve(null); // Trả về null để kích hoạt fallback
+            }
+        }, 10000); // Đợi 10 giây nếu không có chút data nào thì fallback
+
         xhr.onprogress = (event) => {
+            hasProgress = true;
+            clearTimeout(timeoutTimer);
             if (event.lengthComputable) {
                 if (onProgress) onProgress(event.loaded, event.total);
             } else {
@@ -23,6 +34,7 @@ async function prefetchModelToCache(url, onProgress) {
         };
         
         xhr.onload = () => {
+            clearTimeout(timeoutTimer);
             if (xhr.status >= 200 && xhr.status < 300) {
                 // Tạo Blob URL từ phản hồi để truyền trực tiếp cho ONNX Runtime
                 const blobUrl = URL.createObjectURL(xhr.response);
@@ -32,7 +44,10 @@ async function prefetchModelToCache(url, onProgress) {
             }
         };
         
-        xhr.onerror = () => reject(new Error(`Network error while prefetching ${url}`));
+        xhr.onerror = () => {
+            clearTimeout(timeoutTimer);
+            reject(new Error(`Network error while prefetching ${url}`));
+        };
         xhr.send();
     });
 }
@@ -79,25 +94,30 @@ export async function initEcapaModel() {
                 })
             ]);
             
-            if (window.updateAiProgress) window.updateAiProgress(100, 85.2, 85.2);
+            if (window.updateAiProgress && ecapaBlobUrl && vadBlobUrl) {
+                window.updateAiProgress(100, 85.2, 85.2);
+            }
             
-            console.log("Initializing InferenceSessions from Blob URLs sequentially...");
+            console.log("Initializing InferenceSessions sequentially...");
             
-            // Khởi tạo từng model tuần tự bằng Blob URL
-            const ecapaRes = await ort.InferenceSession.create(ecapaBlobUrl, {
+            // Khởi tạo từng model tuần tự
+            // Nếu prefetch bị lỗi hoặc timeout (blob url = null), fallback về URL gốc
+            const ecapaSource = ecapaBlobUrl || './models/ecapa.onnx';
+            const ecapaRes = await ort.InferenceSession.create(ecapaSource, {
                 executionProviders: ['wasm'],
                 graphOptimizationLevel: 'all'
             });
             
             // Giải phóng Blob URL ngay sau khi dùng xong
-            URL.revokeObjectURL(ecapaBlobUrl);
+            if (ecapaBlobUrl) URL.revokeObjectURL(ecapaBlobUrl);
             
-            const vadRes = await ort.InferenceSession.create(vadBlobUrl, {
+            const vadSource = vadBlobUrl || './models/silero_vad.onnx';
+            const vadRes = await ort.InferenceSession.create(vadSource, {
                 executionProviders: ['wasm'],
                 graphOptimizationLevel: 'all'
             });
             
-            URL.revokeObjectURL(vadBlobUrl);
+            if (vadBlobUrl) URL.revokeObjectURL(vadBlobUrl);
             
             ecapaSession = ecapaRes;
             sileroVadSession = vadRes;
