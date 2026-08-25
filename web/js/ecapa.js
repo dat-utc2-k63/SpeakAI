@@ -80,14 +80,20 @@ export async function initEcapaModel() {
                 }
             };
 
+            // Sử dụng tham số phiên bản để xóa bộ nhớ đệm (Cache Busting)
+            // Giúp giải quyết lỗi kẹt cache trên Vercel Edge sau nhiều lần deploy
+            const MODEL_VERSION = '?v=1.0';
+            const ecapaUrl = `./models/ecapa.onnx${MODEL_VERSION}`;
+            const vadUrl = `./models/silero_vad.onnx${MODEL_VERSION}`;
+
             // Tải mô hình và lấy Blob URL
             const [ecapaBlobUrl, vadBlobUrl] = await Promise.all([
-                prefetchModelToCache('./models/ecapa.onnx', (loaded, total) => {
+                prefetchModelToCache(ecapaUrl, (loaded, total) => {
                     ecapaLoaded = loaded;
                     if (total) ecapaTotal = total;
                     updateProgress();
                 }),
-                prefetchModelToCache('./models/silero_vad.onnx', (loaded, total) => {
+                prefetchModelToCache(vadUrl, (loaded, total) => {
                     vadLoaded = loaded;
                     if (total) vadTotal = total;
                     updateProgress();
@@ -101,8 +107,8 @@ export async function initEcapaModel() {
             console.log("Initializing InferenceSessions sequentially...");
             
             // Khởi tạo từng model tuần tự
-            // Nếu prefetch bị lỗi hoặc timeout (blob url = null), fallback về URL gốc
-            const ecapaSource = ecapaBlobUrl || './models/ecapa.onnx';
+            // Nếu prefetch bị lỗi hoặc timeout (blob url = null), fallback về URL gốc có cache buster
+            const ecapaSource = ecapaBlobUrl || ecapaUrl;
             const ecapaRes = await ort.InferenceSession.create(ecapaSource, {
                 executionProviders: ['wasm'],
                 graphOptimizationLevel: 'all'
@@ -111,7 +117,7 @@ export async function initEcapaModel() {
             // Giải phóng Blob URL ngay sau khi dùng xong
             if (ecapaBlobUrl) URL.revokeObjectURL(ecapaBlobUrl);
             
-            const vadSource = vadBlobUrl || './models/silero_vad.onnx';
+            const vadSource = vadBlobUrl || vadUrl;
             const vadRes = await ort.InferenceSession.create(vadSource, {
                 executionProviders: ['wasm'],
                 graphOptimizationLevel: 'all'
