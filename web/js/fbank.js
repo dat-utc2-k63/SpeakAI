@@ -3,10 +3,19 @@
 
 export function extractFbank(audioBuffer) {
     const sampleRate = audioBuffer.sampleRate;
-    const channelData = audioBuffer.getChannelData(0);
+    const rawData = audioBuffer.getChannelData(0);
     
-    // Resample to 16000Hz if needed (Assuming it's already 16kHz for simplicity here,
-    // in real usage we ensure offline audio context is 16kHz)
+    // 0. Audio Normalization (Chuẩn hóa âm lượng)
+    let maxAbs = 0;
+    for (let i = 0; i < rawData.length; i++) {
+        const abs = Math.abs(rawData[i]);
+        if (abs > maxAbs) maxAbs = abs;
+    }
+    const scale = maxAbs > 0 ? (1.0 / maxAbs) : 1.0;
+    const channelData = new Float32Array(rawData.length);
+    for (let i = 0; i < rawData.length; i++) {
+        channelData[i] = rawData[i] * scale;
+    }
     
     const winLength = Math.floor(sampleRate * 0.025); // 400 at 16kHz
     const hopLength = Math.floor(sampleRate * 0.010); // 160 at 16kHz
@@ -19,14 +28,13 @@ export function extractFbank(audioBuffer) {
     // Precompute Povey window (Kaldi default)
     const window = new Float32Array(winLength);
     for (let i = 0; i < winLength; i++) {
-        // Povey window: Math.pow(0.5 - 0.5 * Math.cos(2 * PI * i / (winLength - 1)), 0.85)
         window[i] = Math.pow(0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (winLength - 1)), 0.85);
     }
 
     // Precompute Mel filterbanks
     const melBands = createMelFilterbank(sampleRate, nFft, nMels, 20, 8000);
 
-    // 1. Calculate energy (RMS) for all frames to find max energy for dynamic VAD threshold
+    // 1. Calculate energy (RMS) for all frames
     const frameEnergies = new Float32Array(numFrames);
     let maxEnergy = 0;
     for (let i = 0; i < numFrames; i++) {
@@ -41,19 +49,23 @@ export function extractFbank(audioBuffer) {
         if (energy > maxEnergy) maxEnergy = energy;
     }
 
-    // Reject audio if it's purely background noise (e.g., max RMS energy is too low)
-    if (maxEnergy < 0.015) {
+    // Reject audio if it's purely background noise
+    if (maxEnergy < 0.01) {
+        console.warn("Audio is too quiet, rejecting.");
         return { data: new Float32Array(0), frames: 0, bins: nMels };
     }
 
-    // Threshold is 0.5% of max energy (drop only pure silence)
-    const vadThreshold = maxEnergy * 0.005;
+    // VAD Threshold: 15% of max energy or 0.015 absolute (whichever is higher)
+    // Giúp loại bỏ hoàn toàn tiếng thở, tiếng ồn quạt và khoảng lặng
+    const vadThreshold = Math.max(0.015, maxEnergy * 0.15);
 
     const fbanks = []; // Will be array of [numFrames][80]
+    let droppedFrames = 0;
 
     for (let i = 0; i < numFrames; i++) {
         // Voice Activity Detection (VAD): Drop silent frames
         if (frameEnergies[i] < vadThreshold) {
+            droppedFrames++;
             continue; 
         }
 
@@ -90,11 +102,13 @@ export function extractFbank(audioBuffer) {
             for (let k = 0; k < magSpec.length; k++) {
                 sum += magSpec[k] * melBands[m][k];
             }
-            // Log10, add small epsilon
+        // Log10, add small epsilon
             melFrame[m] = Math.log(sum + 1e-6);
         }
         fbanks.push(melFrame);
     }
+    
+    console.log(`VAD: Dropped ${droppedFrames} silent frames out of ${numFrames}. Kept ${fbanks.length} frames.`);
 
     // Return as flattened Float32Array
     const flattened = new Float32Array(fbanks.length * nMels);
