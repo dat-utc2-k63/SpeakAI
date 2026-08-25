@@ -1475,9 +1475,7 @@
 
             bootstrap.Modal.getInstance(document.getElementById('voiceModal')).hide();
           } catch (e) {
-            console.error('Lỗi khi lưu giọng nói:', e);
-            showToast('Lỗi khi lưu giọng nói: ' + e.message, 'danger');
-          } finally {
+            alert('Lỗi đăng ký: ' + e.message);
             setLoading(btn, false);
           }
         });
