@@ -24,7 +24,9 @@ async function prefetchModelToCache(url, onProgress) {
         
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
-                resolve(); // Không giữ lại blob để tránh tốn RAM
+                // Tạo Blob URL từ phản hồi để truyền trực tiếp cho ONNX Runtime
+                const blobUrl = URL.createObjectURL(xhr.response);
+                resolve(blobUrl);
             } else {
                 reject(new Error(`Failed to prefetch ${url}: ${xhr.statusText}`));
             }
@@ -63,8 +65,8 @@ export async function initEcapaModel() {
                 }
             };
 
-            // Tải mô hình vào cache trước
-            await Promise.all([
+            // Tải mô hình và lấy Blob URL
+            const [ecapaBlobUrl, vadBlobUrl] = await Promise.all([
                 prefetchModelToCache('./models/ecapa.onnx', (loaded, total) => {
                     ecapaLoaded = loaded;
                     if (total) ecapaTotal = total;
@@ -79,18 +81,23 @@ export async function initEcapaModel() {
             
             if (window.updateAiProgress) window.updateAiProgress(100, 85.2, 85.2);
             
-            console.log("Initializing InferenceSessions from cached URLs sequentially...");
+            console.log("Initializing InferenceSessions from Blob URLs sequentially...");
             
-            // Khởi tạo từng model tuần tự để tránh quá tải bộ nhớ WebAssembly
-            const ecapaRes = await ort.InferenceSession.create('./models/ecapa.onnx', {
+            // Khởi tạo từng model tuần tự bằng Blob URL
+            const ecapaRes = await ort.InferenceSession.create(ecapaBlobUrl, {
                 executionProviders: ['wasm'],
                 graphOptimizationLevel: 'all'
             });
             
-            const vadRes = await ort.InferenceSession.create('./models/silero_vad.onnx', {
+            // Giải phóng Blob URL ngay sau khi dùng xong
+            URL.revokeObjectURL(ecapaBlobUrl);
+            
+            const vadRes = await ort.InferenceSession.create(vadBlobUrl, {
                 executionProviders: ['wasm'],
                 graphOptimizationLevel: 'all'
             });
+            
+            URL.revokeObjectURL(vadBlobUrl);
             
             ecapaSession = ecapaRes;
             sileroVadSession = vadRes;
