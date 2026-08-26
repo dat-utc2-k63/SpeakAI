@@ -476,7 +476,7 @@ run_cells.append(code_cell([
     "Âm vị (Phoneme) sai nhiều: {bad_ph_str}\\n",
     "\\n",
     "Yêu cầu nhận xét (bằng tiếng Việt, định dạng Markdown đẹp, rõ ràng):\\n",
-    "1. Đánh giá chung: Học viên làm tốt ở đâu (khen ngợi), giao tiếp có tự nhiên và đúng ngữ cảnh không? Ngữ pháp sử dụng có đúng không?\\n",
+    "1. Đánh giá chung: Học viên làm tốt ở đâu (khen ngợi), giao tiếp có tự nhiên và đúng ngữ cảnh không? Ngữ pháp sử dụng có đúng không? (LƯU Ý: Chỉ liệt kê lỗi sai ngữ pháp, KHÔNG viết lại những câu đã chính xác để tránh dài dòng).\\n",
     "2. Điểm cần khắc phục: Giải thích thật rõ ràng các lỗi phát âm (từ/âm vị cụ thể) và hướng dẫn cách sửa chi tiết.\\n",
     "3. Lời khuyên & Động viên: Đề xuất cách luyện tập để cải thiện.\\n",
     "Không nhắc đến 'Completeness'.\\n",
