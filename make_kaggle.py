@@ -495,7 +495,8 @@ run_cells.append(code_cell([
 
 run_cells.append(md_cell(["---\n", "## Khởi chạy Backend API (FastAPI + Cloudflare Tunnel)"]))
 run_cells.append(code_cell([
-    "from fastapi import FastAPI, UploadFile, File, Form\n",
+    "from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks\n",
+    "import uuid\n",
     "from fastapi.middleware.cors import CORSMiddleware\n",
     "from fastapi.staticfiles import StaticFiles\n",
     "from fastapi.responses import JSONResponse\n",
