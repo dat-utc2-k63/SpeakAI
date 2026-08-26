@@ -26,39 +26,48 @@ let initPromise = null;
  */
 async function loadModel(url, onProgress) {
     const cache = await caches.open(MODEL_CACHE_NAME);
-    const cached = await cache.match(url);
+    let cached = await cache.match(url);
 
+    // NẾU ĐÃ CÓ: Load model từ cache (Bước 5)
     if (cached) {
         const blob = await cached.blob();
         onProgress(blob.size, blob.size);
         return URL.createObjectURL(blob);
     }
 
+    // BƯỚC 1: Download model
     const response = await fetch(url);
     if (!response.ok) {
         throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
     }
 
-    // Lưu vào cache song song, không chặn việc đọc progress bên dưới.
-    cache.put(url, response.clone()).catch(err => {
-        console.warn(`[ModelCache] Không thể lưu cache cho ${url}:`, err);
-    });
+    // Nhân bản response: 1 luồng để ghi thẳng vào ổ cứng (Cache), 1 luồng để đọc %
+    const cachePromise = cache.put(url, response.clone());
 
     const total = Number(response.headers.get('content-length')) || 0;
     const reader = response.body.getReader();
-    const chunks = [];
     let loaded = 0;
 
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        chunks.push(value);
         loaded += value.length;
         onProgress(loaded, total);
+        // BƯỚC 3: KHÔNG push(value) vào mảng chunks.
+        // Bỏ mặc value ở đây để Garbage Collector dọn ngay lập tức -> Không tốn RAM
     }
 
-    // Gộp chunks thành Blob và tạo URL để tránh tràn bộ nhớ ArrayBuffer ở JS
-    const blob = new Blob(chunks);
+    // BƯỚC 2: Đợi Cache ghi đĩa xong hoàn toàn
+    await cachePromise;
+
+    // BƯỚC 4: Chờ vài trăm ms để ổ đĩa và RAM ổn định sau khi tải file lớn
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // BƯỚC 5: Load model từ cache (Đọc lại file vừa lưu trên đĩa cứng)
+    cached = await cache.match(url);
+    if (!cached) throw new Error(`Lưu cache thất bại cho ${url}`);
+    
+    const blob = await cached.blob();
     return URL.createObjectURL(blob);
 }
 
