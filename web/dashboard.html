@@ -828,13 +828,9 @@
           currentAssessmentId = assessmentId;
           currentApiResult = { ...resultObj, llm_feedback: llmFeedback };
 
-          // Trích xuất điểm trung bình của cả học viên và giáo viên (nếu có chấm điểm giáo viên)
+          // Trích xuất điểm trung bình của học viên từ resultObj.student
           let total = 0, acc = 0, flu = 0, pro = 0;
-          const sentences = [
-            ...(resultObj.student?.sentences || []),
-            ...(resultObj.teacher?.sentences || [])
-          ];
-          
+          const sentences = resultObj.student.sentences || [];
           if (sentences.length > 0) {
             let count = 0;
             for (const s of sentences) {
