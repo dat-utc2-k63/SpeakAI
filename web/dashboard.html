@@ -16,7 +16,7 @@
 </head>
 
 <body class="dashboard-page">
-  <div id="globalAiLoader" class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="background: rgba(15, 23, 42, 0.95); z-index: 9999; backdrop-filter: blur(5px);">
+  <div id="globalAiLoader" class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center d-none" style="background: rgba(15, 23, 42, 0.95); z-index: 9999; backdrop-filter: blur(5px);">
     <div class="spinner-border text-primary mb-3" style="width: 4rem; height: 4rem;" role="status">
       <span class="visually-hidden">Loading...</span>
     </div>
@@ -29,6 +29,11 @@
     <p class="text-muted" id="aiLoaderText">Đang chuẩn bị kết nối...</p>
   </div>
   <script>
+    window.showAiLoader = () => {
+      const loader = document.getElementById('globalAiLoader');
+      if (loader) loader.classList.remove('d-none');
+    };
+    
     window.updateAiProgress = (percent, loadedMB, totalMB) => {
       const bar = document.getElementById('aiLoaderProgress');
       const text = document.getElementById('aiLoaderText');

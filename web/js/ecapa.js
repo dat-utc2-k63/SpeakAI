@@ -90,6 +90,16 @@ export async function initEcapaModel() {
                 }
             };
 
+            // Kiểm tra xem đã có trong cache chưa
+            const cache = await caches.open(MODEL_CACHE_NAME);
+            const ecapaCached = await cache.match(MODEL_URLS.ecapa);
+            const vadCached = await cache.match(MODEL_URLS.vad);
+
+            // Chỉ hiện màn hình loading nếu chưa có trong cache (phải tải từ mạng)
+            if (!ecapaCached || !vadCached) {
+                if (window.showAiLoader) window.showAiLoader();
+            }
+
             const [ecapaBlobUrl, vadBlobUrl] = await Promise.all([
                 loadModel(MODEL_URLS.ecapa, (loaded, total) => {
                     ecapaLoaded = loaded;
