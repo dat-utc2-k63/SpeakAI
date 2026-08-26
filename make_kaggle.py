@@ -307,12 +307,10 @@ run_cells.append(md_cell([
     "# SpeakAI-Eval — Inference (Run Only)\n",
     "\n",
     "Notebook này chỉ cần gọi lên và chạy. Đảm bảo bạn đã chạy **Setup Notebook** trước đó.\n",
-    "Mã nguồn, models và HF cache sẽ được đọc thẳng từ Google Drive."
+    "Mã nguồn, models và HF cache sẽ được đọc thẳng từ Kaggle Dataset."
 ]))
 
-run_cells.append(code_cell([
 
-]))
 
 run_cells.append(code_cell([
     "# Cài đặt thư viện\n",
@@ -333,7 +331,7 @@ run_cells.append(code_cell([
     "    subprocess.run('chmod +x /usr/local/bin/cloudflared', shell=True, check=True)\n",
 ]))
 
-run_cells.append(md_cell(["---\n", "## Khởi tạo Pipeline từ Drive"]))
+run_cells.append(md_cell(["---\n", "## Khởi tạo Pipeline từ Kaggle Input"]))
 run_cells.append(code_cell([
     "import sys, os\n",
     "SOURCE_DIR = None\n",
@@ -359,7 +357,7 @@ run_cells.append(code_cell([
     "# Lưu cache HuggingFace vào MODEL_DIR (nếu có thể) hoặc /kaggle/working\n",
     "os.environ['HF_HOME'] = '/kaggle/working/hf_cache'\n",
     "\n",
-    "# VÁ LỖI GOOGLE DRIVE READ-ONLY (monkey-patch)\n",
+    "# VÁ LỖI KAGGLE DATASET READ-ONLY (monkey-patch)\n",
     "import ecapa_diarize.embedding\n",
     "import tempfile\n",
     "original_init = ecapa_diarize.embedding.EcapaEmbedder.__init__\n",
@@ -419,8 +417,7 @@ run_cells.append(code_cell([
     "llm_model = AutoModelForCausalLM.from_pretrained(\n",
     "    model_name,\n",
     "    torch_dtype=torch.float16,\n",
-    "    device_map='cuda',\n",
-    "    attn_implementation='flash_attention_2'\n",
+    "    device_map='cuda'\n",
     ")\n",
     "print(f'LLM Ready on {llm_model.device}!')\n"
 ]))

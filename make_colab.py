@@ -399,8 +399,7 @@ run_cells.append(code_cell([
     "llm_model = AutoModelForCausalLM.from_pretrained(\n",
     "    model_name,\n",
     "    torch_dtype=torch.float16,\n",
-    "    device_map='cuda',\n",
-    "    attn_implementation='flash_attention_2'\n",
+    "    device_map='cuda'\n",
     ")\n",
     "print(f'LLM Ready on {llm_model.device}!')\n"
 ]))
