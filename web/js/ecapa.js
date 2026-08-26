@@ -15,6 +15,12 @@ const MODEL_SIZE_ESTIMATE = {
     vad: 2.2 * 1024 * 1024,
 };
 
+// BẬT WEB WORKER: Offload WebAssembly sang luồng nền để không làm đơ/lag giao diện (Main Thread)
+if (typeof ort !== 'undefined' && ort.env) {
+    ort.env.wasm.proxy = true;
+    ort.env.wasm.numThreads = 1; // Giới hạn 1 thread để tránh lỗi SharedArrayBuffer trên Vercel
+}
+
 let ecapaSession = null;
 let sileroVadSession = null;
 let initPromise = null;
