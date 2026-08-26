@@ -1,22 +1,19 @@
 import { extractFbank } from './fbank.js';
 
 // Đổi version này khi bạn deploy model mới -> tự động bỏ cache cũ
-const MODEL_VERSION = 'v1.1'; // Cập nhật version để xoá cache model cũ (83MB)
+const MODEL_VERSION = 'v1.1';
 const MODEL_CACHE_NAME = `ai-models-cache-${MODEL_VERSION}`;
 
 const MODEL_URLS = {
-    ecapa: `./models/ecapa_quant.onnx`, // Đã đổi sang model lượng tử hóa (Int8)
+    ecapa: `./models/ecapa_quant.onnx`,
     vad: `./models/silero_vad.onnx`,
 };
 
 // Kích thước ước lượng, chỉ dùng để hiện % tiến trình khi chưa biết content-length
 const MODEL_SIZE_ESTIMATE = {
-    ecapa: 21.5 * 1024 * 1024, // Size mới: 21.5MB
+    ecapa: 21.5 * 1024 * 1024,
     vad: 2.2 * 1024 * 1024,
 };
-
-// Bật Web Worker để không làm đơ giao diện trên điện thoại
-ort.env.wasm.proxy = true;
 
 let ecapaSession = null;
 let sileroVadSession = null;
@@ -172,6 +169,7 @@ async function runSileroVAD(channelData, sampleRate = 16000) {
     if (numChunks === 0) return channelData;
 
     let state = new Float32Array(2 * 1 * 128).fill(0);
+    const srTensor = new ort.Tensor('int64', new BigInt64Array([BigInt(sampleRate)]), []);
 
     // 1. Chạy model và lưu lại tất cả xác suất của từng chunk
     const probabilities = new Float32Array(numChunks);
@@ -179,7 +177,6 @@ async function runSileroVAD(channelData, sampleRate = 16000) {
         const chunk = channelData.slice(i * windowSize, (i + 1) * windowSize);
         const inputTensor = new ort.Tensor('float32', chunk, [1, windowSize]);
         const stateTensor = new ort.Tensor('float32', state, [2, 1, 128]);
-        const srTensor = new ort.Tensor('int64', new BigInt64Array([BigInt(sampleRate)]), []);
 
         const feeds = { input: inputTensor, state: stateTensor, sr: srTensor };
         const results = await sileroVadSession.run(feeds);
