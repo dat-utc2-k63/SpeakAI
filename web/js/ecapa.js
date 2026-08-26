@@ -1,19 +1,22 @@
 import { extractFbank } from './fbank.js';
 
 // Đổi version này khi bạn deploy model mới -> tự động bỏ cache cũ
-const MODEL_VERSION = 'v1.0';
+const MODEL_VERSION = 'v1.1'; // Cập nhật version để xoá cache model cũ (83MB)
 const MODEL_CACHE_NAME = `ai-models-cache-${MODEL_VERSION}`;
 
 const MODEL_URLS = {
-    ecapa: `./models/ecapa.onnx`,
+    ecapa: `./models/ecapa_quant.onnx`, // Đã đổi sang model lượng tử hóa (Int8)
     vad: `./models/silero_vad.onnx`,
 };
 
 // Kích thước ước lượng, chỉ dùng để hiện % tiến trình khi chưa biết content-length
 const MODEL_SIZE_ESTIMATE = {
-    ecapa: 83 * 1024 * 1024,
+    ecapa: 21.5 * 1024 * 1024, // Size mới: 21.5MB
     vad: 2.2 * 1024 * 1024,
 };
+
+// Bật Web Worker để không làm đơ giao diện trên điện thoại
+ort.env.wasm.proxy = true;
 
 let ecapaSession = null;
 let sileroVadSession = null;
