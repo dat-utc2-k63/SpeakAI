@@ -23,6 +23,10 @@ let initPromise = null;
  * Tải model, ưu tiên lấy từ Cache Storage của trình duyệt (persist qua các lần
  * truy cập / reload). Nếu chưa có, fetch từ mạng, lưu vào cache song song với
  * việc đọc để báo tiến trình, rồi trả về ArrayBuffer cho ONNX Runtime.
+ *
+ * @param {string} url
+ * @param {(loaded: number, total: number) => void} onProgress
+ * @returns {Promise<{ blobUrl: string, fromCache: boolean }>}
  */
 async function loadModel(url, onProgress) {
     const cache = await caches.open(MODEL_CACHE_NAME);
@@ -32,7 +36,7 @@ async function loadModel(url, onProgress) {
     if (cached) {
         const blob = await cached.blob();
         onProgress(blob.size, blob.size);
-        return URL.createObjectURL(blob);
+        return { blobUrl: URL.createObjectURL(blob), fromCache: true };
     }
 
     // BƯỚC 1: Download model
@@ -57,18 +61,16 @@ async function loadModel(url, onProgress) {
         // Bỏ mặc value ở đây để Garbage Collector dọn ngay lập tức -> Không tốn RAM
     }
 
-    // BƯỚC 2: Đợi Cache ghi đĩa xong hoàn toàn
+    // BƯỚC 2: Đợi Cache ghi đĩa xong hoàn toàn (Cache Storage API đã đảm bảo
+    // ghi hoàn tất trước khi promise resolve, nên KHÔNG cần chờ thêm sau đó)
     await cachePromise;
 
-    // BƯỚC 4: Chờ vài trăm ms để ổ đĩa và RAM ổn định sau khi tải file lớn
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // BƯỚC 5: Load model từ cache (Đọc lại file vừa lưu trên đĩa cứng)
+    // BƯỚC 3 (Load model từ cache vừa ghi)
     cached = await cache.match(url);
     if (!cached) throw new Error(`Lưu cache thất bại cho ${url}`);
-    
+
     const blob = await cached.blob();
-    return URL.createObjectURL(blob);
+    return { blobUrl: URL.createObjectURL(blob), fromCache: false };
 }
 
 /**
@@ -84,6 +86,7 @@ export async function initEcapaModel() {
             let vadLoaded = 0;
             let ecapaTotal = MODEL_SIZE_ESTIMATE.ecapa;
             let vadTotal = MODEL_SIZE_ESTIMATE.vad;
+            let loaderShown = false;
 
             const updateProgress = () => {
                 const totalLoaded = ecapaLoaded + vadLoaded;
@@ -99,17 +102,18 @@ export async function initEcapaModel() {
                 }
             };
 
-            // Kiểm tra xem đã có trong cache chưa
-            const cache = await caches.open(MODEL_CACHE_NAME);
-            const ecapaCached = await cache.match(MODEL_URLS.ecapa);
-            const vadCached = await cache.match(MODEL_URLS.vad);
+            // Chỉ show loader nếu thực sự phải tải từ mạng (biết được ngay khi
+            // progress callback đầu tiên bắn ra mà tổng đã > 0 nhưng chưa xong).
+            // Ta suy ra "cần tải mạng" dựa trên kết quả trả về của loadModel
+            // (fromCache) thay vì match cache riêng một lần nữa trước đó.
+            const maybeShowLoader = (fromCache) => {
+                if (!fromCache && !loaderShown) {
+                    loaderShown = true;
+                    if (window.showAiLoader) window.showAiLoader();
+                }
+            };
 
-            // Chỉ hiện màn hình loading nếu chưa có trong cache (phải tải từ mạng)
-            if (!ecapaCached || !vadCached) {
-                if (window.showAiLoader) window.showAiLoader();
-            }
-
-            const [ecapaBlobUrl, vadBlobUrl] = await Promise.all([
+            const [ecapaResult, vadResult] = await Promise.all([
                 loadModel(MODEL_URLS.ecapa, (loaded, total) => {
                     ecapaLoaded = loaded;
                     if (total) ecapaTotal = total;
@@ -121,6 +125,12 @@ export async function initEcapaModel() {
                     updateProgress();
                 }),
             ]);
+
+            maybeShowLoader(ecapaResult.fromCache);
+            maybeShowLoader(vadResult.fromCache);
+
+            const ecapaBlobUrl = ecapaResult.blobUrl;
+            const vadBlobUrl = vadResult.blobUrl;
 
             if (window.updateAiProgress) {
                 const totalMB = ((ecapaTotal + vadTotal) / 1024 / 1024).toFixed(1);
@@ -180,19 +190,19 @@ async function runSileroVAD(channelData, sampleRate = 16000) {
 
         const feeds = { input: inputTensor, state: stateTensor, sr: srTensor };
         const results = await sileroVadSession.run(feeds);
-        
+
         probabilities[i] = results.output.data[0];
         state = results.stateN.data;
     }
 
     // 2. Làm mượt (Smoothing) và đệm (Padding) để âm thanh không bị giật cục
     // Ngưỡng phát hiện tiếng nói
-    const threshold = 0.5; 
+    const threshold = 0.5;
     // Giữ thêm 3 chunk (~100ms) ở đầu và cuối để không bị cụt các âm gió (như s, t, k)
-    const padChunks = 3; 
-    
+    const padChunks = 3;
+
     const keepMask = new Array(numChunks).fill(false);
-    
+
     for (let i = 0; i < numChunks; i++) {
         if (probabilities[i] > threshold) {
             // Đánh dấu các chunk xung quanh nó cũng được giữ lại
@@ -207,7 +217,7 @@ async function runSileroVAD(channelData, sampleRate = 16000) {
     // 3. Trích xuất âm thanh dựa trên mặt nạ (Mask)
     const cleanAudio = [];
     let keptChunks = 0;
-    
+
     for (let i = 0; i < numChunks; i++) {
         if (keepMask[i]) {
             cleanAudio.push(channelData.slice(i * windowSize, (i + 1) * windowSize));
@@ -239,35 +249,42 @@ export async function getEmbedding(audioBlob) {
 
     // 1. Decode Audio to 16kHz AudioBuffer
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-    const arrayBuffer = await audioBlob.arrayBuffer();
-    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-    // 2. Silero VAD: Keep only speech
-    let channelData = audioBuffer.getChannelData(0);
-    channelData = await runSileroVAD(channelData, 16000);
+    try {
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-    // 3. Extract Fbank
-    const fbank = extractFbank(channelData, 16000);
-    if (fbank.frames === 0) throw new Error('Không phát hiện tiếng nói (hoặc âm lượng quá nhỏ)!');
+        // 2. Silero VAD: Keep only speech
+        let channelData = audioBuffer.getChannelData(0);
+        channelData = await runSileroVAD(channelData, 16000);
 
-    // Lặp (tile) hoặc cắt (truncate) frames cho đúng 300 (do lúc export bằng TorchScript bắt buộc shape cố định)
-    const TARGET_FRAMES = 300;
-    const paddedData = new Float32Array(TARGET_FRAMES * fbank.bins);
-    for (let i = 0; i < TARGET_FRAMES; i++) {
-        const origFrameIdx = i % fbank.frames; // Lặp lại nếu thiếu
-        for (let j = 0; j < fbank.bins; j++) {
-            paddedData[i * fbank.bins + j] = fbank.data[origFrameIdx * fbank.bins + j];
+        // 3. Extract Fbank
+        const fbank = extractFbank(channelData, 16000);
+        if (fbank.frames === 0) throw new Error('Không phát hiện tiếng nói (hoặc âm lượng quá nhỏ)!');
+
+        // Lặp (tile) hoặc cắt (truncate) frames cho đúng 300 (do lúc export bằng TorchScript bắt buộc shape cố định)
+        const TARGET_FRAMES = 300;
+        const paddedData = new Float32Array(TARGET_FRAMES * fbank.bins);
+        for (let i = 0; i < TARGET_FRAMES; i++) {
+            const origFrameIdx = i % fbank.frames; // Lặp lại nếu thiếu
+            for (let j = 0; j < fbank.bins; j++) {
+                paddedData[i * fbank.bins + j] = fbank.data[origFrameIdx * fbank.bins + j];
+            }
         }
+
+        // 4. Chuẩn bị Tensor [1, 300, 80]
+        const tensor = new ort.Tensor('float32', paddedData, [1, TARGET_FRAMES, fbank.bins]);
+
+        // 5. Chạy mô hình
+        const feeds = { fbank: tensor };
+        const results = await ecapaSession.run(feeds);
+
+        return results.embedding.data; // Float32Array(192)
+    } finally {
+        // Luôn đóng AudioContext để tránh rò rỉ tài nguyên / bị trình duyệt
+        // (đặc biệt Safari/iOS) chặn khi tạo quá nhiều AudioContext cùng lúc
+        audioCtx.close().catch(() => { });
     }
-
-    // 4. Chuẩn bị Tensor [1, 300, 80]
-    const tensor = new ort.Tensor('float32', paddedData, [1, TARGET_FRAMES, fbank.bins]);
-
-    // 5. Chạy mô hình
-    const feeds = { fbank: tensor };
-    const results = await ecapaSession.run(feeds);
-
-    return results.embedding.data; // Float32Array(192)
 }
 
 /**
