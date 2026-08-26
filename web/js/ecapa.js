@@ -171,22 +171,46 @@ async function runSileroVAD(channelData, sampleRate = 16000) {
     let state = new Float32Array(2 * 1 * 128).fill(0);
     const srTensor = new ort.Tensor('int64', new BigInt64Array([BigInt(sampleRate)]), []);
 
-    const cleanAudio = [];
-    let keptChunks = 0;
-
+    // 1. Chạy model và lưu lại tất cả xác suất của từng chunk
+    const probabilities = new Float32Array(numChunks);
     for (let i = 0; i < numChunks; i++) {
         const chunk = channelData.slice(i * windowSize, (i + 1) * windowSize);
         const inputTensor = new ort.Tensor('float32', chunk, [1, windowSize]);
         const stateTensor = new ort.Tensor('float32', state, [2, 1, 128]);
 
         const feeds = { input: inputTensor, state: stateTensor, sr: srTensor };
-
         const results = await sileroVadSession.run(feeds);
-        const prob = results.output.data[0];
+        
+        probabilities[i] = results.output.data[0];
         state = results.stateN.data;
+    }
 
-        if (prob > 0.5) {
-            cleanAudio.push(chunk);
+    // 2. Làm mượt (Smoothing) và đệm (Padding) để âm thanh không bị giật cục
+    // Ngưỡng phát hiện tiếng nói
+    const threshold = 0.5; 
+    // Giữ thêm 3 chunk (~100ms) ở đầu và cuối để không bị cụt các âm gió (như s, t, k)
+    const padChunks = 3; 
+    
+    const keepMask = new Array(numChunks).fill(false);
+    
+    for (let i = 0; i < numChunks; i++) {
+        if (probabilities[i] > threshold) {
+            // Đánh dấu các chunk xung quanh nó cũng được giữ lại
+            const start = Math.max(0, i - padChunks);
+            const end = Math.min(numChunks - 1, i + padChunks);
+            for (let j = start; j <= end; j++) {
+                keepMask[j] = true;
+            }
+        }
+    }
+
+    // 3. Trích xuất âm thanh dựa trên mặt nạ (Mask)
+    const cleanAudio = [];
+    let keptChunks = 0;
+    
+    for (let i = 0; i < numChunks; i++) {
+        if (keepMask[i]) {
+            cleanAudio.push(channelData.slice(i * windowSize, (i + 1) * windowSize));
             keptChunks++;
         }
     }
