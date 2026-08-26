@@ -771,16 +771,11 @@
           document.getElementById('assessResults').classList.add('d-none');
           document.getElementById('runAssessBtn').disabled = true;
 
-          const steps = ['Đang upload audio lên Colab...', 'Đang tách diarization...', 'Đang chấm điểm phát âm...', 'Đang tạo feedback LLM...'];
-          let stepIdx = 0;
-          const stepEl = document.getElementById('assessLoadingStep');
-          const stepTimer = setInterval(() => {
-            stepEl.textContent = steps[stepIdx % steps.length];
-            stepIdx++;
-          }, 2000);
-
           try {
-            // Gọi API FastAPI trên Colab
+            const stepEl = document.getElementById('assessLoadingStep');
+            stepEl.textContent = 'Đang gửi yêu cầu...';
+
+            // Gọi API FastAPI trên Colab (Khởi tạo Task)
             const formData = new FormData();
             const scoreTeacher = document.getElementById('scoreTeacherCheck').checked;
             formData.append("audio", convFile);
@@ -788,18 +783,46 @@
             formData.append("student_embeddings_json", JSON.stringify(student.voice_embeddings));
             formData.append("score_teacher", scoreTeacher);
 
-            const response = await fetch(`${apiUrl.replace(/\/$/, '')}/assess`, {
+            const startResponse = await fetch(`${apiUrl.replace(/\/$/, '')}/assess_start`, {
               method: "POST",
               body: formData
             });
 
-            if (!response.ok) {
-              throw new Error(`Lỗi server: ${response.status} ${response.statusText}`);
+            if (!startResponse.ok) {
+              throw new Error(`Lỗi server khởi tạo: ${startResponse.status}`);
             }
 
-            const data = await response.json();
-            if (!data.success) {
-              throw new Error(data.error || "Lỗi xử lý API");
+            const startData = await startResponse.json();
+            if (!startData.success) {
+              throw new Error(startData.error || "Lỗi khởi tạo API");
+            }
+
+            const taskId = startData.task_id;
+
+            // Bắt đầu vòng lặp polling (Kiểm tra tiến độ realtime)
+            let apiData = null;
+            while (true) {
+                await new Promise(r => setTimeout(r, 2000));
+                
+                const statusRes = await fetch(`${apiUrl.replace(/\/$/, '')}/assess_status/${taskId}`);
+                if (!statusRes.ok) throw new Error("Lỗi mạng khi kiểm tra tiến độ");
+                
+                const statusData = await statusRes.json();
+                if (!statusData.success) throw new Error(statusData.error || "Lỗi trạng thái API");
+                
+                const task = statusData.data;
+                if (task.step) {
+                    stepEl.textContent = task.step;
+                }
+                
+                if (task.status === 'completed') {
+                    apiData = task;
+                    break;
+                }
+                
+                if (task.status === 'error') {
+                    throw new Error(task.error || "Lỗi phân tích trên Colab");
+                }
             }
 
             // Upload audio lưu vào Supabase (chạy ngầm)
@@ -808,13 +831,11 @@
             // Create assessment record in DB (status=pending)
             const assessment = await createAssessment(currentUser.id, studentId, audioUrl, scoreTeacher);
 
-            clearInterval(stepTimer);
             document.getElementById('assessLoading').classList.add('d-none');
 
             // Hiển thị kết quả thật
-            showRealResults(assessment.id, data.result, data.llm_feedback);
+            showRealResults(assessment.id, apiData.result, apiData.llm_feedback);
           } catch (e) {
-            clearInterval(stepTimer);
             document.getElementById('assessLoading').classList.add('d-none');
             document.getElementById('runAssessBtn').disabled = false;
             alert('Lỗi: ' + e.message);
