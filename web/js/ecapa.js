@@ -172,7 +172,6 @@ async function runSileroVAD(channelData, sampleRate = 16000) {
     if (numChunks === 0) return channelData;
 
     let state = new Float32Array(2 * 1 * 128).fill(0);
-    const srTensor = new ort.Tensor('int64', new BigInt64Array([BigInt(sampleRate)]), []);
 
     // 1. Chạy model và lưu lại tất cả xác suất của từng chunk
     const probabilities = new Float32Array(numChunks);
@@ -180,6 +179,7 @@ async function runSileroVAD(channelData, sampleRate = 16000) {
         const chunk = channelData.slice(i * windowSize, (i + 1) * windowSize);
         const inputTensor = new ort.Tensor('float32', chunk, [1, windowSize]);
         const stateTensor = new ort.Tensor('float32', state, [2, 1, 128]);
+        const srTensor = new ort.Tensor('int64', new BigInt64Array([BigInt(sampleRate)]), []);
 
         const feeds = { input: inputTensor, state: stateTensor, sr: srTensor };
         const results = await sileroVadSession.run(feeds);
