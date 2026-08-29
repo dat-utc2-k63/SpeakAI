@@ -42,16 +42,14 @@ export async function markVoiceEnrolled(userId, voiceUrl) {
 }
 
 /**
- * Lấy URL của backend từ DOM
+ * Lấy URL của backend từ Global API
  */
 export function getBackendUrl() {
-  const input = document.getElementById('backendUrl');
-  if (input && input.value) {
-    let url = input.value.trim();
+  if (window.globalApiUrl) {
+    let url = window.globalApiUrl.trim();
     if (url.endsWith('/')) url = url.slice(0, -1);
     return url;
   }
-  // Fallback (Trường hợp gọi ở trang không có ô nhập backendUrl)
   return localStorage.getItem('backendUrl') || "https://YOUR_NAMED_TUNNEL_DOMAIN";
 }
 

@@ -24,6 +24,16 @@ GAIN_SMOOTH_MS = 60
 OUTPUT_PEAK = 0.97
 
 def denoise_with_deepfilternet(audio, sr):
+    import torchaudio
+    import sys, types
+    if not hasattr(torchaudio, 'backend'):
+        torchaudio.backend = types.ModuleType('torchaudio.backend')
+        sys.modules['torchaudio.backend'] = torchaudio.backend
+    if not hasattr(torchaudio.backend, 'common'):
+        torchaudio.backend.common = types.ModuleType('torchaudio.backend.common')
+        sys.modules['torchaudio.backend.common'] = torchaudio.backend.common
+        torchaudio.backend.common.AudioMetaData = getattr(torchaudio, 'AudioMetaData', type('AudioMetaData', (), {}))
+        
     from df.enhance import enhance, init_df
     
     # init_df() requires no args for default behavior

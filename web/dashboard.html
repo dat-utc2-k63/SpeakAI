@@ -78,8 +78,13 @@
     <!-- STUDENT NAV -->
     <nav class="sidebar-nav d-none" id="studentNav">
       <a href="#" class="nav-item active" data-page="overview"><i class="bi bi-grid-1x2"></i><span>Tổng quan</span></a>
-      <a href="#" class="nav-item" data-page="results"><i class="bi bi-bar-chart-line"></i><span>Kết quả của
-          tôi</span></a>
+      <a href="#" class="nav-item" data-page="results"><i class="bi bi-bar-chart-line"></i><span>Kết quả của tôi</span></a>
+      <a href="#" class="nav-item" data-page="profile"><i class="bi bi-person-circle"></i><span>Profile</span></a>
+    </nav>
+
+    <!-- ADMIN NAV -->
+    <nav class="sidebar-nav d-none" id="adminNav">
+      <a href="#" class="nav-item active" data-page="admin-overview"><i class="bi bi-shield-lock"></i><span>Quản trị</span></a>
       <a href="#" class="nav-item" data-page="profile"><i class="bi bi-person-circle"></i><span>Profile</span></a>
     </nav>
 
@@ -107,6 +112,52 @@
   <main class="main-content" id="mainContent">
 
     <!-- ===== TEACHER PAGES ===== -->
+
+    <!-- ===== ADMIN PAGES ===== -->
+    <div id="page-admin-overview" class="page-section d-none">
+      <div class="page-header">
+        <h1 class="page-title">Bảng Điều Khiển Quản Trị</h1>
+      </div>
+      <div class="row g-4">
+        <!-- Global Settings -->
+        <div class="col-md-12">
+          <div class="section-card">
+            <h6 class="fw-semibold mb-3"><i class="bi bi-gear-fill me-2 text-primary"></i>Cấu hình API Tunnel Toàn Cục</h6>
+            <div class="alert alert-info small">
+              URL này sẽ được tự động điền làm mặc định cho tất cả Giáo viên khi chấm điểm.
+            </div>
+            <div class="input-group mb-3">
+              <span class="input-group-text"><i class="bi bi-link-45deg"></i></span>
+              <input type="text" class="form-control" id="globalApiUrlInput" placeholder="https://...trycloudflare.com">
+              <button class="btn btn-primary" id="saveGlobalApiBtn">Lưu Cấu Hình</button>
+            </div>
+          </div>
+        </div>
+        <!-- Manage Users -->
+        <div class="col-md-12">
+          <div class="section-card">
+            <h6 class="fw-semibold mb-3"><i class="bi bi-people-fill me-2 text-primary"></i>Quản lý Người Dùng</h6>
+            <div class="table-responsive">
+              <table class="table table-hover align-middle">
+                <thead>
+                  <tr>
+                    <th>Họ Tên</th>
+                    <th>Email</th>
+                    <th>Vai Trò</th>
+                    <th>Đã ĐK Giọng</th>
+                    <th>Ngày Tạo</th>
+                    <th>Hành Động</th>
+                  </tr>
+                </thead>
+                <tbody id="adminUsersTableBody">
+                  <tr><td colspan="6" class="text-center text-muted">Đang tải...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- TEACHER OVERVIEW -->
     <div id="page-teacher-overview" class="page-section d-none">
@@ -177,11 +228,6 @@
     <div id="page-teacher-assess" class="page-section d-none">
       <div class="page-header d-flex justify-content-between align-items-center">
         <h1 class="page-title">Chấm điểm Phát âm</h1>
-        <div class="input-group" style="max-width:350px;">
-          <span class="input-group-text"><i class="bi bi-link-45deg"></i></span>
-          <input type="text" class="form-control form-control-sm" id="apiEndpointUrl"
-            placeholder="https://...trycloudflare.com" title="Dán link Cloudflare Tunnel từ Colab vào đây" />
-        </div>
       </div>
 
       <!-- STEP 1: UPLOAD -->
@@ -514,6 +560,7 @@
         import { ENROLLMENT_SENTENCES, uploadVoiceSample, markVoiceEnrolled } from './js/voice.js';
         import { fetchEmbeddingFromBackend, cosineSimilarity } from './js/voice.js';
 
+
         // ── AUTH GUARD ────────────────────────────────────────────
         let currentUser = null;
         let currentProfile = null;
@@ -546,12 +593,24 @@
             roleBadge.className = 'badge bg-primary';
             document.getElementById('teacherNav').classList.remove('d-none');
             initTeacher();
+          } else if (role === 'admin') {
+            roleBadge.textContent = 'Quản trị';
+            roleBadge.className = 'badge bg-danger';
+            document.getElementById('adminNav').classList.remove('d-none');
+            initAdmin();
           } else {
             roleBadge.textContent = 'Học viên';
             roleBadge.className = 'badge bg-success';
             document.getElementById('studentNav').classList.remove('d-none');
             initStudent();
           }
+
+          import('./js/auth.js').then(async (m) => {
+            const settings = await m.getGlobalSettings();
+            if (settings && settings.api_url) {
+              window.globalApiUrl = settings.api_url;
+            }
+          });
 
           // Common Profile Setup
           document.getElementById('profileName').textContent = currentProfile.full_name;
@@ -751,9 +810,9 @@
         }
 
         async function runAssessment() {
-          const apiUrl = document.getElementById('apiEndpointUrl').value.trim();
+          const apiUrl = window.globalApiUrl;
           if (!apiUrl) {
-            alert("Vui lòng nhập API Endpoint URL (Link Cloudflare Tunnel từ Google Colab)!");
+            alert("Admin chưa cấu hình API Endpoint URL (Tunnel). Vui lòng liên hệ Admin!");
             return;
           }
 
@@ -1003,6 +1062,83 @@
             btn.innerHTML = oldHtml;
             btn.disabled = false;
           }
+        }
+
+        // ===== ADMIN LOGIC =====
+        async function initAdmin() {
+          import('./js/auth.js').then(async (m) => {
+            const getSettings = m.getGlobalSettings;
+            const updateSettings = m.updateGlobalSettings;
+            
+            // Load global settings
+            const settings = await getSettings();
+            if (settings && settings.api_url) {
+              document.getElementById('globalApiUrlInput').value = settings.api_url;
+            }
+
+            document.getElementById('saveGlobalApiBtn').addEventListener('click', async () => {
+              const url = document.getElementById('globalApiUrlInput').value.trim();
+              const btn = document.getElementById('saveGlobalApiBtn');
+              btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>...';
+              btn.disabled = true;
+              try {
+                await updateSettings(url);
+                showToast('Đã lưu API URL toàn cục!', 'success');
+              } catch (e) {
+                alert("Lỗi lưu cấu hình: " + e.message);
+              }
+              btn.innerHTML = 'Lưu Cấu Hình';
+              btn.disabled = false;
+            });
+
+            // Load users
+            const { data: users, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .order('created_at', { ascending: false });
+              
+            const tbody = document.getElementById('adminUsersTableBody');
+            if (error) {
+              tbody.innerHTML = `<tr><td colspan="6" class="text-danger">Lỗi tải dữ liệu: ${error.message}</td></tr>`;
+              return;
+            }
+            if (!users || users.length === 0) {
+              tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Chưa có người dùng nào</td></tr>`;
+              return;
+            }
+            
+            tbody.innerHTML = users.map(u => `
+              <tr>
+                <td>
+                  <div class="d-flex align-items-center gap-2">
+                    <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(u.full_name)}&background=4F46E5&color=fff" class="rounded-circle" width="32" height="32">
+                    <span class="fw-semibold">${u.full_name}</span>
+                  </div>
+                </td>
+                <td>${u.email}</td>
+                <td><span class="badge ${u.role === 'admin' ? 'bg-danger' : u.role === 'teacher' ? 'bg-primary' : 'bg-success'}">${u.role.toUpperCase()}</span></td>
+                <td>${u.voice_enrolled ? '<i class="bi bi-check-circle text-success"></i>' : '-'}</td>
+                <td>${new Date(u.created_at).toLocaleDateString('vi-VN')}</td>
+                <td>
+                  <button class="btn btn-sm btn-outline-danger btn-delete-user" data-id="${u.id}"><i class="bi bi-trash"></i></button>
+                </td>
+              </tr>
+            `).join('');
+
+            document.querySelectorAll('.btn-delete-user').forEach(btn => {
+              btn.addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                if(confirm("Bạn có chắc chắn muốn xoá user này?")) {
+                  const { error } = await supabase.from('profiles').delete().eq('id', id);
+                  if (error) alert("Lỗi xoá user: " + error.message);
+                  else {
+                    showToast('Đã xoá user', 'success');
+                    initAdmin(); // reload
+                  }
+                }
+              });
+            });
+          });
         }
 
         async function renderHistory() {

@@ -104,3 +104,32 @@ export async function updateProfile(userId, updates) {
   if (error) throw error;
   return data;
 }
+
+/**
+ * Lấy Global Settings
+ */
+export async function getGlobalSettings() {
+  const { data, error } = await supabase
+    .from('global_settings')
+    .select('*')
+    .eq('id', 1)
+    .single();
+  if (error) {
+      console.warn("Lỗi lấy global settings:", error.message);
+      return null;
+  }
+  return data;
+}
+
+/**
+ * Cập nhật Global Settings (Chỉ Admin)
+ */
+export async function updateGlobalSettings(apiUrl) {
+  const { data, error } = await supabase
+    .from('global_settings')
+    .upsert({ id: 1, api_url: apiUrl })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
