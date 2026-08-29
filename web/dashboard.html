@@ -1120,10 +1120,28 @@
                 <td>${u.voice_enrolled ? '<i class="bi bi-check-circle text-success"></i>' : '-'}</td>
                 <td>${new Date(u.created_at).toLocaleDateString('vi-VN')}</td>
                 <td>
-                  <button class="btn btn-sm btn-outline-danger btn-delete-user" data-id="${u.id}"><i class="bi bi-trash"></i></button>
+                  <button class="btn btn-sm btn-outline-primary btn-edit-user" data-id="${u.id}" data-role="${u.role}" data-name="${u.full_name}" title="Đổi vai trò"><i class="bi bi-pencil"></i></button>
+                  <button class="btn btn-sm btn-outline-danger btn-delete-user" data-id="${u.id}" title="Xoá user"><i class="bi bi-trash"></i></button>
                 </td>
               </tr>
             `).join('');
+            document.querySelectorAll('.btn-edit-user').forEach(btn => {
+              btn.addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                const currentRole = e.currentTarget.dataset.role;
+                const newRole = prompt(`Nhập vai trò mới cho ${e.currentTarget.dataset.name} (admin, teacher, student):`, currentRole);
+                if (newRole && ['admin', 'teacher', 'student'].includes(newRole.toLowerCase().trim())) {
+                    const { error } = await supabase.from('profiles').update({ role: newRole.toLowerCase().trim() }).eq('id', id);
+                    if (error) alert("Lỗi cập nhật: " + error.message);
+                    else {
+                        showToast('Đã cập nhật vai trò', 'success');
+                        initAdmin();
+                    }
+                } else if (newRole) {
+                    alert("Vai trò không hợp lệ!");
+                }
+              });
+            });
 
             document.querySelectorAll('.btn-delete-user').forEach(btn => {
               btn.addEventListener('click', async (e) => {

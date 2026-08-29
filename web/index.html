@@ -20,15 +20,18 @@
 </head>
 
 <body class="auth-page">
-  <div id="globalAiLoader" class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center d-none" style="background: rgba(15, 23, 42, 0.95); z-index: 9999; backdrop-filter: blur(5px);">
+  <div id="globalAiLoader"
+    class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center d-none"
+    style="background: rgba(15, 23, 42, 0.95); z-index: 9999; backdrop-filter: blur(5px);">
     <div class="spinner-border text-primary mb-3" style="width: 4rem; height: 4rem;" role="status">
       <span class="visually-hidden">Loading...</span>
     </div>
     <h3 class="text-white fw-bold">Đang tải mô hình AI...</h3>
     <div class="w-75 mt-3 mb-2" style="max-width: 400px;">
-        <div class="progress" style="height: 10px; background-color: rgba(255,255,255,0.1);">
-            <div id="aiLoaderProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;"></div>
-        </div>
+      <div class="progress" style="height: 10px; background-color: rgba(255,255,255,0.1);">
+        <div id="aiLoaderProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+          role="progressbar" style="width: 0%;"></div>
+      </div>
     </div>
     <p class="text-muted" id="aiLoaderText">Đang chuẩn bị kết nối...</p>
   </div>
@@ -37,16 +40,16 @@
       const loader = document.getElementById('globalAiLoader');
       if (loader) loader.classList.remove('d-none');
     };
-    
+
     window.updateAiProgress = (percent, loadedMB, totalMB) => {
       const bar = document.getElementById('aiLoaderProgress');
       const text = document.getElementById('aiLoaderText');
       if (bar && text) {
         bar.style.width = percent + '%';
         if (totalMB > 0) {
-            text.innerHTML = `Đã tải: <b>${loadedMB}MB</b> / ${totalMB}MB (${percent}%)`;
+          text.innerHTML = `Đã tải: <b>${loadedMB}MB</b> / ${totalMB}MB (${percent}%)`;
         } else {
-            text.innerHTML = `Đang xử lý mô hình AI... (${percent}%)`;
+          text.innerHTML = `Đang xử lý mô hình AI... (${percent}%)`;
         }
       }
     };
@@ -247,14 +250,17 @@
                 <p class="mb-1 fw-semibold">Kéo thả file audio vào đây</p>
                 <p class="text-muted small mb-3">hoặc nhấn để chọn file</p>
                 <p class="text-muted smaller">Hỗ trợ: .wav, .mp3, .m4a, .ogg (tối đa 10MB)</p>
-                <input type="file" id="voiceFileInput" class="visually-hidden" accept=".wav,.mp3,.m4a,.ogg,audio/*" multiple />
+                <input type="file" id="voiceFileInput" class="visually-hidden" accept=".wav,.mp3,.m4a,.ogg,audio/*"
+                  multiple />
               </div>
               <div id="uploadedAudioPreview" class="mt-3 d-none">
                 <div class="d-flex align-items-center justify-content-between mb-2">
                   <span class="fw-semibold text-primary" id="uploadedFileName"></span>
-                  <button class="btn btn-sm btn-outline-danger" id="removeUploadBtn"><i class="bi bi-x me-1"></i>Xóa hết</button>
+                  <button class="btn btn-sm btn-outline-danger" id="removeUploadBtn"><i class="bi bi-x me-1"></i>Xóa
+                    hết</button>
                 </div>
-                <div id="uploadedFilesList" class="d-flex flex-column gap-2" style="max-height: 250px; overflow-y: auto;">
+                <div id="uploadedFilesList" class="d-flex flex-column gap-2"
+                  style="max-height: 250px; overflow-y: auto;">
                   <!-- List of files will be injected here -->
                 </div>
               </div>
@@ -274,6 +280,9 @@
         <div class="modal-footer border-0 d-flex gap-2">
           <button class="btn btn-outline-secondary flex-fill" data-bs-dismiss="modal">
             <i class="bi bi-x-lg me-1"></i>Huỷ
+          </button>
+          <button class="btn btn-outline-warning flex-fill" id="skipVoiceBtn">
+            Bỏ qua & Đăng ký
           </button>
           <button class="btn btn-primary flex-fill btn-glow" id="saveVoiceBtn" disabled>
             <span class="btn-text"><i class="bi bi-check-circle me-2"></i>Hoàn tất đăng ký</span>
@@ -303,13 +312,13 @@
         if (settings && settings.api_url) {
           window.globalApiUrl = settings.api_url;
         }
-      } catch(e) {}
+      } catch (e) { }
 
-        const loader = document.getElementById('globalAiLoader');
-        if (loader) loader.remove();
+      const loader = document.getElementById('globalAiLoader');
+      if (loader) loader.remove();
 
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) window.location.href = 'dashboard.html';
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) window.location.href = 'dashboard.html';
     })();
 
     // ── PASSWORD TOGGLE ───────────────────────────────────────
@@ -377,43 +386,43 @@
     let pendingRegistrationData = null;
     document.getElementById('registerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      
+
       const btn = e.submitter;
       const originalHtml = btn.innerHTML;
-      
+
       if (!selectedRole) {
         alert('Vui lòng chọn vai trò (Giáo viên / Học viên).');
         return;
       }
-      
+
       let email = document.getElementById('regEmail').value.trim().toLowerCase();
       const password = document.getElementById('regPassword').value;
       const fullName = document.getElementById('regFullName').value.trim();
       const phone = document.getElementById('regPhone').value.trim();
-      
+
       if (password.length < 6) {
-          alert('Mật khẩu phải có ít nhất 6 ký tự!');
-          return;
+        alert('Mật khẩu phải có ít nhất 6 ký tự!');
+        return;
       }
-      
+
       // Kiểm tra xem email đã tồn tại trong database chưa (pre-validation)
       try {
-          btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Đang kiểm tra...';
-          btn.disabled = true;
-          const { data, error } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
-          if (data) {
-              alert('Email này đã được đăng ký! Vui lòng dùng email khác hoặc đăng nhập.');
-              btn.innerHTML = originalHtml;
-              btn.disabled = false;
-              return;
-          }
-      } catch (err) {
-          console.error("Pre-validation error", err);
-          alert('Không thể kiểm tra dữ liệu tài khoản lúc này, vui lòng thử lại.');
-          return;
-      } finally {
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Đang kiểm tra...';
+        btn.disabled = true;
+        const { data, error } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
+        if (data) {
+          alert('Email này đã được đăng ký! Vui lòng dùng email khác hoặc đăng nhập.');
           btn.innerHTML = originalHtml;
           btn.disabled = false;
+          return;
+        }
+      } catch (err) {
+        console.error("Pre-validation error", err);
+        alert('Không thể kiểm tra dữ liệu tài khoản lúc này, vui lòng thử lại.');
+        return;
+      } finally {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
       }
 
       const teacherId = selectedRole === 'student' ? document.getElementById('teacherSelect').value || null : null;
@@ -429,7 +438,7 @@
       // Show voice enrollment modal instead of signing up immediately
       buildSentencesList();
       new bootstrap.Modal(document.getElementById('voiceModal')).show();
-      
+
       // Khởi tạo model ONNX ngầm
       initEcapaModel().catch(e => console.log('Init ECAPA error:', e));
     });
@@ -459,21 +468,21 @@
     async function handleFileSelect(files) {
       if (!files || files.length === 0) return;
       const validFiles = Array.from(files).filter(f => {
-          const isAudio = f.type.startsWith('audio/') || f.type === 'video/mp4' || f.name.match(/\.(wav|mp3|m4a|ogg|webm|aac)$/i);
-          return isAudio && f.size <= 10 * 1024 * 1024;
+        const isAudio = f.type.startsWith('audio/') || f.type === 'video/mp4' || f.name.match(/\.(wav|mp3|m4a|ogg|webm|aac)$/i);
+        return isAudio && f.size <= 10 * 1024 * 1024;
       });
       if (validFiles.length === 0) { alert('Vui lòng chọn file audio hợp lệ (<10MB)!'); return; }
-      
+
       uploadedFiles = validFiles;
       const titleEl = document.getElementById('uploadedFileName');
       titleEl.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Đang kiểm tra ${validFiles.length} file...`;
-      
+
       const listContainer = document.getElementById('uploadedFilesList');
       listContainer.innerHTML = '';
-      
+
       validFiles.forEach((file, index) => {
-          const url = URL.createObjectURL(file);
-          const fileHtml = `
+        const url = URL.createObjectURL(file);
+        const fileHtml = `
             <div class="d-flex align-items-center gap-3 p-2 rounded-2 border">
               <i class="bi bi-file-music text-primary fs-5"></i>
               <div class="flex-grow-1 overflow-hidden">
@@ -482,46 +491,44 @@
               </div>
             </div>
           `;
-          listContainer.innerHTML += fileHtml;
+        listContainer.innerHTML += fileHtml;
       });
-      
+
       document.getElementById('uploadedAudioPreview').classList.remove('d-none');
       document.getElementById('saveVoiceBtn').disabled = true;
 
       // ── AI CHECK NGAY LẬP TỨC ──
       try {
-          if (validFiles.length === 1) {
-              // Chỉ up 1 file thì mặc định làm mẫu gốc
-              await fetchEmbeddingFromBackend(validFiles[0]); // Chạy test thử xem file có lỗi ko
-              titleEl.innerHTML = `Đã chọn 1 file (Mẫu gốc) <i class="bi bi-check-circle-fill text-success"></i>`;
-              document.getElementById('saveVoiceBtn').disabled = false;
-          } else {
-              const embeddings = [];
-              for (const file of validFiles) {
-                  embeddings.push(await fetchEmbeddingFromBackend(file));
-              }
-              let totalSim = 0;
-              let count = 0;
-              for (let i = 0; i < embeddings.length; i++) {
-                  for (let j = i + 1; j < embeddings.length; j++) {
-                      totalSim += cosineSimilarity(embeddings[i], embeddings[j]);
-                      count++;
-                  }
-              }
-              const avgSim = totalSim / count;
-              const percent = Math.round(avgSim * 100);
-              
-              if (avgSim < 0.65) {
-                  titleEl.innerHTML = `<span class="text-danger">Đã chọn ${validFiles.length} file (Không khớp: ${percent}%) ❌</span>`;
-                  alert(`⚠️ Các file âm thanh không đồng nhất (Độ khớp: ${percent}%). Có thể do tiếng ồn hoặc nhiều người cùng nói. Vui lòng chọn lại!`);
-              } else {
-                  titleEl.innerHTML = `Đã chọn ${validFiles.length} file (Độ khớp: ${percent}%) <i class="bi bi-check-circle-fill text-success"></i>`;
-                  document.getElementById('saveVoiceBtn').disabled = false;
-              }
+        if (validFiles.length === 1) {
+          // Chỉ up 1 file thì mặc định làm mẫu gốc
+          await fetchEmbeddingFromBackend(validFiles[0]); // Chạy test thử xem file có lỗi ko
+          titleEl.innerHTML = `Đã chọn 1 file (Mẫu gốc) <i class="bi bi-check-circle-fill text-success"></i>`;
+          document.getElementById('saveVoiceBtn').disabled = false;
+        } else {
+          const embeddings = [];
+          for (const file of validFiles) {
+            embeddings.push(await fetchEmbeddingFromBackend(file));
           }
+          let totalSim = 0;
+          let count = 0;
+          for (let i = 0; i < embeddings.length; i++) {
+            for (let j = i + 1; j < embeddings.length; j++) {
+              totalSim += cosineSimilarity(embeddings[i], embeddings[j]);
+              count++;
+            }
+          }
+          const avgSim = totalSim / count;
+          const percent = Math.round(avgSim * 100);
+
+          if (avgSim < 0.55) {
+            titleEl.innerHTML = `<span class="text-danger">Đã chọn ${validFiles.length} file (Không khớp: ${percent}%) ❌</span>`;
+          } else {
+            titleEl.innerHTML = `Đã chọn ${validFiles.length} file (Độ khớp: ${percent}%) <i class="bi bi-check-circle-fill text-success"></i>`;
+            document.getElementById('saveVoiceBtn').disabled = false;
+          }
+        }
       } catch (err) {
-          titleEl.innerHTML = `<span class="text-danger">Lỗi: File âm thanh không hợp lệ hoặc quá nhỏ! ❌</span>`;
-          alert("Lỗi kiểm tra giọng: " + err.message);
+        titleEl.innerHTML = `<span class="text-danger">Lỗi: File âm thanh không hợp lệ hoặc quá nhỏ! ❌</span>`;
       }
     }
 
@@ -562,79 +569,77 @@
       if (!state || state.status !== 'recording') {
         // Start recording with WebRTC Noise Suppression & Echo Cancellation
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ 
-              audio: {
-                  noiseSuppression: true,
-                  echoCancellation: true,
-                  autoGainControl: true
-              } 
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              noiseSuppression: true,
+              echoCancellation: true,
+              autoGainControl: true
+            }
           });
           const recorder = new MediaRecorder(stream);
           const chunks = [];
           recorder.ondataavailable = e => chunks.push(e.data);
           recorder.onstop = async () => {
             const blob = new Blob(chunks, { type: 'audio/webm' });
-            
+
             // Progressive Check
             btn.innerHTML = '<i class="spinner-border spinner-border-sm me-1"></i>Kiểm tra...';
             btn.disabled = true;
             try {
-                const emb = await fetchEmbeddingFromBackend(blob);
-                
-                const prevEmbeddings = [];
-                for (let i = 0; i < ENROLLMENT_SENTENCES.length; i++) {
-                    if (i !== idx && recorderStates[i]?.embedding) {
-                        prevEmbeddings.push(recorderStates[i].embedding);
-                    }
+              const emb = await fetchEmbeddingFromBackend(blob);
+
+              const prevEmbeddings = [];
+              for (let i = 0; i < ENROLLMENT_SENTENCES.length; i++) {
+                if (i !== idx && recorderStates[i]?.embedding) {
+                  prevEmbeddings.push(recorderStates[i].embedding);
                 }
-                
-                let avgSim = null;
-                if (prevEmbeddings.length > 0) {
-                    let totalSim = 0;
-                    for (const prevEmb of prevEmbeddings) {
-                        totalSim += cosineSimilarity(emb, prevEmb);
-                    }
-                    avgSim = totalSim / prevEmbeddings.length;
-                    if (avgSim < 0.65) {
-                        alert(`⚠️ Giọng đọc này không giống với các câu trước đó (Độ tương đồng: ${Math.round(avgSim * 100)}%). Vui lòng đọc lại!`);
-                        delete recorderStates[idx].blob;
-                        delete recorderStates[idx].embedding;
-                        statusEl.className = 'badge bg-danger status-badge';
-                        statusEl.textContent = `Thất bại (${Math.round(avgSim * 100)}%) ❌`;
-                        item.classList.remove('recorded');
-                        btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Ghi lại';
-                        btn.className = 'btn btn-sm btn-outline-danger record-btn';
-                        btn.disabled = false;
-                        checkAllRecorded();
-                        return;
-                    }
+              }
+
+              let avgSim = null;
+              if (prevEmbeddings.length > 0) {
+                let totalSim = 0;
+                for (const prevEmb of prevEmbeddings) {
+                  totalSim += cosineSimilarity(emb, prevEmb);
                 }
-                
-                recorderStates[idx].blob = blob;
-                recorderStates[idx].embedding = emb;
-                audioEl.src = URL.createObjectURL(blob);
-                audioEl.classList.remove('d-none');
-                statusEl.className = 'badge bg-success status-badge';
-                if (avgSim !== null) {
-                    statusEl.textContent = `Đã ghi ✓ (Khớp ${Math.round(avgSim * 100)}%)`;
-                } else {
-                    statusEl.textContent = 'Đã ghi ✓ (Mẫu gốc)';
+                avgSim = totalSim / prevEmbeddings.length;
+                if (avgSim < 0.55) {
+                  delete recorderStates[idx].blob;
+                  delete recorderStates[idx].embedding;
+                  statusEl.className = 'badge bg-danger status-badge';
+                  statusEl.textContent = `Thất bại (${Math.round(avgSim * 100)}%) ❌`;
+                  item.classList.remove('recorded');
+                  btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Ghi lại';
+                  btn.className = 'btn btn-sm btn-outline-danger record-btn';
+                  btn.disabled = false;
+                  checkAllRecorded();
+                  return;
                 }
-                item.classList.add('recorded');
-                btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Ghi lại';
-                btn.className = 'btn btn-sm btn-outline-warning record-btn';
+              }
+
+              recorderStates[idx].blob = blob;
+              recorderStates[idx].embedding = emb;
+              audioEl.src = URL.createObjectURL(blob);
+              audioEl.classList.remove('d-none');
+              statusEl.className = 'badge bg-success status-badge';
+              if (avgSim !== null) {
+                statusEl.textContent = `Đã ghi ✓ (Khớp ${Math.round(avgSim * 100)}%)`;
+              } else {
+                statusEl.textContent = 'Đã ghi ✓ (Mẫu gốc)';
+              }
+              item.classList.add('recorded');
+              btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Ghi lại';
+              btn.className = 'btn btn-sm btn-outline-warning record-btn';
             } catch (err) {
-                alert("Lỗi kiểm tra giọng: " + err.message);
-                delete recorderStates[idx].blob;
-                delete recorderStates[idx].embedding;
-                statusEl.className = 'badge bg-danger status-badge';
-                statusEl.textContent = 'Lỗi ❌';
-                btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Ghi lại';
-                btn.className = 'btn btn-sm btn-outline-danger record-btn';
+              delete recorderStates[idx].blob;
+              delete recorderStates[idx].embedding;
+              statusEl.className = 'badge bg-danger status-badge';
+              statusEl.textContent = 'Lỗi ❌';
+              btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Ghi lại';
+              btn.className = 'btn btn-sm btn-outline-danger record-btn';
             } finally {
-                btn.disabled = false;
-                stream.getTracks().forEach(t => t.stop());
-                checkAllRecorded();
+              btn.disabled = false;
+              stream.getTracks().forEach(t => t.stop());
+              checkAllRecorded();
             }
           };
           recorder.start();
@@ -668,12 +673,12 @@
         let voiceUrl;
         let finalEmbeddings = [];
         const tempId = 'new_user_' + Date.now();
-        
+
         if (isUpload && uploadedFiles.length > 0) {
           btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-cpu me-2"></i>Đang trích xuất...';
           const embeddings = [];
           for (const file of uploadedFiles) {
-              embeddings.push(await fetchEmbeddingFromBackend(file));
+            embeddings.push(await fetchEmbeddingFromBackend(file));
           }
           finalEmbeddings = embeddings;
           btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-check-circle me-2"></i>Đang lưu...';
@@ -683,37 +688,37 @@
           // Direct Recording
           const allBlobs = ENROLLMENT_SENTENCES.map((_, i) => recorderStates[i]?.blob).filter(Boolean);
           finalEmbeddings = ENROLLMENT_SENTENCES.map((_, i) => recorderStates[i]?.embedding).filter(Boolean);
-          
+
           btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-check-circle me-2"></i>Đang lưu...';
           const merged = new Blob(allBlobs, { type: 'audio/webm' });
           voiceUrl = await uploadVoiceSample(tempId, merged, 'enrollment.webm');
         }
-        
+
         // Calculate mean embedding
         let meanEmb = new Float32Array(192);
         if (finalEmbeddings.length > 0) {
+          for (let i = 0; i < 192; i++) {
+            let sum = 0;
+            for (const emb of finalEmbeddings) {
+              sum += emb[i];
+            }
+            meanEmb[i] = sum / finalEmbeddings.length;
+          }
+          // L2 Normalize
+          let norm = 0;
+          for (let i = 0; i < 192; i++) {
+            norm += meanEmb[i] * meanEmb[i];
+          }
+          norm = Math.sqrt(norm);
+          if (norm > 0) {
             for (let i = 0; i < 192; i++) {
-                let sum = 0;
-                for (const emb of finalEmbeddings) {
-                    sum += emb[i];
-                }
-                meanEmb[i] = sum / finalEmbeddings.length;
+              meanEmb[i] /= norm;
             }
-            // L2 Normalize
-            let norm = 0;
-            for (let i = 0; i < 192; i++) {
-                norm += meanEmb[i] * meanEmb[i];
-            }
-            norm = Math.sqrt(norm);
-            if (norm > 0) {
-                for (let i = 0; i < 192; i++) {
-                    meanEmb[i] /= norm;
-                }
-            }
+          }
         }
-        
+
         pendingRegistrationData.voiceEmbeddings = Array.from(meanEmb);
-        
+
         // Now do the actual Sign Up
         pendingRegistrationData.voiceUrl = voiceUrl;
         await signUp(pendingRegistrationData);
@@ -723,6 +728,24 @@
       } catch (e) {
         alert('Lỗi đăng ký: ' + e.message);
         setLoading(btn, false);
+      }
+    });
+
+    // ── SKIP VOICE ENROLLMENT ──────────────────────────────────────────
+    document.getElementById('skipVoiceBtn').addEventListener('click', async () => {
+      if (!pendingRegistrationData) return;
+      const btn = document.getElementById('skipVoiceBtn');
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Đang tạo...';
+      btn.disabled = true;
+      
+      pendingRegistrationData.voiceUrl = null;
+      pendingRegistrationData.voiceEmbeddings = null;
+      
+      try {
+        await signUp(pendingRegistrationData);
+      } catch (err) {
+        btn.innerHTML = 'Bỏ qua & Đăng ký';
+        btn.disabled = false;
       }
     });
 
