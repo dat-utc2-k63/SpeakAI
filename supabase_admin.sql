@@ -38,3 +38,20 @@ FOR ALL
 USING (
   (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
 );
+
+-- Hàm xoá ngu?i dùng kh?i h? th?ng Auth (Ch? admin)
+CREATE OR REPLACE FUNCTION delete_user_by_admin(user_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Ch? admin m?i có quy?n th?c thi
+  IF (SELECT role FROM public.profiles WHERE id = auth.uid()) != 'admin' THEN
+    RAISE EXCEPTION 'Ch? admin m?i có quy?n xoá user.';
+  END IF;
+
+  -- Xoá trong auth.users
+  DELETE FROM auth.users WHERE id = user_id;
+END;
+$$;
