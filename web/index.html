@@ -221,7 +221,8 @@
             <h5 class="modal-title fw-bold">
               <i class="bi bi-mic-fill text-primary me-2"></i>Đăng ký Mẫu Giọng Nói
             </h5>
-            <p class="text-muted small mb-0">Giúp hệ thống nhận diện giọng nói của bạn chính xác hơn</p>
+            <p class="text-muted small mb-0">Giúp hệ thống nhận diện giọng nói của bạn chính xác hơn.</p>
+            <p class="text-warning small mb-0 mt-1"><i class="bi bi-info-circle"></i> <strong>Khuyến nghị:</strong> Vui lòng đeo tai nghe có tính năng chống ồn (hoặc ghi âm ở nơi yên tĩnh) để bản thu đạt chất lượng tốt nhất.</p>
           </div>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" title="Đóng"></button>
         </div>
@@ -571,9 +572,9 @@
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
-              noiseSuppression: true,
+              noiseSuppression: false,
               echoCancellation: true,
-              autoGainControl: true
+              autoGainControl: false
             }
           });
           const recorder = new MediaRecorder(stream);

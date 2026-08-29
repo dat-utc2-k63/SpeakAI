@@ -75,24 +75,26 @@ class TwoSpeakerSplitter:
         teacher_reference_path: str | Path | None = None,
         teacher_embedding: np.ndarray | None = None,
         student_embedding: np.ndarray | None = None,
+        apply_denoise: bool = False,
     ) -> SplitResult:
         input_path = Path(input_path)
 
         teacher_emb = teacher_embedding
         if teacher_emb is None and teacher_reference_path:
-            teacher_emb = self._embed_reference(teacher_reference_path)
+            teacher_emb = self._embed_reference(teacher_reference_path, apply_denoise=apply_denoise)
         elif teacher_emb is not None:
             pass
 
         audio, sr = load_audio(input_path)
         
-        # 1. Khử nhiễu mạnh bằng DeepFilterNet
-        print("[DeepFilterNet] Đang khử nhiễu...")
-        audio, sr = denoise_with_deepfilternet(audio, sr)
-        
-        # 2. Cân bằng âm lượng toàn mảng (Adaptive Leveling) để làm rõ tiếng nói 
-        print("[Leveling] Đang cân bằng âm lượng...")
-        audio = level_audio_to_target(audio, sr)
+        if apply_denoise:
+            # 1. Khử nhiễu mạnh bằng DeepFilterNet
+            print("[DeepFilterNet] Đang khử nhiễu...")
+            audio, sr = denoise_with_deepfilternet(audio, sr)
+            
+            # 2. Cân bằng âm lượng toàn mảng (Adaptive Leveling)
+            print("[Leveling] Đang cân bằng âm lượng...")
+            audio = level_audio_to_target(audio, sr)
 
         segments, teacher_cluster = self._diarize(
             audio, sr, teacher_emb=teacher_emb, student_emb=student_embedding
@@ -143,12 +145,13 @@ class TwoSpeakerSplitter:
             denoised_path=denoised_path if 'denoised_path' in locals() else None,
         )
 
-    def _embed_reference(self, reference_path: str | Path) -> np.ndarray:
+    def _embed_reference(self, reference_path: str | Path, apply_denoise: bool = False) -> np.ndarray:
         audio, sr = load_audio(reference_path)
         
-        # Khử nhiễu và cân bằng cho audio tham chiếu trước khi nhúng
-        audio, sr = denoise_with_deepfilternet(audio, sr)
-        audio = level_audio_to_target(audio, sr)
+        if apply_denoise:
+            # Khử nhiễu và cân bằng cho audio tham chiếu trước khi nhúng
+            audio, sr = denoise_with_deepfilternet(audio, sr)
+            audio = level_audio_to_target(audio, sr)
         
         embs: list[np.ndarray] = []
         for window in self.buffer.iter_windows(audio):

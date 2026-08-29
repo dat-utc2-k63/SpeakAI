@@ -72,13 +72,13 @@ def run_test(audio_path: str):
     teacher_embs = []
     for ref in teacher_refs:
         if Path(ref).exists():
-            emb = splitter._embed_reference(ref)
+            emb = splitter._embed_reference(ref, apply_denoise=False)
             teacher_embs.append(emb)
     
     student_embs = []
     for ref in student_refs:
         if Path(ref).exists():
-            emb = splitter._embed_reference(ref)
+            emb = splitter._embed_reference(ref, apply_denoise=False)
             student_embs.append(emb)
             
     teacher_emb = np.mean(teacher_embs, axis=0) if teacher_embs else None
@@ -94,11 +94,12 @@ def run_test(audio_path: str):
     result = splitter.split_file(
         input_path=audio_file,
         teacher_embedding=teacher_emb,
-        student_embedding=student_emb
+        student_embedding=student_emb,
+        apply_denoise=False
     )
     infer_time = time.time() - start_infer
-    print(f"\nPhÃ¢n tÃ¡ch xong! Thá»i gian xá»­ lÃ½: {infer_time:.2f}s")
-    print(f"Tá»•ng thá»i lÆ°á»£ng audio gá»‘c: {result.duration_sec:.2f}s")
+    print(f"\nPhÃ¢n tÃ¡ch xong! Thá» i gian xá»­ lÃ½: {infer_time:.2f}s")
+    print(f"Tá»•ng thá» i lÆ°á»£ng audio gá»‘c: {result.duration_sec:.2f}s")
     
     print("\n[3] Káº¾T QUáº¢ DIARIZATION:")
     for seg in result.segments:
