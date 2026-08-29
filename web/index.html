@@ -683,16 +683,14 @@
           }
           finalEmbeddings = embeddings;
           btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-check-circle me-2"></i>Đang lưu...';
-          // Upload the first file to represent the sample
-          voiceUrl = await uploadVoiceSample(tempId, uploadedFiles[0], uploadedFiles[0].name);
+          voiceUrl = "";
         } else {
           // Direct Recording
           const allBlobs = ENROLLMENT_SENTENCES.map((_, i) => recorderStates[i]?.blob).filter(Boolean);
           finalEmbeddings = ENROLLMENT_SENTENCES.map((_, i) => recorderStates[i]?.embedding).filter(Boolean);
 
           btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-check-circle me-2"></i>Đang lưu...';
-          const merged = new Blob(allBlobs, { type: 'audio/webm' });
-          voiceUrl = await uploadVoiceSample(tempId, merged, 'enrollment.webm');
+          voiceUrl = "";
         }
 
         // Calculate mean embedding

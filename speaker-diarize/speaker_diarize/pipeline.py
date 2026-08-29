@@ -179,9 +179,21 @@ class TwoSpeakerSplitter:
 
         labels = batch_cluster_two(embeddings)
         centers = self._cluster_centers(embeddings, labels)
+        n_clusters = len(set(labels))
 
         teacher_cluster: int | None = None
-        if teacher_emb is not None or student_emb is not None:
+        if n_clusters == 1:
+            teacher_cluster = 0
+        else:
+            if teacher_emb is not None and len(teacher_emb) != len(centers[0]):
+                import warnings
+                warnings.warn(f"Teacher embedding dimension mismatch: expected {len(centers[0])}, got {len(teacher_emb)}. Ignoring teacher embedding.")
+                teacher_emb = None
+            if student_emb is not None and len(student_emb) != len(centers[0]):
+                import warnings
+                warnings.warn(f"Student embedding dimension mismatch: expected {len(centers[0])}, got {len(student_emb)}. Ignoring student embedding.")
+                student_emb = None
+
             sim_t0 = float(np.dot(centers[0], teacher_emb)) if teacher_emb is not None else 0.0
             sim_t1 = float(np.dot(centers[1], teacher_emb)) if teacher_emb is not None else 0.0
             sim_s0 = float(np.dot(centers[0], student_emb)) if student_emb is not None else 0.0
