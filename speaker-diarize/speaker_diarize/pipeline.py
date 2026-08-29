@@ -224,6 +224,9 @@ class TwoSpeakerSplitter:
                 conf_a = float(np.clip(np.dot(emb, centers[0]), 0.0, 1.0))
                 conf_b = float(np.clip(np.dot(emb, centers[1]), 0.0, 1.0))
                 
+                if conf_a < 0.4 and conf_b < 0.4:
+                    continue
+                
                 label = 0 if conf_a >= conf_b else 1
                 confidence = conf_a if label == 0 else conf_b
                 
