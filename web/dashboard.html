@@ -16,15 +16,18 @@
 </head>
 
 <body class="dashboard-page">
-  <div id="globalAiLoader" class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center d-none" style="background: rgba(15, 23, 42, 0.95); z-index: 9999; backdrop-filter: blur(5px);">
+  <div id="globalAiLoader"
+    class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center d-none"
+    style="background: rgba(15, 23, 42, 0.95); z-index: 9999; backdrop-filter: blur(5px);">
     <div class="spinner-border text-primary mb-3" style="width: 4rem; height: 4rem;" role="status">
       <span class="visually-hidden">Loading...</span>
     </div>
     <h3 class="text-white fw-bold">Đang tải mô hình AI...</h3>
     <div class="w-75 mt-3 mb-2" style="max-width: 400px;">
-        <div class="progress" style="height: 10px; background-color: rgba(255,255,255,0.1);">
-            <div id="aiLoaderProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;"></div>
-        </div>
+      <div class="progress" style="height: 10px; background-color: rgba(255,255,255,0.1);">
+        <div id="aiLoaderProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+          role="progressbar" style="width: 0%;"></div>
+      </div>
     </div>
     <p class="text-muted" id="aiLoaderText">Đang chuẩn bị kết nối...</p>
   </div>
@@ -33,16 +36,16 @@
       const loader = document.getElementById('globalAiLoader');
       if (loader) loader.classList.remove('d-none');
     };
-    
+
     window.updateAiProgress = (percent, loadedMB, totalMB) => {
       const bar = document.getElementById('aiLoaderProgress');
       const text = document.getElementById('aiLoaderText');
       if (bar && text) {
         bar.style.width = percent + '%';
         if (totalMB > 0) {
-            text.innerHTML = `Đã tải: <b>${loadedMB}MB</b> / ${totalMB}MB (${percent}%)`;
+          text.innerHTML = `Đã tải: <b>${loadedMB}MB</b> / ${totalMB}MB (${percent}%)`;
         } else {
-            text.innerHTML = `Đang xử lý mô hình AI... (${percent}%)`;
+          text.innerHTML = `Đang xử lý mô hình AI... (${percent}%)`;
         }
       }
     };
@@ -78,13 +81,15 @@
     <!-- STUDENT NAV -->
     <nav class="sidebar-nav d-none" id="studentNav">
       <a href="#" class="nav-item active" data-page="overview"><i class="bi bi-grid-1x2"></i><span>Tổng quan</span></a>
-      <a href="#" class="nav-item" data-page="results"><i class="bi bi-bar-chart-line"></i><span>Kết quả của tôi</span></a>
+      <a href="#" class="nav-item" data-page="results"><i class="bi bi-bar-chart-line"></i><span>Kết quả của
+          tôi</span></a>
       <a href="#" class="nav-item" data-page="profile"><i class="bi bi-person-circle"></i><span>Profile</span></a>
     </nav>
 
     <!-- ADMIN NAV -->
     <nav class="sidebar-nav d-none" id="adminNav">
-      <a href="#" class="nav-item active" data-page="overview"><i class="bi bi-shield-lock"></i><span>Quản trị</span></a>
+      <a href="#" class="nav-item active" data-page="overview"><i class="bi bi-shield-lock"></i><span>Quản
+          trị</span></a>
       <a href="#" class="nav-item" data-page="profile"><i class="bi bi-person-circle"></i><span>Profile</span></a>
     </nav>
 
@@ -122,7 +127,8 @@
         <!-- Global Settings -->
         <div class="col-md-12">
           <div class="section-card">
-            <h6 class="fw-semibold mb-3"><i class="bi bi-gear-fill me-2 text-primary"></i>Cấu hình API Tunnel Toàn Cục</h6>
+            <h6 class="fw-semibold mb-3"><i class="bi bi-gear-fill me-2 text-primary"></i>Cấu hình API Tunnel Toàn Cục
+            </h6>
             <div class="alert alert-info small">
               URL này sẽ được tự động điền làm mặc định cho tất cả Giáo viên khi chấm điểm.
             </div>
@@ -150,7 +156,9 @@
                   </tr>
                 </thead>
                 <tbody id="adminUsersTableBody">
-                  <tr><td colspan="6" class="text-center text-muted">Đang tải...</td></tr>
+                  <tr>
+                    <td colspan="6" class="text-center text-muted">Đang tải...</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -863,27 +871,27 @@
             // Bắt đầu vòng lặp polling (Kiểm tra tiến độ realtime)
             let apiData = null;
             while (true) {
-                await new Promise(r => setTimeout(r, 2000));
-                
-                const statusRes = await fetch(`${apiUrl.replace(/\/$/, '')}/assess_status/${taskId}`);
-                if (!statusRes.ok) throw new Error("Lỗi mạng khi kiểm tra tiến độ");
-                
-                const statusData = await statusRes.json();
-                if (!statusData.success) throw new Error(statusData.error || "Lỗi trạng thái API");
-                
-                const task = statusData.data;
-                if (task.step) {
-                    stepEl.textContent = task.step;
-                }
-                
-                if (task.status === 'completed') {
-                    apiData = task;
-                    break;
-                }
-                
-                if (task.status === 'error') {
-                    throw new Error(task.error || "Lỗi phân tích trên Colab");
-                }
+              await new Promise(r => setTimeout(r, 2000));
+
+              const statusRes = await fetch(`${apiUrl.replace(/\/$/, '')}/assess_status/${taskId}`);
+              if (!statusRes.ok) throw new Error("Lỗi mạng khi kiểm tra tiến độ");
+
+              const statusData = await statusRes.json();
+              if (!statusData.success) throw new Error(statusData.error || "Lỗi trạng thái API");
+
+              const task = statusData.data;
+              if (task.step) {
+                stepEl.textContent = task.step;
+              }
+
+              if (task.status === 'completed') {
+                apiData = task;
+                break;
+              }
+
+              if (task.status === 'error') {
+                throw new Error(task.error || "Lỗi phân tích trên Colab");
+              }
             }
 
             // Upload audio lưu vào Supabase (chạy ngầm)
@@ -1069,7 +1077,7 @@
           import('./js/auth.js').then(async (m) => {
             const getSettings = m.getGlobalSettings;
             const updateSettings = m.updateGlobalSettings;
-            
+
             // Load global settings
             const settings = await getSettings();
             if (settings && settings.api_url) {
@@ -1096,7 +1104,7 @@
               .from('profiles')
               .select('*')
               .order('created_at', { ascending: false });
-              
+
             const tbody = document.getElementById('adminUsersTableBody');
             if (error) {
               tbody.innerHTML = `<tr><td colspan="6" class="text-danger">Lỗi tải dữ liệu: ${error.message}</td></tr>`;
@@ -1106,7 +1114,7 @@
               tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Chưa có người dùng nào</td></tr>`;
               return;
             }
-            
+
             tbody.innerHTML = users.map(u => `
               <tr>
                 <td>
@@ -1131,14 +1139,14 @@
                 const currentRole = e.currentTarget.dataset.role;
                 const newRole = prompt(`Nhập vai trò mới cho ${e.currentTarget.dataset.name} (admin, teacher, student):`, currentRole);
                 if (newRole && ['admin', 'teacher', 'student'].includes(newRole.toLowerCase().trim())) {
-                    const { error } = await supabase.from('profiles').update({ role: newRole.toLowerCase().trim() }).eq('id', id);
-                    if (error) alert("Lỗi cập nhật: " + error.message);
-                    else {
-                        showToast('Đã cập nhật vai trò', 'success');
-                        initAdmin();
-                    }
+                  const { error } = await supabase.from('profiles').update({ role: newRole.toLowerCase().trim() }).eq('id', id);
+                  if (error) alert("Lỗi cập nhật: " + error.message);
+                  else {
+                    showToast('Đã cập nhật vai trò', 'success');
+                    initAdmin();
+                  }
                 } else if (newRole) {
-                    alert("Vai trò không hợp lệ!");
+                  alert("Vai trò không hợp lệ!");
                 }
               });
             });
@@ -1146,14 +1154,14 @@
             document.querySelectorAll('.btn-delete-user').forEach(btn => {
               btn.addEventListener('click', async (e) => {
                 const id = e.currentTarget.dataset.id;
-                if(confirm("Bạn có chắc chắn muốn xoá user này?")) {
+                if (confirm("Bạn có chắc chắn muốn xoá user này?")) {
                   // Xoá từ auth.users (Thông qua RPC của admin)
                   const { error: authError } = await supabase.rpc('delete_user_by_admin', { user_id: id });
                   if (authError) {
-                      alert("Lỗi xoá user (Auth): " + authError.message);
-                      return;
+                    alert("Lỗi xoá user (Auth): " + authError.message);
+                    return;
                   }
-                  
+
                   // Xoá từ profiles
                   const { error } = await supabase.from('profiles').delete().eq('id', id);
                   if (error) alert("Lỗi xoá user (Profile): " + error.message);
@@ -1491,7 +1499,7 @@
               const avgSim = totalSim / count;
               const percent = Math.round(avgSim * 100);
 
-              if (avgSim < 0.65) {
+              if (avgSim < 0.5) {
                 titleEl.innerHTML = `<span class="text-danger">Đã chọn ${validFiles.length} file (Không khớp: ${percent}%) ❌</span>`;
                 alert(`⚠️ Các file âm thanh không đồng nhất (Độ khớp: ${percent}%). Có thể do tiếng ồn hoặc nhiều người cùng nói. Vui lòng chọn lại!`);
               } else {
@@ -1575,7 +1583,7 @@
                       totalSim += cosineSimilarity(emb, prevEmb);
                     }
                     avgSim = totalSim / prevEmbeddings.length;
-                    if (avgSim < 0.65) {
+                    if (avgSim < 0.5) {
                       alert(`⚠️ Giọng đọc này không giống với các câu trước đó (Độ tương đồng: ${Math.round(avgSim * 100)}%). Vui lòng đọc lại!`);
                       delete recorderStates[idx].blob;
                       delete recorderStates[idx].embedding;
