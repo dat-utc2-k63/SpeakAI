@@ -743,9 +743,12 @@
       
       try {
         await signUp(pendingRegistrationData);
+        bootstrap.Modal.getInstance(document.getElementById('voiceModal')).hide();
+        window.location.href = 'dashboard.html';
       } catch (err) {
         btn.innerHTML = 'Bỏ qua & Đăng ký';
         btn.disabled = false;
+        alert('Lỗi đăng ký: ' + err.message);
       }
     });
 
@@ -754,6 +757,15 @@
       btn.querySelector('.btn-text').classList.toggle('d-none', loading);
       btn.querySelector('.btn-loader').classList.toggle('d-none', !loading);
       btn.disabled = loading;
+    }
+
+    function translateAuthError(msg) {
+      if (!msg) return 'Lỗi không xác định.';
+      const m = msg.toLowerCase();
+      if (m.includes('invalid login credentials')) return 'Email hoặc mật khẩu không chính xác.';
+      if (m.includes('user already registered')) return 'Email này đã được đăng ký.';
+      if (m.includes('password should be at least')) return 'Mật khẩu phải có ít nhất 6 ký tự.';
+      return msg;
     }
   </script>
 </body>
