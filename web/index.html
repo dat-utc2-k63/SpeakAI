@@ -521,7 +521,7 @@
           const avgSim = totalSim / count;
           const percent = Math.round(avgSim * 100);
 
-          if (avgSim < 0.55) {
+          if (avgSim < 0.50) {
             titleEl.innerHTML = `<span class="text-danger">Đã chọn ${validFiles.length} file (Không khớp: ${percent}%) ❌</span>`;
           } else {
             titleEl.innerHTML = `Đã chọn ${validFiles.length} file (Độ khớp: ${percent}%) <i class="bi bi-check-circle-fill text-success"></i>`;
@@ -603,7 +603,7 @@
                   totalSim += cosineSimilarity(emb, prevEmb);
                 }
                 avgSim = totalSim / prevEmbeddings.length;
-                if (avgSim < 0.55) {
+                if (avgSim < 0.50) {
                   delete recorderStates[idx].blob;
                   delete recorderStates[idx].embedding;
                   statusEl.className = 'badge bg-danger status-badge';

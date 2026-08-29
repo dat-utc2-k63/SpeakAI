@@ -11,7 +11,6 @@ from speaker_diarize.audio_io import load_audio, save_audio
 from speaker_diarize.clustering import TwoSpeakerClusterer, batch_cluster_two
 from speaker_diarize.embedding import ERes2NetEmbedder
 from speaker_diarize.segmentation import RmsVad, SlidingWindowBuffer, SpeechWindow
-from speaker_diarize.denoise import denoise_with_deepfilternet, level_audio_to_target
 
 LABELS = ("Speaker A", "Speaker B")
 ROLE_TEACHER = "Teacher"
@@ -37,7 +36,6 @@ class SplitResult:
     student_segments: list[DiarizationSegment] | None = None
     teacher_path: Path | None = None
     student_path: Path | None = None
-    denoised_path: Path | None = None
 
 
 class TwoSpeakerSplitter:
@@ -75,26 +73,19 @@ class TwoSpeakerSplitter:
         teacher_reference_path: str | Path | None = None,
         teacher_embedding: np.ndarray | None = None,
         student_embedding: np.ndarray | None = None,
-        apply_denoise: bool = False,
+        apply_denoise: bool = True,
     ) -> SplitResult:
         input_path = Path(input_path)
 
         teacher_emb = teacher_embedding
         if teacher_emb is None and teacher_reference_path:
-            teacher_emb = self._embed_reference(teacher_reference_path, apply_denoise=apply_denoise)
+            teacher_emb = self._embed_reference(teacher_reference_path)
         elif teacher_emb is not None:
             pass
 
         audio, sr = load_audio(input_path)
         
-        if apply_denoise:
-            # 1. Khử nhiễu mạnh bằng DeepFilterNet
-            print("[DeepFilterNet] Đang khử nhiễu...")
-            audio, sr = denoise_with_deepfilternet(audio, sr)
-            
-            # 2. Cân bằng âm lượng toàn mảng (Adaptive Leveling)
-            print("[Leveling] Đang cân bằng âm lượng...")
-            audio = level_audio_to_target(audio, sr)
+
 
         segments, teacher_cluster = self._diarize(
             audio, sr, teacher_emb=teacher_emb, student_emb=student_embedding
@@ -119,12 +110,10 @@ class TwoSpeakerSplitter:
             out_dir.mkdir(parents=True, exist_ok=True)
             teacher_path = out_dir / f"{input_path.stem}_teacher.wav"
             student_path = out_dir / f"{input_path.stem}_student.wav"
-            denoised_path = out_dir / f"{input_path.stem}_denoised.wav"
             csv_path = out_dir / f"{input_path.stem}_cosine_scores.csv"
             
             save_audio(teacher_path, teacher_track, sr)
             save_audio(student_path, student_track, sr)
-            save_audio(denoised_path, audio, sr)
             
             # Lưu file CSV hiển thị điểm cosine
             with open(csv_path, "w", encoding="utf-8") as f:
@@ -142,16 +131,12 @@ class TwoSpeakerSplitter:
             student_segments=student_segments,
             teacher_path=teacher_path,
             student_path=student_path,
-            denoised_path=denoised_path if 'denoised_path' in locals() else None,
         )
 
-    def _embed_reference(self, reference_path: str | Path, apply_denoise: bool = False) -> np.ndarray:
+    def _embed_reference(self, reference_path: str | Path, apply_denoise: bool = True) -> np.ndarray:
         audio, sr = load_audio(reference_path)
         
-        if apply_denoise:
-            # Khử nhiễu và cân bằng cho audio tham chiếu trước khi nhúng
-            audio, sr = denoise_with_deepfilternet(audio, sr)
-            audio = level_audio_to_target(audio, sr)
+
         
         embs: list[np.ndarray] = []
         for window in self.buffer.iter_windows(audio):
