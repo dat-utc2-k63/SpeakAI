@@ -225,6 +225,12 @@
                 Chấm điểm cả Giáo viên trong audio
               </label>
             </div>
+            <div class="form-check form-switch mt-2">
+              <input class="form-check-input" type="checkbox" id="skipFeedbackCheck" />
+              <label class="form-check-label" for="skipFeedbackCheck">
+                Bỏ qua LLM Feedback (Nhận kết quả nhanh hơn)
+              </label>
+            </div>
           </div>
         </div>
       </div>
@@ -506,7 +512,7 @@
         } from './js/teacher.js';
         import { fetchStudentProfile, fetchStudentAssessments, fetchStudentStats } from './js/student.js';
         import { ENROLLMENT_SENTENCES, uploadVoiceSample, markVoiceEnrolled } from './js/voice.js';
-        import { initEcapaModel, getEmbedding, cosineSimilarity } from './js/ecapa.js';
+        import { fetchEmbeddingFromBackend, cosineSimilarity } from './js/voice.js';
 
         // ── AUTH GUARD ────────────────────────────────────────────
         let currentUser = null;
@@ -518,11 +524,6 @@
           currentUser = session.user;
           currentProfile = await getProfile(currentUser.id);
 
-          try {
-            await initEcapaModel();
-          } catch (e) {
-            alert("Lỗi tải mô hình AI: " + e.message);
-          }
           const loader = document.getElementById('globalAiLoader');
           if (loader) loader.remove();
 
@@ -778,10 +779,12 @@
             // Gọi API FastAPI trên Colab (Khởi tạo Task)
             const formData = new FormData();
             const scoreTeacher = document.getElementById('scoreTeacherCheck').checked;
+            const skipFeedback = document.getElementById('skipFeedbackCheck').checked;
             formData.append("audio", convFile);
             formData.append("teacher_embeddings_json", JSON.stringify(currentProfile.voice_embeddings));
             formData.append("student_embeddings_json", JSON.stringify(student.voice_embeddings));
             formData.append("score_teacher", scoreTeacher);
+            formData.append("skip_feedback", skipFeedback);
 
             const startResponse = await fetch(`${apiUrl.replace(/\/$/, '')}/assess_start`, {
               method: "POST",
@@ -1307,13 +1310,13 @@
           try {
             if (validFiles.length === 1) {
               // Chỉ up 1 file thì mặc định làm mẫu gốc
-              await getEmbedding(validFiles[0]); // Chạy test thử xem file có lỗi ko
+              await fetchEmbeddingFromBackend(validFiles[0]); // Chạy test thử xem file có lỗi ko
               titleEl.innerHTML = `Đã chọn 1 file (Mẫu gốc) <i class="bi bi-check-circle-fill text-success"></i>`;
               document.getElementById('saveVoiceBtn').disabled = false;
             } else {
               const embeddings = [];
               for (const file of validFiles) {
-                embeddings.push(await getEmbedding(file));
+                embeddings.push(await fetchEmbeddingFromBackend(file));
               }
               let totalSim = 0;
               let count = 0;
@@ -1394,7 +1397,7 @@
                 btn.innerHTML = '<i class="spinner-border spinner-border-sm me-1"></i>Kiểm tra...';
                 btn.disabled = true;
                 try {
-                  const emb = await getEmbedding(blob);
+                  const emb = await fetchEmbeddingFromBackend(blob);
 
                   const prevEmbeddings = [];
                   for (let i = 0; i < ENROLLMENT_SENTENCES.length; i++) {
@@ -1487,7 +1490,7 @@
               btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-cpu me-2"></i>Đang trích xuất...';
               const embeddings = [];
               for (const file of uploadedFiles) {
-                embeddings.push(await getEmbedding(file));
+                embeddings.push(await fetchEmbeddingFromBackend(file));
               }
               finalEmbeddings = embeddings;
               btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-check-circle me-2"></i>Đang lưu...';

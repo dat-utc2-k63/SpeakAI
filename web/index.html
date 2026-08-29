@@ -294,21 +294,16 @@
     import { signIn, signUp, fetchTeachers } from './js/auth.js';
     import { supabase } from './js/supabase.js';
     import { ENROLLMENT_SENTENCES, uploadVoiceSample, markVoiceEnrolled } from './js/voice.js';
-    import { initEcapaModel, getEmbedding, cosineSimilarity } from './js/ecapa.js';
+    import { fetchEmbeddingFromBackend, cosineSimilarity } from './js/voice.js';
 
     // ── SESSION CHECK ─────────────────────────────────────────
-      (async () => {
-        try {
-          await initEcapaModel();
-        } catch (e) {
-          alert("Lỗi tải mô hình AI: " + e.message);
-        }
+    (async () => {
         const loader = document.getElementById('globalAiLoader');
         if (loader) loader.remove();
 
         const { data: { session } } = await supabase.auth.getSession();
         if (session) window.location.href = 'dashboard.html';
-      })();
+    })();
 
     // ── PASSWORD TOGGLE ───────────────────────────────────────
     function togglePw(inputId, btnId) {
@@ -490,13 +485,13 @@
       try {
           if (validFiles.length === 1) {
               // Chỉ up 1 file thì mặc định làm mẫu gốc
-              await getEmbedding(validFiles[0]); // Chạy test thử xem file có lỗi ko
+              await fetchEmbeddingFromBackend(validFiles[0]); // Chạy test thử xem file có lỗi ko
               titleEl.innerHTML = `Đã chọn 1 file (Mẫu gốc) <i class="bi bi-check-circle-fill text-success"></i>`;
               document.getElementById('saveVoiceBtn').disabled = false;
           } else {
               const embeddings = [];
               for (const file of validFiles) {
-                  embeddings.push(await getEmbedding(file));
+                  embeddings.push(await fetchEmbeddingFromBackend(file));
               }
               let totalSim = 0;
               let count = 0;
@@ -577,7 +572,7 @@
             btn.innerHTML = '<i class="spinner-border spinner-border-sm me-1"></i>Kiểm tra...';
             btn.disabled = true;
             try {
-                const emb = await getEmbedding(blob);
+                const emb = await fetchEmbeddingFromBackend(blob);
                 
                 const prevEmbeddings = [];
                 for (let i = 0; i < ENROLLMENT_SENTENCES.length; i++) {
@@ -671,7 +666,7 @@
           btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-cpu me-2"></i>Đang trích xuất...';
           const embeddings = [];
           for (const file of uploadedFiles) {
-              embeddings.push(await getEmbedding(file));
+              embeddings.push(await fetchEmbeddingFromBackend(file));
           }
           finalEmbeddings = embeddings;
           btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-check-circle me-2"></i>Đang lưu...';

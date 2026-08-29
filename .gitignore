@@ -29,3 +29,4 @@ pretrained_models/lang-id-voxlingua107-ecapa/
 
 transformer_models/
 venv_dfn/
+torch_hub/
