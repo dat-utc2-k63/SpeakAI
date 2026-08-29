@@ -17,7 +17,7 @@ from infer.lang_id import is_vietnamese_segment
 from infer.pronunciation import Predictor
 from infer.transcribe import transcribe_audio
 from infer.device_utils import resolve_device
-from paths import ECAPA_DIR, PRONUNCIATION_CONFIG, ROOT
+from paths import SPEAKER_DIARIZE_DIR, PRONUNCIATION_CONFIG, ROOT
 
 SCORE_KEYS = ("accuracy", "fluency", "prosodic", "total")
 
@@ -165,11 +165,11 @@ class SpeakingPipeline:
         )
         self.pronunciation.preprocess = self.preprocess
         
-        if not ECAPA_DIR.is_dir():
-            raise FileNotFoundError(f"ecapa-diarize not found at {ECAPA_DIR}")
-        if str(ECAPA_DIR) not in sys.path:
-            sys.path.insert(0, str(ECAPA_DIR))
-        from ecapa_diarize.pipeline import TwoSpeakerSplitter
+        if not SPEAKER_DIARIZE_DIR.is_dir():
+            raise FileNotFoundError(f"speaker-diarize not found at {SPEAKER_DIARIZE_DIR}")
+        if str(SPEAKER_DIARIZE_DIR) not in sys.path:
+            sys.path.insert(0, str(SPEAKER_DIARIZE_DIR))
+        from speaker_diarize.pipeline import TwoSpeakerSplitter
         
         self.diarizer = TwoSpeakerSplitter(device=self.device)
         from infer.transcribe import get_transcriber

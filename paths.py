@@ -9,7 +9,7 @@ CONFIGS = ROOT / "configs"
 PRONUNCIATION_CONFIG = CONFIGS / "pronunciation.yaml"
 
 TRANSFORMER_MODELS = ROOT / "transformer_models"
-ECAPA_DIR = ROOT / "ecapa-diarize"
+SPEAKER_DIARIZE_DIR = ROOT / "speaker-diarize"
 LOGS_DIR = ROOT / "logs"
 WEB_UPLOADS = ROOT / "web" / "uploads"
 TEACHER_REFERENCE_DIR = WEB_UPLOADS / "teacher_reference"

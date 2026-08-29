@@ -291,13 +291,20 @@
 
   <!-- JS Logic -->
   <script type="module">
-    import { signIn, signUp, fetchTeachers } from './js/auth.js';
+    import { signIn, signUp, fetchTeachers, getGlobalSettings } from './js/auth.js';
     import { supabase } from './js/supabase.js';
     import { ENROLLMENT_SENTENCES, uploadVoiceSample, markVoiceEnrolled } from './js/voice.js';
     import { fetchEmbeddingFromBackend, cosineSimilarity } from './js/voice.js';
 
     // ── SESSION CHECK ─────────────────────────────────────────
     (async () => {
+      try {
+        const settings = await getGlobalSettings();
+        if (settings && settings.api_url) {
+          window.globalApiUrl = settings.api_url;
+        }
+      } catch(e) {}
+
         const loader = document.getElementById('globalAiLoader');
         if (loader) loader.remove();
 

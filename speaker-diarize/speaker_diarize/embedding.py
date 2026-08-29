@@ -7,10 +7,13 @@ warnings.filterwarnings("ignore")
 
 SAMPLE_RATE = 16000
 
+import os
+DEFAULT_MODEL_ID = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pretrained_models", "speech_eres2net_large_200k_sv_zh-cn_16k-common")
+
 class ERes2NetEmbedder:
     """Wrap ModelScope ERes2NetV2 for speaker embeddings."""
 
-    def __init__(self, device: str = "cuda", model_id: str = "d:/SpeakAI-Eval/speaker-diarize/pretrained_models/speech_eres2net_large_200k_sv_zh-cn_16k-common") -> None:
+    def __init__(self, device: str = "cuda", model_id: str = DEFAULT_MODEL_ID) -> None:
         self.device = device if torch.cuda.is_available() else "cpu"
         self.model_id = model_id
         from modelscope.pipelines import pipeline
