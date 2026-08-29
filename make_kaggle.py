@@ -321,6 +321,9 @@ run_cells.append(md_cell([
 run_cells.append(code_cell([
     "# Cài đặt thư viện\n",
     "import subprocess, sys, os\n",
+    "print('Installing Rust (required for DeepFilterNet on Python 3.12)...')\n",
+    "os.system(\"curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y\")\n",
+    "os.environ['PATH'] = f\"/root/.cargo/bin:{os.environ.get('PATH', '')}\"\n",
     "pkgs = [\n",
     "    'torch>=2.1.0', 'torchaudio>=2.1.0', 'torch-geometric>=2.4.0',\n",
     "    'transformers>=4.36.0', 'peft>=0.7.0', 'pyyaml>=6.0.1',\n",
