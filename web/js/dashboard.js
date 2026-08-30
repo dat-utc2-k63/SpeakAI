@@ -54,7 +54,7 @@ import { supabase } from './supabase.js';
             initStudent();
           }
 
-          import('./js/auth.js').then(async (m) => {
+          import('./auth.js').then(async (m) => {
             const settings = await m.getGlobalSettings();
             if (settings && settings.api_url) {
               window.globalApiUrl = settings.api_url;
@@ -526,7 +526,7 @@ import { supabase } from './supabase.js';
         // ===== ADMIN LOGIC =====
         async function initAdmin() {
           navigateTo('overview');
-          import('./js/auth.js').then(async (m) => {
+          import('./auth.js').then(async (m) => {
             const getSettings = m.getGlobalSettings;
             const updateSettings = m.updateGlobalSettings;
 
