@@ -675,20 +675,21 @@ import { supabase } from './supabase.js';
               btn.addEventListener('click', async (e) => {
                 const id = e.currentTarget.dataset.id;
                 if (confirm("Bạn có chắc chắn muốn xoá user này?")) {
-                  // Xoá từ auth.users (Thông qua RPC của admin)
-                  const { error: authError } = await supabase.rpc('delete_user_by_admin', { user_id: id });
-                  if (authError) {
-                    alert("Lỗi xoá user (Auth): " + authError.message);
+                  // Xoá từ profiles trước để tránh lỗi Foreign Key Constraint
+                  const { error } = await supabase.from('profiles').delete().eq('id', id);
+                  if (error) {
+                    alert("Lỗi xoá user (Profile): " + error.message);
                     return;
                   }
 
-                  // Xoá từ profiles
-                  const { error } = await supabase.from('profiles').delete().eq('id', id);
-                  if (error) alert("Lỗi xoá user (Profile): " + error.message);
-                  else {
-                    showToast('Đã xoá tài khoản hoàn toàn', 'success');
-                    initAdmin(); // reload
+                  // Xoá từ auth.users (Thông qua RPC của admin)
+                  const { error: authError } = await supabase.rpc('delete_user_by_admin', { user_id: id });
+                  if (authError) {
+                    alert("Cảnh báo (Auth): " + authError.message + " (Profile đã được xoá)");
                   }
+                  
+                  showToast('Đã xoá tài khoản hoàn toàn', 'success');
+                  initAdmin(); // reload
                 }
               });
             });
