@@ -1002,7 +1002,15 @@
           const sc = turn.scores || { total: 0, accuracy: 0, fluency: 0 };
           const errs = turn.errors || {};
           const badWords = errs.words ? errs.words.filter(w => w.score < 7.0).map(w => w.word) : [];
-          const llmFb = turn.llm_feedback ? `<div class="mt-3 p-3 bg-white rounded border border-light text-dark shadow-sm feedback-per-turn" style="font-size:0.95rem;">${simpleMarkdown(turn.llm_feedback)}</div>` : '';
+          
+          const llmFb = turn.llm_feedback 
+            ? `<div class="mt-2 pt-2 border-top border-white-50 text-white feedback-per-turn" style="font-size:0.9rem; line-height: 1.4;">${simpleMarkdown(turn.llm_feedback).replace(/<ul>/g, '<ul class="mb-0 ps-3">').replace(/<li>/g, '<li class="mb-1">')}</div>` 
+            : '';
+          
+          // Only show hardcoded bad words if LLM feedback isn't available
+          const badWordsHtml = (!turn.llm_feedback && badWords.length) 
+            ? `<div class="mt-2"><small class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Từ cần sửa: ${badWords.map(w => `<code>${w}</code>`).join(', ')}</small></div>` 
+            : '';
 
           return `
     <div class="timeline-item timeline-student">
