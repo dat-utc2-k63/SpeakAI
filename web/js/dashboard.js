@@ -20,6 +20,18 @@ import { supabase } from './supabase.js';
           currentUser = session.user;
           currentProfile = await getProfile(currentUser.id);
 
+          try {
+            const m = await import('./auth.js');
+            const settings = await m.getGlobalSettings();
+            if (settings && settings.api_url) {
+              window.globalApiUrl = settings.api_url;
+            } else {
+              console.warn("Chưa cấu hình API URL");
+            }
+          } catch(e) {
+            console.error("Lỗi tải API URL", e);
+          }
+
           const loader = document.getElementById('globalAiLoader');
           if (loader) loader.remove();
 
@@ -54,12 +66,7 @@ import { supabase } from './supabase.js';
             initStudent();
           }
 
-          import('./auth.js').then(async (m) => {
-            const settings = await m.getGlobalSettings();
-            if (settings && settings.api_url) {
-              window.globalApiUrl = settings.api_url;
-            }
-          });
+
 
           // Common Profile Setup
           document.getElementById('profileName').textContent = currentProfile.full_name;
@@ -603,6 +610,7 @@ import { supabase } from './supabase.js';
               btn.disabled = true;
               try {
                 await updateSettings(url);
+                window.globalApiUrl = url;
                 showToast('Đã lưu API URL toàn cục!', 'success');
               } catch (e) {
                 alert("Lỗi lưu cấu hình: " + e.message);

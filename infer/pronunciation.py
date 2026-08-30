@@ -116,22 +116,24 @@ class Predictor:
         pred = out["predictions"][0]
         scores = self.scorer.aggregate_utterance(pred)
         scores["final"] = self.scorer.final_score(pred)
-        errors = self.scorer.find_errors(pred, tokens, words, ranges)
+        alignments = [
+            {
+                "phoneme": a.phoneme,
+                "start_frame": a.start_frame,
+                "end_frame": a.end_frame,
+                "confidence": a.confidence,
+            }
+            for a in (out.get("alignments") or [[]])[0]
+        ]
+        
+        errors = self.scorer.find_errors(pred, tokens, words, ranges, alignments=alignments)
         result = {
             "transcript": transcript,
             "scores": scores,
             "errors": errors,
             "truncated": truncated,
             "max_duration_sec": self.max_duration_sec,
-            "alignments": [
-                {
-                    "phoneme": a.phoneme,
-                    "start_frame": a.start_frame,
-                    "end_frame": a.end_frame,
-                    "confidence": a.confidence,
-                }
-                for a in (out.get("alignments") or [[]])[0]
-            ],
+            "alignments": alignments,
             "feedback": None,
             "feedback_source": None,
         }

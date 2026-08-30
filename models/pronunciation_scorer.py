@@ -23,7 +23,7 @@ class PronunciationScorer:
         self,
         score_scale: float = 5.0,
         weights: Optional[Dict[str, float]] = None,
-        phoneme_low_threshold: float = 1.2,
+        phoneme_low_threshold: float = 1.4,
     ):
         self.score_scale = score_scale
         self.weights = weights or {
@@ -85,36 +85,85 @@ class PronunciationScorer:
         phoneme_tokens: List[str],
         word_texts: List[str],
         word_phone_ranges: List[tuple],
+        alignments: Optional[List[dict]] = None,
         threshold: Optional[float] = None,
     ) -> Dict[str, List[dict]]:
         """
-        Identify low-scoring phonemes/words for LLM feedback.
+        Identify low-scoring phonemes/words for LLM feedback, grouped by severity.
 
         Returns:
-            {"phonemes": [...], "words": [...]} with scores on 0-10 scale.
+            {"phonemes": [...], "words": [...]} with scores on 0-10 scale and severity.
         """
         thr = threshold if threshold is not None else self.phoneme_low_threshold
+        display_thr = self.to_display_scale(thr)
         errors = {"phonemes": [], "words": []}
+
+        def get_severity(score_10: float) -> str:
+            if score_10 < 4.0:
+                return "critical"
+            elif score_10 < 6.0:
+                return "warning"
+            else:
+                return "minor"
 
         pa = predictions.get("phoneme_accuracy")
         if pa is not None and isinstance(pa, torch.Tensor):
             for i, (tok, score) in enumerate(zip(phoneme_tokens, pa.tolist())):
-                if score < thr:
+                display_score = self.to_display_scale(score)
+                
+                # Confidence gating & min frames
+                valid = True
+                if alignments and i < len(alignments):
+                    al = alignments[i]
+                    conf = al.get("confidence", 1.0)
+                    dur = al.get("end_frame", 2) - al.get("start_frame", 0)
+                    if conf < 0.5 or dur < 2:
+                        valid = False
+
+                if valid and display_score < display_thr:
                     errors["phonemes"].append(
                         {
                             "index": i,
                             "phoneme": tok,
-                            "score": self.to_display_scale(score),
+                            "score": display_score,
+                            "severity": get_severity(display_score)
                         }
                     )
 
-        wt = predictions.get("word_accuracy")
-        if wt is not None and isinstance(wt, torch.Tensor):
-            for i, (word, score) in enumerate(zip(word_texts, wt.tolist())):
-                display = self.to_display_scale(score)
-                if display < self.to_display_scale(thr):
+        wt_acc = predictions.get("word_accuracy")
+        wt_stress = predictions.get("word_stress")
+        if wt_acc is not None and isinstance(wt_acc, torch.Tensor):
+            for i, (word, acc_score) in enumerate(zip(word_texts, wt_acc.tolist())):
+                stress_score = wt_stress[i].item() if (wt_stress is not None and isinstance(wt_stress, torch.Tensor) and i < len(wt_stress)) else acc_score
+                combined_score = (acc_score + stress_score) / 2.0
+                display_score = self.to_display_scale(combined_score)
+                
+                # Word confidence and frames derived from constituent phonemes
+                valid = True
+                if alignments and i < len(word_phone_ranges):
+                    start_idx, end_idx = word_phone_ranges[i]
+                    word_conf = 0.0
+                    word_dur = 0
+                    count = 0
+                    for p_idx in range(start_idx, end_idx):
+                        if p_idx < len(alignments):
+                            al = alignments[p_idx]
+                            word_conf += al.get("confidence", 1.0)
+                            word_dur += (al.get("end_frame", 2) - al.get("start_frame", 0))
+                            count += 1
+                    if count > 0:
+                        word_conf /= count
+                        if word_conf < 0.5 or word_dur < 2:
+                            valid = False
+
+                if valid and display_score < display_thr:
                     errors["words"].append(
-                        {"index": i, "word": word, "score": display}
+                        {
+                            "index": i, 
+                            "word": word, 
+                            "score": display_score,
+                            "severity": get_severity(display_score)
+                        }
                     )
 
         return errors
