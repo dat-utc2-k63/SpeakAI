@@ -1195,9 +1195,11 @@ import { supabase } from './supabase.js';
             }
 
             // Calculate mean embedding
-            let meanEmb = new Float32Array(192);
+            let meanEmb = [];
             if (finalEmbeddings.length > 0) {
-              for (let i = 0; i < 192; i++) {
+              const dim = finalEmbeddings[0].length;
+              meanEmb = new Float32Array(dim);
+              for (let i = 0; i < dim; i++) {
                 let sum = 0;
                 for (const emb of finalEmbeddings) {
                   sum += emb[i];
@@ -1206,12 +1208,12 @@ import { supabase } from './supabase.js';
               }
               // L2 Normalize
               let norm = 0;
-              for (let i = 0; i < 192; i++) {
+              for (let i = 0; i < dim; i++) {
                 norm += meanEmb[i] * meanEmb[i];
               }
               norm = Math.sqrt(norm);
               if (norm > 0) {
-                for (let i = 0; i < 192; i++) {
+                for (let i = 0; i < dim; i++) {
                   meanEmb[i] /= norm;
                 }
               }
