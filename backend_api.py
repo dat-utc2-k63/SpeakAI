@@ -22,7 +22,7 @@ def start_cloudflare_tunnel(port=8000):
         
     for _ in range(20):
         line = process.stdout.readline()
-        match = re.search(r'https://[a-zA-Z0-9-]+\\.trycloudflare\\.com', line)
+        match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
         if match:
             url = match.group(0)
             break
@@ -30,8 +30,10 @@ def start_cloudflare_tunnel(port=8000):
     return url
 
 PUBLIC_URL = start_cloudflare_tunnel(8000)
+print('\n' + '='*80)
 print(f'🚀 API IS LIVE AT: {PUBLIC_URL}')
 print('=> COPY LINK NÀY VÀ DÁN VÀO CẤU HÌNH TRÊN WEBSITE CỦA BẠN!')
+print('='*80 + '\n')
 
 # 2. Khởi tạo FastAPI App
 app = FastAPI()

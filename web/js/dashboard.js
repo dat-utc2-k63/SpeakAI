@@ -1,13 +1,13 @@
-import { supabase } from './js/supabase.js';
-        import { signOut, getProfile, updateProfile } from './js/auth.js';
+import { supabase } from './supabase.js';
+        import { signOut, getProfile, updateProfile } from './auth.js';
         import {
           fetchMyStudents, fetchTeacherStats, uploadConversationAudio,
           createAssessment, saveAssessment, fetchSavedAssessments, deleteAssessment,
           uploadAudioUrlToSupabase
-        } from './js/teacher.js';
-        import { fetchStudentProfile, fetchStudentAssessments, fetchStudentStats } from './js/student.js';
-        import { ENROLLMENT_SENTENCES, uploadVoiceSample, markVoiceEnrolled } from './js/voice.js';
-        import { fetchEmbeddingFromBackend, cosineSimilarity } from './js/voice.js';
+        } from './teacher.js';
+        import { fetchStudentProfile, fetchStudentAssessments, fetchStudentStats } from './student.js';
+        import { ENROLLMENT_SENTENCES, uploadVoiceSample, markVoiceEnrolled } from './voice.js';
+        import { fetchEmbeddingFromBackend, cosineSimilarity } from './voice.js';
 
 
         // ── AUTH GUARD ────────────────────────────────────────────
