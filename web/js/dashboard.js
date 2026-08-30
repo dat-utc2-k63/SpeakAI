@@ -675,6 +675,13 @@ import { supabase } from './supabase.js';
               btn.addEventListener('click', async (e) => {
                 const id = e.currentTarget.dataset.id;
                 if (confirm("Bạn có chắc chắn muốn xoá user này?")) {
+                  // Xoá các bài đánh giá liên quan (để tránh lỗi Foreign Key Constraint 'assessments_student_id_fkey' / 'assessments_teacher_id_fkey')
+                  const { error: assessError } = await supabase.from('assessments').delete().or(`student_id.eq.${id},teacher_id.eq.${id}`);
+                  if (assessError) {
+                    alert("Lỗi xoá bài đánh giá liên quan: " + assessError.message);
+                    return;
+                  }
+
                   // Xoá từ profiles trước để tránh lỗi Foreign Key Constraint
                   const { error } = await supabase.from('profiles').delete().eq('id', id);
                   if (error) {
