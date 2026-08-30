@@ -445,9 +445,69 @@ import { supabase } from './supabase.js';
           const errs = turn.errors || {};
           const badWords = errs.words ? errs.words.filter(w => w.score < 7.0).map(w => w.word) : [];
           
-          const llmFb = turn.llm_feedback 
-            ? `<div class="mt-2 pt-2 border-top border-white-50 text-white feedback-per-turn" style="font-size:0.9rem; line-height: 1.4;">${simpleMarkdown(turn.llm_feedback).replace(/<ul>/g, '<ul class="mb-0 ps-3">').replace(/<li>/g, '<li class="mb-1">')}</div>` 
-            : '';
+          function formatTurnFeedback(text) {
+            if (!text) return '';
+            let phatAmHtml = '';
+            let nguPhapHtml = '';
+            
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+            let currentSection = '';
+            let phatAmLines = [];
+            let nguPhapLines = [];
+            
+            for (const line of lines) {
+                if (line.startsWith('- Phát âm:')) {
+                    currentSection = 'phatam';
+                    const val = line.replace('- Phát âm:', '').trim();
+                    if (val) phatAmLines.push(val);
+                } else if (line.startsWith('- Ngữ pháp')) {
+                    currentSection = 'nguphap';
+                    const val = line.replace(/^- Ngữ pháp.*?:\s*/, '').trim();
+                    if (val) nguPhapLines.push(val);
+                } else {
+                    if (currentSection === 'phatam') phatAmLines.push(line);
+                    else if (currentSection === 'nguphap') nguPhapLines.push(line);
+                }
+            }
+            
+            if (phatAmLines.length > 0) {
+                const content = phatAmLines.join('<br>');
+                if (content.includes('✅')) {
+                     phatAmHtml = `<div class="mb-2"><span class="badge bg-success me-1"><i class="bi bi-mic"></i> Phát âm</span> <span class="text-success small">${content}</span></div>`;
+                } else {
+                     phatAmHtml = `<div class="mb-2">
+                        <span class="badge bg-warning text-dark mb-1"><i class="bi bi-mic"></i> Phát âm</span>
+                        <div class="small ps-2 border-start border-warning text-warning">${content}</div>
+                     </div>`;
+                }
+            }
+            
+            if (nguPhapLines.length > 0) {
+                const content = nguPhapLines.join('<br>');
+                if (content.includes('✅')) {
+                     nguPhapHtml = `<div><span class="badge bg-success me-1"><i class="bi bi-chat-text"></i> Ngữ pháp & Ngữ cảnh</span> <span class="text-success small">${content}</span></div>`;
+                } else {
+                     let formatted = content;
+                     if (content.includes('->')) {
+                         const parts = content.split('->');
+                         formatted = `<span class="text-danger">${parts[0].trim()}</span><br><span class="text-info"><i class="bi bi-arrow-return-right"></i> ${parts[1].trim()}</span>`;
+                     } else {
+                         formatted = `<span class="text-danger">${content}</span>`;
+                     }
+                     nguPhapHtml = `<div>
+                        <span class="badge bg-danger mb-1"><i class="bi bi-chat-text"></i> Ngữ pháp & Ngữ cảnh</span>
+                        <div class="small ps-2 border-start border-danger">${formatted}</div>
+                     </div>`;
+                }
+            }
+            
+            return `<div class="mt-2 pt-2 border-top border-white-50 feedback-per-turn" style="background: rgba(0,0,0,0.15); padding: 10px; border-radius: 8px;">
+                ${phatAmHtml}
+                ${nguPhapHtml}
+            </div>`;
+          }
+
+          const llmFb = turn.llm_feedback ? formatTurnFeedback(turn.llm_feedback) : '';
           
           // Only show hardcoded bad words if LLM feedback isn't available
           const badWordsHtml = (!turn.llm_feedback && badWords.length) 
