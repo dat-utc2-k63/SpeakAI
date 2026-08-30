@@ -130,12 +130,11 @@ def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embe
             score_teacher=score_teacher
         )
         
-        # Áp dụng phạt nặng điểm số để phản ánh thực tế
         def apply_penalty(node):
             if isinstance(node, dict):
                 for k, v in node.items():
                     if k in ['accuracy', 'fluency', 'prosodic', 'score', 'completeness', 'total'] and isinstance(v, (int, float)) and v > 0:
-                        node[k] = max(0.0, v - (10.0 - v) * 0.45)
+                        node[k] = max(0.0, v - (10.0 - v) * 0.15)
                     else:
                         apply_penalty(v)
             elif isinstance(node, list):

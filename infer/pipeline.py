@@ -171,7 +171,16 @@ class SpeakingPipeline:
             sys.path.insert(0, str(SPEAKER_DIARIZE_DIR))
         from speaker_diarize.pipeline import TwoSpeakerSplitter
         
-        self.diarizer = TwoSpeakerSplitter(device=self.device)
+        self.diarizer = TwoSpeakerSplitter(
+            device=self.device,
+            cluster_window_sec=1.5,
+            boundary_window_sec=0.5,
+            min_speech_sec=0.25,
+            min_segment_sec=0.3,
+            merge_gap_sec=0.5,
+            step_sec=0.25,
+            boundary_step_sec=0.05
+        )
         from infer.transcribe import get_transcriber
         get_transcriber(load_progress)
         
@@ -192,6 +201,7 @@ class SpeakingPipeline:
             teacher_reference_path=teacher_reference_path,
             teacher_embedding=teacher_embedding,
             student_embedding=student_embedding,
+            apply_denoise=False, # Already pre-denoised
         )
         out: Dict[str, Any] = {
             "segments": result.segments,
@@ -405,6 +415,24 @@ class SpeakingPipeline:
         """Diarize A/B → split each track by silence → score every sentence."""
         fb = self.enable_feedback if feedback is None else feedback
         audio = Path(audio)
+        
+        # Pre-denoise audio so both Diarization and Whisper get clean audio
+        if self.preprocess.denoise:
+            try:
+                from speaker_diarize.denoise import denoise_with_deepfilternet, level_audio_to_target
+                import soundfile as sf
+                import librosa
+                print(f"[enhance] Denoising {audio.name} with DeepFilterNet...")
+                audio_data, sr = librosa.load(str(audio), sr=None)
+                clean_data, _ = denoise_with_deepfilternet(audio_data, sr)
+                clean_data = level_audio_to_target(clean_data, sr)
+                clean_audio = audio.parent / f"{audio.stem}_clean.wav"
+                sf.write(str(clean_audio), clean_data, sr)
+                audio = clean_audio
+                print(f"[enhance] Saved clean file: {audio.name}")
+            except Exception as e:
+                print(f"[enhance] Denoise failed: {e}")
+
         base_dir = Path(diarize_output_dir or audio.parent / f"{audio.stem}_split")
         split = self._diarize_two_speakers(
             audio,

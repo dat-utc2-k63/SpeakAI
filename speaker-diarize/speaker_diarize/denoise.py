@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 # ---- DeepFilterNet: giới hạn mức khử nhiễu tối đa ----
-ATTEN_LIM_DB = 20.0
+ATTEN_LIM_DB = 10.0
 
 # ---- Envelope follower (theo dõi mức năng lượng) ----
 FRAME_MS = 50            # kích thước khung để tính RMS

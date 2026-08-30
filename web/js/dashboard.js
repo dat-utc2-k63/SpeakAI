@@ -451,75 +451,20 @@ import { supabase } from './supabase.js';
           const sc = turn.scores || { total: 0, accuracy: 0, fluency: 0 };
           const errs = turn.errors || {};
           const badWords = errs.words ? errs.words.filter(w => w.score < 7.0).map(w => w.word) : [];
-          
-          function formatTurnFeedback(text) {
-            if (!text) return '';
-            let phatAmHtml = '';
-            let nguPhapHtml = '';
+          const badPhonemes = errs.phonemes ? errs.phonemes.filter(p => p.score < 7.0).map(p => p.phoneme) : [];
             
-            const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-            let currentSection = '';
-            let phatAmLines = [];
-            let nguPhapLines = [];
-            
-            for (const line of lines) {
-                if (line.startsWith('- Phát âm:')) {
-                    currentSection = 'phatam';
-                    const val = line.replace('- Phát âm:', '').trim();
-                    if (val) phatAmLines.push(val);
-                } else if (line.startsWith('- Ngữ pháp')) {
-                    currentSection = 'nguphap';
-                    const val = line.replace(/^- Ngữ pháp.*?:\s*/, '').trim();
-                    if (val) nguPhapLines.push(val);
-                } else {
-                    if (currentSection === 'phatam') phatAmLines.push(line);
-                    else if (currentSection === 'nguphap') nguPhapLines.push(line);
-                }
+          let errorsHtml = '';
+          if (badWords.length > 0 || badPhonemes.length > 0) {
+            errorsHtml = `<div class="mt-2" style="background: rgba(255,193,7,0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #ffc107;">
+              <div class="small text-warning mb-1"><i class="bi bi-exclamation-triangle me-1"></i><strong>Cần cải thiện phát âm:</strong></div>`;
+            if (badWords.length > 0) {
+              errorsHtml += `<div class="small text-white-50 ms-3">- Từ phát âm yếu: ${badWords.map(w => `<strong class="text-white">${w}</strong>`).join(', ')}</div>`;
             }
-            
-            if (phatAmLines.length > 0) {
-                const content = phatAmLines.join('<br>');
-                if (content.includes('✅')) {
-                     phatAmHtml = `<div class="mb-2"><span class="badge bg-success me-1"><i class="bi bi-mic"></i> Phát âm</span> <span class="text-success small">${content}</span></div>`;
-                } else {
-                     phatAmHtml = `<div class="mb-2">
-                        <span class="badge bg-warning text-dark mb-1"><i class="bi bi-mic"></i> Phát âm</span>
-                        <div class="small ps-2 border-start border-warning text-warning">${content}</div>
-                     </div>`;
-                }
+            if (badPhonemes.length > 0) {
+              errorsHtml += `<div class="small text-white-50 ms-3">- Âm sai/yếu: ${badPhonemes.map(p => `<strong class="text-warning">${p}</strong>`).join(', ')}</div>`;
             }
-            
-            if (nguPhapLines.length > 0) {
-                const content = nguPhapLines.join('<br>');
-                if (content.includes('✅')) {
-                     nguPhapHtml = `<div><span class="badge bg-success me-1"><i class="bi bi-chat-text"></i> Ngữ pháp & Ngữ cảnh</span> <span class="text-success small">${content}</span></div>`;
-                } else {
-                     let formatted = content;
-                     if (content.includes('->')) {
-                         const parts = content.split('->');
-                         formatted = `<span class="text-danger">${parts[0].trim()}</span><br><span class="text-info"><i class="bi bi-arrow-return-right"></i> ${parts[1].trim()}</span>`;
-                     } else {
-                         formatted = `<span class="text-danger">${content}</span>`;
-                     }
-                     nguPhapHtml = `<div>
-                        <span class="badge bg-danger mb-1"><i class="bi bi-chat-text"></i> Ngữ pháp & Ngữ cảnh</span>
-                        <div class="small ps-2 border-start border-danger">${formatted}</div>
-                     </div>`;
-                }
-            }
-            
-            return `<div class="mt-2 pt-2 border-top border-white-50 feedback-per-turn" style="background: rgba(0,0,0,0.15); padding: 10px; border-radius: 8px;">
-                ${phatAmHtml}
-                ${nguPhapHtml}
-            </div>`;
+            errorsHtml += `</div>`;
           }
-
-          const llmFb = turn.llm_feedback ? formatTurnFeedback(turn.llm_feedback) : '';
-          
-          // Only show hardcoded bad words if LLM feedback isn't available
-          const badWordsHtml = (!turn.llm_feedback && badWords.length) 
-            ? `<div class="mt-2"><small class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Từ cần sửa: ${badWords.map(w => `<code>${w}</code>`).join(', ')}</small></div>` 
-            : '';
 
           return `
     <div class="timeline-item timeline-student">
@@ -533,9 +478,8 @@ import { supabase } from './supabase.js';
           </div>
         </div>
         <div>${turn.transcript}</div>
-        ${badWords.length ? `<div class="mt-2"><small class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Từ cần sửa: ${badWords.map(w => `<code>${w}</code>`).join(', ')}</small></div>` : ''}
+        ${errorsHtml}
         ${audioHtml}
-        ${llmFb}
       </div>
       <div class="timeline-dot student-dot"><i class="bi bi-mortarboard"></i></div>
     </div>`;
