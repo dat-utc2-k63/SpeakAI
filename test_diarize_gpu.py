@@ -1,5 +1,8 @@
 import os
 import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 import time
 from pathlib import Path
 import torch
@@ -72,13 +75,13 @@ def run_test(audio_path: str):
     teacher_embs = []
     for ref in teacher_refs:
         if Path(ref).exists():
-            emb = splitter._embed_reference(ref, apply_denoise=False)
+            emb = splitter._embed_reference(ref)
             teacher_embs.append(emb)
     
     student_embs = []
     for ref in student_refs:
         if Path(ref).exists():
-            emb = splitter._embed_reference(ref, apply_denoise=False)
+            emb = splitter._embed_reference(ref)
             student_embs.append(emb)
             
     teacher_emb = np.mean(teacher_embs, axis=0) if teacher_embs else None
@@ -94,8 +97,7 @@ def run_test(audio_path: str):
     result = splitter.split_file(
         input_path=audio_file,
         teacher_embedding=teacher_emb,
-        student_embedding=student_emb,
-        apply_denoise=False
+        student_embedding=student_emb
     )
     infer_time = time.time() - start_infer
     print(f"\nPhÃ¢n tÃ¡ch xong! Thá» i gian xá»­ lÃ½: {infer_time:.2f}s")
@@ -106,8 +108,7 @@ def run_test(audio_path: str):
         print(f"[{seg.start:05.2f}s - {seg.end:05.2f}s] {seg.speaker} (Confidence: {seg.confidence:.2f})")
     
     print("\n[4] FILE Káº¾T QUáº¢:")
-    if result.denoised_path:
-        print(f"- File Ã¢m thanh gá»‘c (Ä‘Ã£ khá»­ nhiá»…u/cÃ¢n báº±ng): {result.denoised_path}")
+
     print(f"- File giá»ng GiÃ¡o viÃªn: {result.teacher_path}")
     print(f"- File giá»ng Há»c sinh:  {result.student_path}")
     print(f"- File CSV cháº¥m Ä‘iá»ƒm (Cosine Score): d:\\SpeakAI-Eval\\sample_audio\\conversation_split\\conversation_cosine_scores.csv")

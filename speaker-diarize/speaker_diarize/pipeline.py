@@ -85,8 +85,15 @@ class TwoSpeakerSplitter:
 
         audio, sr = load_audio(input_path)
 
+        diarize_audio = audio
+        if apply_denoise:
+            from speaker_diarize.denoise import denoise_with_deepfilternet, level_audio_to_target
+            print("[Info] Applying DeepFilterNet denoise and leveling for accurate VAD segmentation...")
+            diarize_audio, _ = denoise_with_deepfilternet(audio, sr)
+            diarize_audio = level_audio_to_target(diarize_audio, sr)
+
         segments, teacher_cluster = self._diarize(
-            audio, sr, teacher_emb=teacher_emb, student_emb=student_embedding
+            diarize_audio, sr, teacher_emb=teacher_emb, student_emb=student_embedding
         )
 
         teacher_segments = [s for s in segments if s.speaker == ROLE_TEACHER] if teacher_cluster is not None else None
@@ -133,6 +140,11 @@ class TwoSpeakerSplitter:
 
     def _embed_reference(self, reference_path: str | Path, apply_denoise: bool = True) -> np.ndarray:
         audio, sr = load_audio(reference_path)
+        
+        if apply_denoise:
+            from speaker_diarize.denoise import denoise_with_deepfilternet, level_audio_to_target
+            audio, _ = denoise_with_deepfilternet(audio, sr)
+            audio = level_audio_to_target(audio, sr)
             
         embs: list[np.ndarray] = []
         for window in self.buffer.iter_windows(audio):
@@ -218,17 +230,7 @@ class TwoSpeakerSplitter:
             try:
                 emb = self.embedder.embed(window.audio)
                 
-                # Check directly against teacher/student embeddings if provided
-                if teacher_emb is not None and student_emb is not None:
-                    conf_t = float(np.clip(np.dot(emb, teacher_emb), 0.0, 1.0))
-                    conf_s = float(np.clip(np.dot(emb, student_emb), 0.0, 1.0))
-                    if conf_t < 0.4 and conf_s < 0.4:
-                        continue
-                else:
-                    conf_a = float(np.clip(np.dot(emb, centers[0]), 0.0, 1.0))
-                    conf_b = float(np.clip(np.dot(emb, centers[1]), 0.0, 1.0))
-                    if conf_a < 0.4 and conf_b < 0.4:
-                        continue
+
                 
                 conf_a = float(np.clip(np.dot(emb, centers[0]), 0.0, 1.0))
                 conf_b = float(np.clip(np.dot(emb, centers[1]), 0.0, 1.0))
@@ -246,7 +248,7 @@ class TwoSpeakerSplitter:
 
         stamps = self.vad.get_timestamps(audio, sample_rate=sample_rate)
         is_speech = np.zeros(n, dtype=bool)
-        pad_samples = int(0.4 * sample_rate)  # Expand speech by 400ms to avoid missing soft ends
+        pad_samples = int(0.2 * sample_rate)  # Expand speech by 400ms to avoid missing soft ends
         for stamp in stamps:
             s_idx = max(0, stamp["start"] - pad_samples)
             e_idx = min(n, stamp["end"] + pad_samples)
