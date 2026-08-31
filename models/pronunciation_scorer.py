@@ -111,14 +111,9 @@ class PronunciationScorer:
             for i, (tok, score) in enumerate(zip(phoneme_tokens, pa.tolist())):
                 display_score = self.to_display_scale(score)
                 
-                # Confidence gating & min frames
+                # We no longer filter out low confidence/short phonemes because the user explicitly said:
+                # "confidence < 0.5 -> noise: Không nên kết luận như vậy"
                 valid = True
-                if alignments and i < len(alignments):
-                    al = alignments[i]
-                    conf = al.get("confidence", 1.0)
-                    dur = al.get("end_frame", 2) - al.get("start_frame", 0)
-                    if conf < 0.5 or dur < 2:
-                        valid = False
 
                 if valid and display_score < display_thr:
                     errors["phonemes"].append(
@@ -153,8 +148,9 @@ class PronunciationScorer:
                             count += 1
                     if count > 0:
                         word_conf /= count
-                        if word_conf < 0.5 or word_dur < 2:
-                            valid = False
+                        # We no longer filter out low confidence/short words
+                        # if word_conf < 0.5 or word_dur < 2:
+                        #     valid = False
 
                 if valid and display_score < display_thr:
                     errors["words"].append(

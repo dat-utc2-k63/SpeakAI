@@ -201,7 +201,7 @@ class SpeakingPipeline:
             teacher_reference_path=teacher_reference_path,
             teacher_embedding=teacher_embedding,
             student_embedding=student_embedding,
-            apply_denoise=False, # Already pre-denoised
+            apply_denoise=self.preprocess.denoise,
         )
         out: Dict[str, Any] = {
             "segments": result.segments,
@@ -415,23 +415,8 @@ class SpeakingPipeline:
         """Diarize A/B → split each track by silence → score every sentence."""
         fb = self.enable_feedback if feedback is None else feedback
         audio = Path(audio)
-        
-        # Pre-denoise audio so both Diarization and Whisper get clean audio
-        if self.preprocess.denoise:
-            try:
-                from speaker_diarize.denoise import denoise_with_deepfilternet, level_audio_to_target
-                import soundfile as sf
-                import librosa
-                print(f"[enhance] Denoising {audio.name} with DeepFilterNet...")
-                audio_data, sr = librosa.load(str(audio), sr=None)
-                clean_data, _ = denoise_with_deepfilternet(audio_data, sr)
-                clean_data = level_audio_to_target(clean_data, sr)
-                clean_audio = audio.parent / f"{audio.stem}_clean.wav"
-                sf.write(str(clean_audio), clean_data, sr)
-                audio = clean_audio
-                print(f"[enhance] Saved clean file: {audio.name}")
-            except Exception as e:
-                print(f"[enhance] Denoise failed: {e}")
+        # We no longer pre-denoise the audio because Whisper works better with raw audio
+        # The diarizer will internally denoise for its own segmentation if self.preprocess.denoise is True.
 
         base_dir = Path(diarize_output_dir or audio.parent / f"{audio.stem}_split")
         split = self._diarize_two_speakers(

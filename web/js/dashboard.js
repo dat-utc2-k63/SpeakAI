@@ -454,7 +454,11 @@ import { supabase } from './supabase.js';
           const badPhonemes = errs.phonemes ? errs.phonemes.filter(p => p.score < 7.0).map(p => p.phoneme) : [];
             
           let errorsHtml = '';
-          if (badWords.length > 0 || badPhonemes.length > 0) {
+          if (turn.llm_feedback) {
+            errorsHtml = `<div class="mt-2" style="background: rgba(255,193,7,0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #ffc107;">
+              <div class="small text-warning"><i class="bi bi-robot me-1"></i>${turn.llm_feedback}</div>
+            </div>`;
+          } else if (badWords.length > 0 || badPhonemes.length > 0) {
             errorsHtml = `<div class="mt-2" style="background: rgba(255,193,7,0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #ffc107;">
               <div class="small text-warning mb-1"><i class="bi bi-exclamation-triangle me-1"></i><strong>Cần cải thiện phát âm:</strong></div>`;
             if (badWords.length > 0) {

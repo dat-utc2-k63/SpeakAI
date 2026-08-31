@@ -134,7 +134,7 @@ def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embe
             if isinstance(node, dict):
                 for k, v in node.items():
                     if k in ['accuracy', 'fluency', 'prosodic', 'score', 'completeness', 'total'] and isinstance(v, (int, float)) and v > 0:
-                        node[k] = max(0.0, v - (10.0 - v) * 0.15)
+                        node[k] = max(0.0, v - (10.0 - v) * 0.30)
                     else:
                         apply_penalty(v)
             elif isinstance(node, list):
