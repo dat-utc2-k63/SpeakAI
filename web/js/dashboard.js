@@ -542,30 +542,6 @@ import { supabase } from './supabase.js';
         async function initAdmin() {
           navigateTo('overview');
           import('./auth.js').then(async (m) => {
-            const getSettings = m.getGlobalSettings;
-            const updateSettings = m.updateGlobalSettings;
-
-            // Load global settings
-            const settings = await getSettings();
-            if (settings && settings.api_url) {
-              document.getElementById('globalApiUrlInput').value = settings.api_url;
-            }
-
-            document.getElementById('saveGlobalApiBtn').addEventListener('click', async () => {
-              const url = document.getElementById('globalApiUrlInput').value.trim();
-              const btn = document.getElementById('saveGlobalApiBtn');
-              btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>...';
-              btn.disabled = true;
-              try {
-                await updateSettings(url);
-                window.globalApiUrl = url;
-                showToast('Đã lưu API URL toàn cục!', 'success');
-              } catch (e) {
-                alert("Lỗi lưu cấu hình: " + e.message);
-              }
-              btn.innerHTML = 'Lưu Cấu Hình';
-              btn.disabled = false;
-            });
 
             // Load users
             const { data: users, error } = await supabase

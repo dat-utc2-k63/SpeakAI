@@ -30,9 +30,32 @@ def start_cloudflare_tunnel(port=8000):
     return url
 
 PUBLIC_URL = start_cloudflare_tunnel(8000)
+
+if PUBLIC_URL:
+    import requests
+    SUPABASE_URL = 'https://kngkckshvgaqeiatryqy.supabase.co'
+    SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuZ2tja3NodmdhcWVpYXRyeXF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MzAxMjYsImV4cCI6MjEwMzEwNjEyNn0.tDs7-9R0h3YHQF78uGGMSWtUXTOOE5y0XYD5mYk_KAM'
+    try:
+        r = requests.patch(
+            f"{SUPABASE_URL}/rest/v1/global_settings?id=eq.1",
+            headers={
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal"
+            },
+            json={"api_url": PUBLIC_URL},
+            timeout=10
+        )
+        if r.status_code in [200, 204]:
+            print("✅ Đã tự động cập nhật API URL lên Supabase!")
+        else:
+            print(f"❌ Lỗi cập nhật Supabase: {r.text}")
+    except Exception as e:
+        print(f"❌ Lỗi cập nhật Supabase: {e}")
+
 print('\n' + '='*80)
 print(f'🚀 API IS LIVE AT: {PUBLIC_URL}')
-print('=> COPY LINK NÀY VÀ DÁN VÀO CẤU HÌNH TRÊN WEBSITE CỦA BẠN!')
 print('='*80 + '\n')
 
 # 2. Khởi tạo FastAPI App
