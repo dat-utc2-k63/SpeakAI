@@ -73,7 +73,7 @@ inference:
   max_upload_mb: 300
 
 asr:
-  model_name: pretrained_models/whisper-large-v3-turbo
+  model_name: pretrained_models/whisper-large-v3
   language: en
   device: cuda
   torch_dtype: float16
