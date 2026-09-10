@@ -7,80 +7,74 @@ import time
 from pathlib import Path
 import torch
 
-# ThÃªm thÆ° má»¥c speaker-diarize vÃ o sys.path Ä‘á»ƒ cÃ³ thá»ƒ import
+# Them thu muc speaker-diarize vao sys.path de import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "speaker-diarize"))
 
 from speaker_diarize.pipeline import TwoSpeakerSplitter
 from speaker_diarize.embedding import ERes2NetEmbedder
 
-def run_test(audio_path: str):
-    print("=== KIá»‚M TRA QUÃ TRÃŒNH DIARIZE TRÃŠN GPU ===")
+def run_test(audio_path: str, teacher_ref: str = None, student_ref: str = None):
+    print("=== KIEM TRA QUA TRINH DIARIZE TREN GPU ===")
     
-    # Kiá»ƒm tra GPU
+    # Kiem tra GPU
     if torch.cuda.is_available():
-        print(f"[Info] Sá»­ dá»¥ng GPU: {torch.cuda.get_device_name(0)}")
+        print(f"[Info] Su dung GPU: {torch.cuda.get_device_name(0)}")
         device = "cuda"
     else:
-        print("[Cáº£nh bÃ¡o] KhÃ´ng tÃ¬m tháº¥y GPU, sáº½ cháº¡y báº±ng CPU!")
+        print("[Canh bao] Khong tim thay GPU, se chay bang CPU!")
         device = "cpu"
 
     audio_file = Path(audio_path)
     if not audio_file.exists():
-        print(f"[Lá»—i] KhÃ´ng tÃ¬m tháº¥y file Ã¢m thanh: {audio_path}")
-        print("Vui lÃ²ng sá»­a biáº¿n AUDIO_PATH trong file test_diarize_gpu.py thÃ nh Ä‘Æ°á» ng dáº«n file thá»±c táº¿.")
+        print(f"[Loi] Khong tim thay file am thanh: {audio_path}")
         return
 
-    print("\n[1] Ä ang khá»Ÿi táº¡o mÃ´ hÃ¬nh ERes2Net-Large...")
+    print("\n[1] Dang khoi tao mo hinh ERes2Net-Large...")
     start_init = time.time()
     
-    # Khá»Ÿi táº¡o bá»™ trÃ­ch xuáº¥t ERes2Net-Large
     embedder = ERes2NetEmbedder(device=device)
-    
-    # Khá»Ÿi táº¡o bá»™ chia 2 ngÆ°á» i nÃ³i (TwoSpeakerSplitter) trÃªn GPU
-    # Ghi chÃº: DeepFilterNet tá»± Ä‘á»™ng dÃ¹ng GPU náº¿u PyTorch nháº­n diá»‡n Ä‘Æ°á»£c CUDA.
     splitter = TwoSpeakerSplitter(
         device=device,
         embedder=embedder,
-        cluster_window_sec=1.5,     # Kích thước cửa sổ trượt để gom cụm (K-Means)
-        boundary_window_sec=0.5,    # Cửa sổ quét ranh giới nhỏ (0.5s) để bắt trọn các từ ngắn
-        min_speech_sec=0.25,        # Thời lượng tiếng nói tối thiểu trong 1 cửa sổ 0.5s
-        min_segment_sec=0.3,        # Lọc bỏ các tiếng động/thở cực ngắn (<0.3s)
-        merge_gap_sec=0.5,          # Nối các đoạn của cùng 1 người nếu cách nhau dưới 0.5s
-        step_sec=0.25,              # Trượt dày hơn để lấy được nhiều mẫu thuần khiết
-        boundary_step_sec=0.05      # Quét cực kỳ chi tiết (50ms/lần)
+        cluster_window_sec=1.5,
+        boundary_window_sec=0.5,
+        min_speech_sec=0.25,
+        min_segment_sec=0.3,
+        merge_gap_sec=0.5,
+        consecutive_merge_gap_sec=2.5,
+        step_sec=0.25,
+        boundary_step_sec=0.05
     )
-    print(f"Khá»Ÿi táº¡o xong! ({time.time() - start_init:.2f}s)\n")
+    print(f"Khoi tao xong! ({time.time() - start_init:.2f}s)\n")
 
-    print(f"[2] Ä ang xá»­ lÃ½ file: {audio_file.name}")
-    print("QuÃ¡ trÃ¬nh nÃ y bao gá»“m: Khá»­ nhiá»…u DeepFilterNet -> Adaptive Leveling -> ERes2Net-Large Embedding -> PhÃ¢n tÃ¡ch...")
+    print(f"[2] Dang xu ly file: {audio_file.name}")
+    print("Qua trinh nay bao gom: Khu nhieu DeepFilterNet -> Adaptive Leveling -> ERes2Net-Large Embedding -> Phan tach...")
     
-    # Danh sÃ¡ch cÃ¡c file tham chiáº¿u
-    teacher_refs = [
+    teacher_refs = [teacher_ref] if teacher_ref else [
+        "d:/SpeakAI-Eval/sample_audio/teacherr.m4a",
         "d:/SpeakAI-Eval/sample_audio/teacher_ref.wav",
         "d:/SpeakAI-Eval/sample_audio/teacher_ref1.wav",
-        "d:/SpeakAI-Eval/sample_audio/teacher_ref2.wav",
-        "d:/SpeakAI-Eval/sample_audio/teacher_ref3.wav",
-        "d:/SpeakAI-Eval/sample_audio/teacher_ref4.wav",
     ]
-    student_refs = [
+    student_refs = [student_ref] if student_ref else [
+        "d:/SpeakAI-Eval/sample_audio/studentt.m4a",
         "d:/SpeakAI-Eval/sample_audio/student_ref.wav",
         "d:/SpeakAI-Eval/sample_audio/student_ref1.wav",
-        "d:/SpeakAI-Eval/sample_audio/student_ref2.wav",
-        "d:/SpeakAI-Eval/sample_audio/student_ref3.wav",
     ]
     
-    print("\n[2.1] TrÃ­ch xuáº¥t Ä‘áº·c trÆ°ng (Embedding) giá»ng máº«u...")
+    print("\n[2.1] Trich xuat dac trung (Embedding) giong mau...")
     import numpy as np
     
     teacher_embs = []
     for ref in teacher_refs:
-        if Path(ref).exists():
+        if ref and Path(ref).exists():
+            print(f"  + Teacher ref: {ref}")
             emb = splitter._embed_reference(ref)
             teacher_embs.append(emb)
     
     student_embs = []
     for ref in student_refs:
-        if Path(ref).exists():
+        if ref and Path(ref).exists():
+            print(f"  + Student ref: {ref}")
             emb = splitter._embed_reference(ref)
             student_embs.append(emb)
             
@@ -93,33 +87,41 @@ def run_test(audio_path: str):
         student_emb /= np.linalg.norm(student_emb)
         
     start_infer = time.time()
-    # Cháº¡y toÃ n bá»™ quÃ¡ trÃ¬nh tÃ¡ch
     result = splitter.split_file(
         input_path=audio_file,
         teacher_embedding=teacher_emb,
         student_embedding=student_emb
     )
     infer_time = time.time() - start_infer
-    print(f"\nPhÃ¢n tÃ¡ch xong! Thá» i gian xá»­ lÃ½: {infer_time:.2f}s")
-    print(f"Tá»•ng thá» i lÆ°á»£ng audio gá»‘c: {result.duration_sec:.2f}s")
+    print(f"\nPhan tach xong! Thoi gian xu ly: {infer_time:.2f}s")
+    print(f"Tong thoi luong audio goc: {result.duration_sec:.2f}s")
     
-    print("\n[3] Káº¾T QUáº¢ DIARIZATION:")
+    print("\n[3] KET QUA DIARIZATION:")
     for seg in result.segments:
-        print(f"[{seg.start:05.2f}s - {seg.end:05.2f}s] {seg.speaker} (Confidence: {seg.confidence:.2f})")
+        ts = f", T_score: {seg.teacher_score:.3f}" if seg.teacher_score is not None else ""
+        ss = f", S_score: {seg.student_score:.3f}" if seg.student_score is not None else ""
+        print(f"[{seg.start:05.2f}s - {seg.end:05.2f}s] {seg.speaker} (Confidence: {seg.confidence:.2f}{ts}{ss})")
     
-    print("\n[4] FILE Káº¾T QUáº¢:")
+    t_count = len(result.teacher_segments) if result.teacher_segments else 0
+    s_count = len(result.student_segments) if result.student_segments else 0
+    print(f"\n=> Teacher segments: {t_count}, Student segments: {s_count}")
 
-    print(f"- File giá»ng GiÃ¡o viÃªn: {result.teacher_path}")
-    print(f"- File giá»ng Há»c sinh:  {result.student_path}")
-    print(f"- File CSV cháº¥m Ä‘iá»ƒm (Cosine Score): d:\\SpeakAI-Eval\\sample_audio\\conversation_split\\conversation_cosine_scores.csv")
+    print("\n[4] FILE KET QUA:")
+    print(f"- File giong Giao vien: {result.teacher_path}")
+    print(f"- File giong Hoc sinh:  {result.student_path}")
+
 
 if __name__ == "__main__":
-    # Thay Ä‘á»•i Ä‘Æ°á»ng dáº«n nÃ y thÃ nh file ghi Ã¢m thá»±c táº¿ báº¡n muá»‘n test
-    # (CÃ³ thá»ƒ truyá»n tá»« dÃ²ng lá»‡nh hoáº·c sá»­a trá»±c tiáº¿p á»Ÿ Ä‘Ã¢y)
+    audio_path = "d:/SpeakAI-Eval/sample_audio/audio_test4.m4a"
+    student_path = "d:/SpeakAI-Eval/sample_audio/studentt.m4a"
+    teacher_path = "d:/SpeakAI-Eval/sample_audio/teacherr.m4a"
+    
     if len(sys.argv) > 1:
-        AUDIO_PATH = sys.argv[1]
-    else:
-        # File máº·c Ä‘á»‹nh Ä‘á»ƒ test (náº¿u chÆ°a cÃ³ thÃ¬ báº¡n tá»± Ä‘á»•i láº¡i nhÃ©)
-        AUDIO_PATH = "d:/SpeakAI-Eval/sample_audio/conversation.wav"
+        audio_path = sys.argv[1]
+    if len(sys.argv) > 2:
+        student_path = sys.argv[2]
+    if len(sys.argv) > 3:
+        teacher_path = sys.argv[3]
         
-    run_test(AUDIO_PATH)
+    print(f"Chay test voi:\n- Audio: {audio_path}\n- Student: {student_path}\n- Teacher: {teacher_path}\n")
+    run_test(audio_path, teacher_ref=teacher_path, student_ref=student_path)

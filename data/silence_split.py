@@ -234,12 +234,22 @@ def export_diarization_clips(
         "S": "Student",
     }
     label = label_map.get(speaker_key.upper(), speaker_key)
+    accepted_labels = {label}
+    if label == "Speaker A":
+        accepted_labels.add("Teacher")
+    elif label == "Speaker B":
+        accepted_labels.add("Student")
+    elif label == "Teacher":
+        accepted_labels.add("Speaker A")
+    elif label == "Student":
+        accepted_labels.add("Speaker B")
+
     spans: List[tuple[float, float]] = []
     for s in diarize_segments:
         sp = getattr(s, "speaker", None)
         if sp is None and isinstance(s, dict):
             sp = s.get("speaker")
-        if sp != label:
+        if sp not in accepted_labels:
             continue
         start = float(getattr(s, "start", 0) if not isinstance(s, dict) else s.get("start", 0))
         end = float(getattr(s, "end", 0) if not isinstance(s, dict) else s.get("end", 0))

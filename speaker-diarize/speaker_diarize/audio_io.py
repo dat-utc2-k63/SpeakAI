@@ -14,14 +14,26 @@ def load_audio(path: str | Path) -> tuple[np.ndarray, int]:
     import soundfile as sf
     import torchaudio
 
-    audio, sr = sf.read(str(path), dtype="float32", always_2d=True)
-    mono = audio.mean(axis=1)
-    if sr != SAMPLE_RATE:
-        wav = torchaudio.functional.resample(
-            __import__("torch").from_numpy(mono).unsqueeze(0), sr, SAMPLE_RATE
-        )
-        mono = wav.squeeze(0).numpy()
-    return mono.astype(np.float32), SAMPLE_RATE
+    try:
+        audio, sr = sf.read(str(path), dtype="float32", always_2d=True)
+        mono = audio.mean(axis=1)
+        if sr != SAMPLE_RATE:
+            wav = torchaudio.functional.resample(
+                __import__("torch").from_numpy(mono).unsqueeze(0), sr, SAMPLE_RATE
+            )
+            mono = wav.squeeze(0).numpy()
+        return mono.astype(np.float32), SAMPLE_RATE
+    except Exception:
+        import subprocess
+        cmd = [
+            "ffmpeg", "-y", "-i", str(path),
+            "-f", "f32le", "-ac", "1", "-ar", str(SAMPLE_RATE), "-"
+        ]
+        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if p.returncode != 0:
+            raise RuntimeError(f"Failed to load audio {path}: {p.stderr.decode('utf-8', errors='ignore')}")
+        mono = np.frombuffer(p.stdout, dtype=np.float32)
+        return mono, SAMPLE_RATE
 
 
 def save_audio(path: str | Path, audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> None:

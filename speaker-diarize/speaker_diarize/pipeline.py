@@ -51,6 +51,7 @@ class TwoSpeakerSplitter:
         min_speech_sec: float = 0.25,
         min_segment_sec: float = 0.3,
         merge_gap_sec: float = 0.5,
+        consecutive_merge_gap_sec: float = 2.5,
         step_sec: float = 0.5,
         boundary_step_sec: float = 0.1,
     ) -> None:
@@ -58,6 +59,7 @@ class TwoSpeakerSplitter:
         self.vad = vad or RmsVad()
         self.min_segment_sec = min_segment_sec
         self.merge_gap_sec = merge_gap_sec
+        self.consecutive_merge_gap_sec = consecutive_merge_gap_sec
         self.buffer = SlidingWindowBuffer(window_sec=cluster_window_sec, step_sec=step_sec)
         self.boundary_buffer = SlidingWindowBuffer(
             window_sec=boundary_window_sec, 
@@ -185,40 +187,37 @@ class TwoSpeakerSplitter:
         if not windows:
             raise ValueError("Không phát hiện giọng nói trong file audio.")
 
-        labels = batch_cluster_two(embeddings)
-        centers = self._cluster_centers(embeddings, labels)
-        n_clusters = len(set(labels))
-
         teacher_cluster: int | None = None
-        if n_clusters == 1:
+        if teacher_emb is not None and student_emb is not None:
+            # Dual reference mode: directly use reference embeddings as centroids
             teacher_cluster = 0
+            centers = [teacher_emb, student_emb]
+            print("\n[Diarization: Dual Reference Mode]")
+            print(f"- Giáo viên (Teacher) reference embedding loaded (norm={np.linalg.norm(teacher_emb):.2f})")
+            print(f"- Học sinh (Student)  reference embedding loaded (norm={np.linalg.norm(student_emb):.2f})")
         else:
-            if teacher_emb is not None and len(teacher_emb) != len(centers[0]):
-                import warnings
-                warnings.warn(f"Teacher embedding dimension mismatch: expected {len(centers[0])}, got {len(teacher_emb)}. Ignoring teacher embedding.")
-                teacher_emb = None
-            if student_emb is not None and len(student_emb) != len(centers[0]):
-                import warnings
-                warnings.warn(f"Student embedding dimension mismatch: expected {len(centers[0])}, got {len(student_emb)}. Ignoring student embedding.")
-                student_emb = None
+            labels = batch_cluster_two(embeddings)
+            centers = self._cluster_centers(embeddings, labels)
+            n_clusters = len(set(labels))
 
-            sim_t0 = float(np.dot(centers[0], teacher_emb)) if teacher_emb is not None else 0.0
-            sim_t1 = float(np.dot(centers[1], teacher_emb)) if teacher_emb is not None else 0.0
-            sim_s0 = float(np.dot(centers[0], student_emb)) if student_emb is not None else 0.0
-            sim_s1 = float(np.dot(centers[1], student_emb)) if student_emb is not None else 0.0
+            if n_clusters == 1:
+                teacher_cluster = 0 if (teacher_emb is not None or student_emb is not None) else None
+            elif teacher_emb is not None or student_emb is not None:
+                sim_t0 = float(np.dot(centers[0], teacher_emb)) if teacher_emb is not None else 0.0
+                sim_t1 = float(np.dot(centers[1], teacher_emb)) if teacher_emb is not None else 0.0
+                sim_s0 = float(np.dot(centers[0], student_emb)) if student_emb is not None else 0.0
+                sim_s1 = float(np.dot(centers[1], student_emb)) if student_emb is not None else 0.0
 
-            score_a = sim_t0 + sim_s1
-            score_b = sim_t1 + sim_s0
+                score_a = sim_t0 + sim_s1
+                score_b = sim_t1 + sim_s0
 
-            teacher_cluster = 0 if score_a >= score_b else 1
-            
-            print(f"\n[Mapping Similarity]")
-            print(f"- Giáo viên (Teacher) so với Cluster 0: {sim_t0:.3f}")
-            print(f"- Giáo viên (Teacher) so với Cluster 1: {sim_t1:.3f}")
-            print(f"- Học sinh (Student)  so với Cluster 0: {sim_s0:.3f}")
-            print(f"- Học sinh (Student)  so với Cluster 1: {sim_s1:.3f}")
-            print(f"=> Quyết định: Gán Giáo viên = Cluster {teacher_cluster}, Học sinh = Cluster {1 - teacher_cluster}")
-
+                teacher_cluster = 0 if score_a >= score_b else 1
+                print(f"\n[Mapping Similarity]")
+                print(f"- Giáo viên (Teacher) so với Cluster 0: {sim_t0:.3f}, Cluster 1: {sim_t1:.3f}")
+                print(f"- Học sinh (Student)  so với Cluster 0: {sim_s0:.3f}, Cluster 1: {sim_s1:.3f}")
+                print(f"=> Quyết định: Gán Giáo viên = Cluster {teacher_cluster}, Học sinh = Cluster {1 - teacher_cluster}")
+            else:
+                teacher_cluster = None
 
         n = len(audio)
         votes_a = np.zeros(n, dtype=np.float32)
@@ -229,9 +228,6 @@ class TwoSpeakerSplitter:
                 continue
             try:
                 emb = self.embedder.embed(window.audio)
-                
-
-                
                 conf_a = float(np.clip(np.dot(emb, centers[0]), 0.0, 1.0))
                 conf_b = float(np.clip(np.dot(emb, centers[1]), 0.0, 1.0))
                 
@@ -248,7 +244,7 @@ class TwoSpeakerSplitter:
 
         stamps = self.vad.get_timestamps(audio, sample_rate=sample_rate)
         is_speech = np.zeros(n, dtype=bool)
-        pad_samples = int(0.2 * sample_rate)  # Expand speech by 400ms to avoid missing soft ends
+        pad_samples = int(0.2 * sample_rate)
         for stamp in stamps:
             s_idx = max(0, stamp["start"] - pad_samples)
             e_idx = min(n, stamp["end"] + pad_samples)
@@ -282,11 +278,8 @@ class TwoSpeakerSplitter:
             })
             
         raw_segments.sort(key=lambda x: x["start"])
-        
-        # 1. Filter out excessively short segments to prevent flickering
         raw_segments = [s for s in raw_segments if (s["end"] - s["start"]) >= self.min_segment_sec]
         
-        # 2. Merge same-speaker segments that are close to each other
         merged_segments = []
         for seg in raw_segments:
             if not merged_segments:
@@ -308,8 +301,6 @@ class TwoSpeakerSplitter:
                 # 2nd-pass Refinement: Chấm điểm trực tiếp từng phân đoạn để gán nhãn
                 chunk = audio[int(s["start"]*sample_rate) : int(s["end"]*sample_rate)]
                 
-                # Thay vì nhúng cả 1 đoạn dài (có thể lẫn khoảng lặng/thở làm loãng vector), 
-                # ta dùng chung buffer (1.5s) và VAD lọc tiếng nói hệt như cách lấy mẫu Reference để vector chuẩn nhất.
                 chunk_embs = []
                 for window in self.buffer.iter_windows(chunk):
                     if self.vad.is_speech(window.audio):
@@ -330,29 +321,44 @@ class TwoSpeakerSplitter:
                     t_score = float(np.dot(seg_emb, teacher_emb))
                     s_score = float(np.dot(seg_emb, student_emb))
                     
-                    # Trust K-Means clustering which naturally separates the two speakers in this audio
-                    role = ROLE_TEACHER if s["cluster"] == teacher_cluster else ROLE_STUDENT
+                    # Quyết định role dựa trên so sánh độ tương đồng giọng thực tế
+                    role = ROLE_TEACHER if t_score >= s_score else ROLE_STUDENT
                     
-                    # Filter out segments with poor cosine similarity (< 0.4)
-                    if role == ROLE_TEACHER and t_score < 0.4:
-                        continue
-                    if role == ROLE_STUDENT and s_score < 0.4:
+                    # Lọc bỏ đoạn nhiễu/tạp âm không khớp với cả 2 người nói (< 0.35)
+                    if max(t_score, s_score) < 0.35:
                         continue
                         
                 except ValueError:
-                    # Fallback for too short segments
                     role = ROLE_TEACHER if s["cluster"] == teacher_cluster else ROLE_STUDENT
+            elif teacher_cluster is not None:
+                role = ROLE_TEACHER if s["cluster"] == teacher_cluster else ROLE_STUDENT
             else:
-                if teacher_cluster is not None:
-                    role = ROLE_TEACHER if s["cluster"] == teacher_cluster else ROLE_STUDENT
-                else:
-                    role = LABELS[s["cluster"]]
+                role = LABELS[s["cluster"]]
                 
             final_segments.append(DiarizationSegment(
                 start=s["start"], end=s["end"], speaker=role, confidence=1.0,
                 teacher_score=t_score, student_score=s_score
             ))
 
+        # Hậu xử lý: Gộp các lượt nói liền kề của cùng 1 người nếu người kia không nói xen vào
+        merged_roles = []
+        for seg in final_segments:
+            if not merged_roles:
+                merged_roles.append(seg)
+                continue
+            last = merged_roles[-1]
+            gap = seg.start - last.end
+            if last.speaker == seg.speaker and (gap <= self.consecutive_merge_gap_sec):
+                d1 = max(0.01, last.end - last.start)
+                d2 = max(0.01, seg.end - seg.start)
+                last.end = seg.end
+                if last.teacher_score is not None and seg.teacher_score is not None:
+                    last.teacher_score = round((last.teacher_score * d1 + seg.teacher_score * d2) / (d1 + d2), 4)
+                if last.student_score is not None and seg.student_score is not None:
+                    last.student_score = round((last.student_score * d1 + seg.student_score * d2) / (d1 + d2), 4)
+            else:
+                merged_roles.append(seg)
+        final_segments = merged_roles
         return final_segments, teacher_cluster
 
     @staticmethod

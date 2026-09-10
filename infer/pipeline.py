@@ -198,6 +198,7 @@ class SpeakingPipeline:
             min_speech_sec=0.25,
             min_segment_sec=0.3,
             merge_gap_sec=0.5,
+            consecutive_merge_gap_sec=2.5,
             step_sec=0.25,
             boundary_step_sec=0.05
         )
@@ -411,10 +412,17 @@ class SpeakingPipeline:
         )
 
         if not segments:
-            raise ValueError(
-                f"{role}: không tách được lượt nói nào từ audio "
-                f"(kiểm tra diarization hoặc độ dài segment tối thiểu)"
-            )
+            print(f"[{role}] Không tách được lượt nói nào từ audio", flush=True)
+            return {
+                "role": role,
+                "scored": score,
+                "sentences": [],
+                "sentence_count": 0,
+                "transcript": "",
+                "transcript_lines": [],
+                "scores": {},
+                "message": f"{role}: không tách được lượt nói nào từ audio",
+            }
 
         sentences: List[Dict[str, Any]] = []
         filtered_vi = 0
@@ -428,16 +436,18 @@ class SpeakingPipeline:
                 sentences.append(item)
 
         if not sentences and use_asr:
-            if score:
-                raise ValueError(
-                    f"{role}: không còn đoạn tiếng Anh sau LID "
-                    f"({len(segments)} turn, {filtered_vi} đoạn tiếng Việt đã loại, "
-                    f"kiểm tra ASR hoặc transcript/CMUdict)"
-                )
-            raise ValueError(
-                f"{role}: không transcribe được lượt nói nào "
-                f"({len(segments)} turn, kiểm tra ASR)"
-            )
+            print(f"[{role}] Không có câu nói tiếng Anh hợp lệ sau ASR/LID ({len(segments)} turn, {filtered_vi} đoạn tiếng Việt)", flush=True)
+            return {
+                "role": role,
+                "scored": score,
+                "sentences": [],
+                "sentence_count": 0,
+                "transcript": "",
+                "transcript_lines": [],
+                "scores": {},
+                "filtered_vi_count": filtered_vi,
+                "message": f"{role}: không có câu nói tiếng Anh hợp lệ sau nhận diện",
+            }
 
         summary = _build_summary(
             sentences,
@@ -470,8 +480,6 @@ class SpeakingPipeline:
         """Diarize A/B → split each track by silence → score every sentence."""
         fb = self.enable_feedback if feedback is None else feedback
         audio = Path(audio)
-        # We no longer pre-denoise the audio because Whisper works better with raw audio
-        # The diarizer will internally denoise for its own segmentation if self.preprocess.denoise is True.
 
         base_dir = Path(diarize_output_dir or audio.parent / f"{audio.stem}_split")
         split = self._diarize_two_speakers(
@@ -482,32 +490,43 @@ class SpeakingPipeline:
             student_embedding=student_embedding,
         )
 
-        if split.get("teacher_segments") and split.get("student_segments"):
+        has_refs = (
+            teacher_voice is not None
+            or teacher_embedding is not None
+            or student_embedding is not None
+            or split.get("teacher_segments") is not None
+            or split.get("student_segments") is not None
+        )
+
+        if has_refs:
             teacher_dir = base_dir / "teacher_sentences"
             student_dir = base_dir / "student_sentences"
+            teacher_segs = split.get("teacher_segments") or []
+            student_segs = split.get("student_segments") or []
+            
             teacher = self._assess_speaker_sentences(
                 output_dir=teacher_dir,
                 speaker="Teacher",
                 source_audio=audio,
-                diarize_segments=split.get("teacher_segments"),
+                diarize_segments=teacher_segs,
                 use_asr=use_asr,
                 feedback=False,
                 lang=lang,
-                score=score_teacher,
+                score=score_teacher and len(teacher_segs) > 0,
                 role="teacher",
             )
             student = self._assess_speaker_sentences(
                 output_dir=student_dir,
                 speaker="Student",
                 source_audio=audio,
-                diarize_segments=split.get("student_segments"),
+                diarize_segments=student_segs,
                 use_asr=use_asr,
                 feedback=False,
                 lang=lang,
                 score=True,
                 role="student",
             )
-            dialogue = _build_dialogue(teacher["sentences"], student["sentences"])
+            dialogue = _build_dialogue(teacher.get("sentences", []), student.get("sentences", []))
             if fb and student.get("sentences"):
                 lang_fb = _build_summary(
                     student["sentences"],
@@ -539,6 +558,10 @@ class SpeakingPipeline:
                 "dialogue": dialogue,
                 "has_l2_mdd": self.l2_mdd is not None,
                 "overall_transformer_feedback": overall_tf,
+                "diarization": {
+                    "teacher": split.get("teacher"),
+                    "student": split.get("student"),
+                },
             }
 
         speakers: Dict[str, Any] = {}
@@ -560,6 +583,10 @@ class SpeakingPipeline:
             "duration_sec": split["duration_sec"],
             "speakers": speakers,
             "has_l2_mdd": self.l2_mdd is not None,
+            "diarization": {
+                "teacher": split.get("teacher"),
+                "student": split.get("student"),
+            },
         }
 
 

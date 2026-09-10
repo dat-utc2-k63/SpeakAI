@@ -16,12 +16,22 @@ def load_audio_file(path: PathLike) -> Tuple[torch.Tensor, int]:
     """Load audio as float tensor [channels, samples] without torchcodec."""
     import soundfile as sf
 
-    data, sr = sf.read(str(path), dtype="float32")
-    if data.ndim == 1:
-        wav = torch.from_numpy(data).unsqueeze(0)
-    else:
-        wav = torch.from_numpy(data.T.copy())
-    return wav, int(sr)
+    try:
+        data, sr = sf.read(str(path), dtype="float32")
+        if data.ndim == 1:
+            wav = torch.from_numpy(data).unsqueeze(0)
+        else:
+            wav = torch.from_numpy(data.T.copy())
+        return wav, int(sr)
+    except Exception:
+        import subprocess
+        import numpy as np
+        cmd = ["ffmpeg", "-y", "-i", str(path), "-f", "f32le", "-ac", "1", "-ar", "16000", "-"]
+        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if p.returncode != 0:
+            raise RuntimeError(f"Failed to load audio {path}: {p.stderr.decode('utf-8', errors='ignore')}")
+        data = np.frombuffer(p.stdout, dtype=np.float32)
+        return torch.from_numpy(data).unsqueeze(0), 16000
 
 
 def save_audio_file(path: PathLike, wav: torch.Tensor, sample_rate: int) -> None:
