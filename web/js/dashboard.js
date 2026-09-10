@@ -374,10 +374,10 @@ import { supabase } from './supabase.js';
             let count = 0;
             for (const s of sentences) {
               if (s.scores) {
-                total += s.scores.total;
-                acc += s.scores.accuracy;
-                flu += s.scores.fluency;
-                pro += s.scores.prosodic;
+                total += s.scores.total || 0;
+                acc += s.scores.accuracy || 0;
+                flu += s.scores.fluency || 0;
+                pro += s.scores.prosodic || 0;
                 count++;
               }
             }
@@ -390,6 +390,98 @@ import { supabase } from './supabase.js';
           document.getElementById('resAcc').textContent = acc.toFixed(1);
           document.getElementById('resFlu').textContent = flu.toFixed(1);
           document.getElementById('resPro').textContent = pro.toFixed(1);
+
+          // Level badge
+          const levelBadge = document.getElementById('resLevelBadge');
+          const otf = resultObj.overall_transformer_feedback || {};
+          const level = otf.level || (total >= 8.5 ? 'excellent' : total >= 7.0 ? 'good' : total >= 5.0 ? 'average' : total >= 3.0 ? 'weak' : 'critical');
+          const levelLabels = { excellent: 'Xuất sắc', good: 'Tốt', average: 'Trung bình', weak: 'Yếu', critical: 'Cần cải thiện' };
+          const levelColors = { excellent: 'bg-success', good: 'bg-info', average: 'bg-warning text-dark', weak: 'bg-danger', critical: 'bg-danger' };
+          levelBadge.textContent = levelLabels[level] || level;
+          levelBadge.className = `badge fs-6 ${levelColors[level] || 'bg-secondary'}`;
+
+          // Model comparison table
+          const comparisonInfo = document.getElementById('modelComparisonInfo');
+          const comparisonBody = document.getElementById('modelComparisonBody');
+          if (resultObj.has_l2_mdd && sentences.length > 0) {
+            // Aggregate per-model scores from sentences
+            let pronScores = { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
+            let mddScores = { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
+            let countPron = 0, countMdd = 0;
+            for (const s of sentences) {
+              if (s.scores_pronunciation) {
+                for (const k of ['total', 'accuracy', 'fluency', 'prosodic']) {
+                  pronScores[k] += (s.scores_pronunciation[k] || 0);
+                }
+                countPron++;
+              }
+              if (s.scores_l2_mdd) {
+                for (const k of ['total', 'accuracy', 'fluency', 'prosodic']) {
+                  mddScores[k] += (s.scores_l2_mdd[k] || 0);
+                }
+                countMdd++;
+              }
+            }
+            if (countPron > 0) { for (const k in pronScores) pronScores[k] /= countPron; }
+            if (countMdd > 0) { for (const k in mddScores) mddScores[k] /= countMdd; }
+
+            const rows = [
+              ['Tổng', pronScores.total, mddScores.total, total],
+              ['Accuracy', pronScores.accuracy, mddScores.accuracy, acc],
+              ['Fluency', pronScores.fluency, mddScores.fluency, flu],
+              ['Prosody', pronScores.prosodic, mddScores.prosodic, pro],
+            ];
+            comparisonBody.innerHTML = rows.map(([label, a, b, e]) => `
+              <tr>
+                <td>${label}</td>
+                <td class="text-center"><span class="badge bg-info bg-opacity-25 text-info">${a.toFixed(1)}</span></td>
+                <td class="text-center"><span class="badge bg-warning bg-opacity-25 text-warning">${b.toFixed(1)}</span></td>
+                <td class="text-center"><span class="badge bg-primary">${e.toFixed(1)}</span></td>
+              </tr>
+            `).join('');
+            comparisonInfo.classList.remove('d-none');
+          } else {
+            comparisonInfo.classList.add('d-none');
+          }
+
+          // Transformer feedback panel
+          const tfSummaryBox = document.getElementById('tfSummaryBox');
+          const tfTipsBox = document.getElementById('tfTipsBox');
+          const tfTipsList = document.getElementById('tfTipsList');
+          if (otf && otf.summary) {
+            tfSummaryBox.innerHTML = simpleMarkdown(otf.summary);
+          } else {
+            tfSummaryBox.innerHTML = '<span class="text-muted">Đang phân tích...</span>';
+          }
+          if (otf && otf.tips && otf.tips.length > 0) {
+            tfTipsBox.classList.remove('d-none');
+            tfTipsList.innerHTML = otf.tips.map(tip => `
+              <div class="p-2 rounded-2 small" style="background: rgba(255,193,7,0.06); border: 1px solid rgba(255,193,7,0.12);">
+                ${tip}
+              </div>
+            `).join('');
+          } else {
+            // Collect tips from individual turns
+            const allTips = [];
+            for (const turn of (resultObj.dialogue?.turns || [])) {
+              const tf = turn.transformer_feedback;
+              if (tf && tf.tips) {
+                for (const tip of tf.tips) {
+                  if (!allTips.includes(tip)) allTips.push(tip);
+                }
+              }
+            }
+            if (allTips.length > 0) {
+              tfTipsBox.classList.remove('d-none');
+              tfTipsList.innerHTML = allTips.slice(0, 8).map(tip => `
+                <div class="p-2 rounded-2 small" style="background: rgba(255,193,7,0.06); border: 1px solid rgba(255,193,7,0.12);">
+                  ${tip}
+                </div>
+              `).join('');
+            } else {
+              tfTipsBox.classList.add('d-none');
+            }
+          }
 
           let fullAudioHtml = '';
           if (resultObj.teacher && resultObj.teacher.full_audio) {
@@ -436,9 +528,9 @@ import { supabase } from './supabase.js';
           <div class="d-flex justify-content-between align-items-center mb-1">
             <div class="small text-muted">Giáo viên</div>
             ${scT ? `<div class="d-flex gap-2">
-              <span class="badge bg-primary">Total: ${scT.total.toFixed(1)}</span>
-              <span class="badge bg-secondary">Acc: ${scT.accuracy.toFixed(1)}</span>
-              <span class="badge bg-secondary">Flu: ${scT.fluency.toFixed(1)}</span>
+              <span class="badge bg-primary">Total: ${scT.total?.toFixed(1)}</span>
+              <span class="badge bg-secondary">Acc: ${scT.accuracy?.toFixed(1)}</span>
+              <span class="badge bg-secondary">Flu: ${scT.fluency?.toFixed(1)}</span>
             </div>` : ''}
           </div>
           <div>${turn.transcript}</div>
@@ -450,24 +542,53 @@ import { supabase } from './supabase.js';
 
           const sc = turn.scores || { total: 0, accuracy: 0, fluency: 0 };
           const errs = turn.errors || {};
-          const badWords = errs.words ? errs.words.filter(w => w.score < 7.0).map(w => w.word) : [];
-          const badPhonemes = errs.phonemes ? errs.phonemes.filter(p => p.score < 7.0).map(p => p.phoneme) : [];
+          const badWords = errs.words ? errs.words.filter(w => w.score < 7.0) : [];
+          const badPhonemes = errs.phonemes ? errs.phonemes.filter(p => p.score < 7.0) : [];
+          const tf = turn.transformer_feedback || {};
             
-          let errorsHtml = '';
-          if (turn.llm_feedback) {
-            errorsHtml = `<div class="mt-2" style="background: rgba(255,193,7,0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #ffc107;">
-              <div class="small text-warning"><i class="bi bi-robot me-1"></i>${turn.llm_feedback}</div>
+          // Build enhanced feedback block
+          let feedbackHtml = '';
+          
+          // Transformer feedback summary (priority)
+          if (tf.summary) {
+            feedbackHtml += `<div class="mt-2 tf-turn-feedback">
+              <div class="small mb-1"><i class="bi bi-cpu me-1 text-info"></i><strong>Phân tích Transformer:</strong></div>
+              <div class="small text-white-50">${simpleMarkdown(tf.summary)}</div>`;
+            // Show tips for this turn
+            if (tf.tips && tf.tips.length > 0) {
+              feedbackHtml += `<div class="mt-1">`;
+              for (const tip of tf.tips.slice(0, 3)) {
+                feedbackHtml += `<div class="small text-white-50 ms-2">${tip}</div>`;
+              }
+              feedbackHtml += `</div>`;
+            }
+            feedbackHtml += `</div>`;
+          } else if (turn.llm_feedback) {
+            feedbackHtml = `<div class="mt-2" style="background: rgba(255,193,7,0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #ffc107;">
+              <div class="small text-warning"><i class="bi bi-robot me-1"></i>${simpleMarkdown(turn.llm_feedback)}</div>
             </div>`;
           } else if (badWords.length > 0 || badPhonemes.length > 0) {
-            errorsHtml = `<div class="mt-2" style="background: rgba(255,193,7,0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #ffc107;">
+            feedbackHtml = `<div class="mt-2" style="background: rgba(255,193,7,0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #ffc107;">
               <div class="small text-warning mb-1"><i class="bi bi-exclamation-triangle me-1"></i><strong>Cần cải thiện phát âm:</strong></div>`;
             if (badWords.length > 0) {
-              errorsHtml += `<div class="small text-white-50 ms-3">- Từ phát âm yếu: ${badWords.map(w => `<strong class="text-white">${w}</strong>`).join(', ')}</div>`;
+              feedbackHtml += `<div class="small text-white-50 ms-3">- Từ phát âm yếu: ${badWords.map(w => `<strong class="text-white">${w.word}</strong> <span class="text-muted">(${w.score?.toFixed(1)})</span>`).join(', ')}</div>`;
             }
             if (badPhonemes.length > 0) {
-              errorsHtml += `<div class="small text-white-50 ms-3">- Âm sai/yếu: ${badPhonemes.map(p => `<strong class="text-warning">${p}</strong>`).join(', ')}</div>`;
+              feedbackHtml += `<div class="small text-white-50 ms-3">- Âm sai/yếu: ${badPhonemes.map(p => {
+                let tipStr = p.tip ? ` <span class="text-muted fst-italic">— ${p.tip}</span>` : '';
+                return `<strong class="text-warning">/${p.phoneme}/</strong> <span class="text-muted">(${p.score?.toFixed(1)})</span>${tipStr}`;
+              }).join(', ')}</div>`;
             }
-            errorsHtml += `</div>`;
+            feedbackHtml += `</div>`;
+          }
+
+          // Score comparison badges if L2-MDD is available
+          let modelBadges = '';
+          if (turn.scores_pronunciation && turn.scores_l2_mdd) {
+            modelBadges = `<div class="d-flex gap-1 mt-1 flex-wrap">
+              <span class="badge bg-info bg-opacity-25 text-info" style="font-size: 0.65em;">SO762: ${turn.scores_pronunciation.total?.toFixed(1)}</span>
+              <span class="badge bg-warning bg-opacity-25 text-warning" style="font-size: 0.65em;">L2-MDD: ${turn.scores_l2_mdd.total?.toFixed(1)}</span>
+            </div>`;
           }
 
           return `
@@ -475,14 +596,17 @@ import { supabase } from './supabase.js';
       <div class="timeline-bubble student-bubble">
         <div class="d-flex justify-content-between align-items-center mb-1">
           <div class="small text-muted">Học viên</div>
-          <div class="d-flex gap-2">
-            <span class="badge bg-primary">Total: ${sc.total.toFixed(1)}</span>
-            <span class="badge bg-secondary">Acc: ${sc.accuracy.toFixed(1)}</span>
-            <span class="badge bg-secondary">Flu: ${sc.fluency.toFixed(1)}</span>
+          <div>
+            <div class="d-flex gap-2">
+              <span class="badge bg-primary">Total: ${(sc.total || 0).toFixed(1)}</span>
+              <span class="badge bg-secondary">Acc: ${(sc.accuracy || 0).toFixed(1)}</span>
+              <span class="badge bg-secondary">Flu: ${(sc.fluency || 0).toFixed(1)}</span>
+            </div>
+            ${modelBadges}
           </div>
         </div>
         <div>${turn.transcript}</div>
-        ${errorsHtml}
+        ${feedbackHtml}
         ${audioHtml}
       </div>
       <div class="timeline-dot student-dot"><i class="bi bi-mortarboard"></i></div>
@@ -765,6 +889,14 @@ import { supabase } from './supabase.js';
           if (!a) return;
           const r = a.result_json || {};
           const turns = r.dialogue?.turns || r.turns || [];
+          const otf = r.overall_transformer_feedback || {};
+
+          // Level badge
+          const total = a.score_total || 0;
+          const level = otf.level || (total >= 8.5 ? 'excellent' : total >= 7.0 ? 'good' : total >= 5.0 ? 'average' : total >= 3.0 ? 'weak' : 'critical');
+          const levelLabels = { excellent: 'Xuất sắc', good: 'Tốt', average: 'Trung bình', weak: 'Yếu', critical: 'Cần cải thiện' };
+          const levelColors = { excellent: 'bg-success', good: 'bg-info', average: 'bg-warning text-dark', weak: 'bg-danger', critical: 'bg-danger' };
+          const levelBadgeHtml = `<span class="badge fs-6 ${levelColors[level] || 'bg-secondary'}">${levelLabels[level] || level}</span>`;
 
           let fullAudioHtml = '';
           if (r.teacher && r.teacher.full_audio) {
@@ -782,10 +914,32 @@ import { supabase } from './supabase.js';
             fullAudioHtml = `<div class="p-3 mb-4 rounded bg-light border">${fullAudioHtml}</div>`;
           }
 
+          // Transformer feedback HTML
+          let tfHtml = '';
+          if (otf.summary) {
+            tfHtml = `
+    <div class="section-card mb-4 tf-feedback-section">
+      <h6 class="fw-bold mb-3"><i class="bi bi-cpu me-2 text-info"></i>Phân tích AI Chi tiết (Transformer)</h6>
+      <div class="mb-3 p-3 rounded-3" style="background: rgba(79, 70, 229, 0.08); border-left: 3px solid var(--color-indigo);">
+        ${simpleMarkdown(otf.summary)}
+      </div>
+      ${otf.tips && otf.tips.length > 0 ? `
+      <div>
+        <div class="small fw-semibold mb-2"><i class="bi bi-lightbulb me-1 text-warning"></i>Gợi ý luyện tập</div>
+        <div class="d-flex flex-column gap-2">
+          ${otf.tips.map(tip => `<div class="p-2 rounded-2 small" style="background: rgba(255,193,7,0.06); border: 1px solid rgba(255,193,7,0.12);">${tip}</div>`).join('')}
+        </div>
+      </div>` : ''}
+    </div>`;
+          }
+
           document.getElementById('assessDetailBody').innerHTML = `
     <!-- Score overview -->
     <div class="section-card mb-4">
-      <h6 class="fw-bold mb-4"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Điểm Tổng Quát</h6>
+      <div class="d-flex justify-content-between align-items-start mb-4">
+        <h6 class="fw-bold mb-0"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Điểm Tổng Quát${r.has_l2_mdd ? ' (Ensemble)' : ''}</h6>
+        ${levelBadgeHtml}
+      </div>
       <div class="row g-3">
         <div class="col-6 col-lg-3">
           <div class="score-card score-card-total">
@@ -817,6 +971,8 @@ import { supabase } from './supabase.js';
         </div>
       </div>
     </div>
+
+    ${tfHtml}
 
     <!-- Dialogue timeline -->
     <div class="section-card mb-4">

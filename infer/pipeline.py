@@ -14,15 +14,13 @@ from data.audio_preprocess import PreprocessConfig
 from data.silence_split import export_diarization_clips, split_audio_file
 from infer.lang_id import is_vietnamese_segment
 
-from infer.pronunciation import Predictor
+from infer.pronunciation import Predictor, L2MDDPredictor
 from infer.transcribe import transcribe_audio
 from infer.device_utils import resolve_device
+from models.pronunciation_scorer import PronunciationScorer
 from paths import SPEAKER_DIARIZE_DIR, PRONUNCIATION_CONFIG, ROOT
 
 SCORE_KEYS = ("accuracy", "fluency", "prosodic", "total")
-
-
-
 
 
 def _build_dialogue(
@@ -41,6 +39,7 @@ def _build_dialogue(
             "audio": s.get("audio"),
             "scores": s.get("scores"),
             "errors": s.get("errors"),
+            "transformer_feedback": s.get("transformer_feedback"),
         })
     for s in student_sentences:
         turns.append({
@@ -52,6 +51,7 @@ def _build_dialogue(
             "audio": s.get("audio"),
             "scores": s.get("scores"),
             "errors": s.get("errors"),
+            "transformer_feedback": s.get("transformer_feedback"),
         })
     turns.sort(key=lambda t: (t.get("start_sec") or 0, 0 if t["role"] == "teacher" else 1))
 
@@ -130,13 +130,14 @@ def _build_summary(
 
 
 class SpeakingPipeline:
-    """Diarize 2 speakers → silence-split → per-sentence scoring."""
+    """Diarize 2 speakers → silence-split → per-sentence scoring with dual models."""
 
     def __init__(
         self,
         config_path: str | Path | None = None,
         device: Optional[str] = None,
         pronunciation_ckpt: Optional[str] = None,
+        l2_mdd_ckpt: Optional[str] = None,
         enable_feedback: bool = True,
         load_progress: Optional[Any] = None,
     ):
@@ -154,6 +155,8 @@ class SpeakingPipeline:
             asr_cfg["device"] = self.device
         self.preprocess = PreprocessConfig.from_dict(self.config.get("audio_preprocess"))
         wavlm_name = self.config.get("wavlm", {}).get("model_name", "microsoft/wavlm-large")
+        
+        # ── Load Pronunciation Model (SpeechOcean762) ──
         self.pronunciation = Predictor(
             config_path,
             pronunciation_ckpt,
@@ -164,6 +167,23 @@ class SpeakingPipeline:
             wavlm_name=wavlm_name,
         )
         self.pronunciation.preprocess = self.preprocess
+
+        # ── Load L2-MDD Model ──
+        self.l2_mdd: Optional[L2MDDPredictor] = None
+        try:
+            self.l2_mdd = L2MDDPredictor(
+                config_path,
+                l2_mdd_ckpt,
+                self.device,
+                load_progress=load_progress,
+                model_step="l2_mdd",
+                ckpt_step="l2_mdd_ckpt",
+            )
+            self.l2_mdd.preprocess = self.preprocess
+            print("✅ L2-MDD model loaded successfully")
+        except Exception as e:
+            print(f"⚠️ L2-MDD model not available: {e}")
+            self.l2_mdd = None
         
         if not SPEAKER_DIARIZE_DIR.is_dir():
             raise FileNotFoundError(f"speaker-diarize not found at {SPEAKER_DIARIZE_DIR}")
@@ -315,20 +335,63 @@ class SpeakingPipeline:
         truncate: bool = False,
         apply_preprocess: bool = True,
     ) -> Dict[str, Any]:
+        """Score a single track using both models and generate transformer feedback."""
         fb = self.enable_feedback if feedback is None else feedback
-        scores = self.pronunciation.predict(
+
+        # ── Run pronunciation model (SpeechOcean762) ──
+        pron_result = self.pronunciation.predict(
             str(audio), transcript, fb, lang,
             feedback_mode=feedback_mode, truncate=truncate,
             apply_preprocess=apply_preprocess,
         )
+
+        pron_scores = pron_result["scores"]
+        pron_errors = pron_result["errors"]
+
+        # ── Run L2-MDD model if available ──
+        l2_scores = None
+        l2_errors = None
+        if self.l2_mdd is not None:
+            try:
+                l2_result = self.l2_mdd.predict(
+                    str(audio), transcript, False, lang,
+                    feedback_mode=feedback_mode, truncate=truncate,
+                    apply_preprocess=apply_preprocess,
+                )
+                l2_scores = l2_result["scores"]
+                l2_errors = l2_result["errors"]
+            except Exception as e:
+                print(f"  ⚠️ L2-MDD prediction failed: {e}")
+
+        # ── Ensemble scores ──
+        if l2_scores:
+            final_scores = PronunciationScorer.ensemble_scores(pron_scores, l2_scores)
+            final_errors = PronunciationScorer.merge_errors(pron_errors, l2_errors or {})
+        else:
+            final_scores = pron_scores
+            final_errors = pron_errors
+
+        # ── Generate transformer feedback ──
+        transformer_feedback = PronunciationScorer.generate_transformer_feedback(
+            scores_pronunciation=pron_scores,
+            errors_pronunciation=pron_errors,
+            scores_l2_mdd=l2_scores,
+            errors_l2_mdd=l2_errors,
+            ensemble_scores=final_scores,
+            transcript=transcript,
+        )
+
         return {
             "audio": str(audio),
             "transcript": transcript,
-            "scores": scores["scores"],
-            "errors": scores["errors"],
-            "alignments": scores.get("alignments"),
-            "feedback": scores.get("feedback"),
-            "feedback_source": scores.get("feedback_source"),
+            "scores": final_scores,
+            "errors": final_errors,
+            "alignments": pron_result.get("alignments"),
+            "feedback": pron_result.get("feedback"),
+            "feedback_source": pron_result.get("feedback_source"),
+            "transformer_feedback": transformer_feedback,
+            "scores_pronunciation": pron_scores,
+            "scores_l2_mdd": l2_scores,
         }
 
     def _assess_speaker_sentences(
@@ -467,6 +530,17 @@ class SpeakingPipeline:
                 student["feedback_source"] = lang_fb["feedback_source"]
                 student["pronunciation_feedback"] = lang_fb.get("pronunciation_feedback")
                 student["pronunciation_feedback_source"] = lang_fb.get("pronunciation_feedback_source")
+
+            # ── Build overall transformer feedback for the student ──
+            overall_tf = PronunciationScorer.generate_transformer_feedback(
+                scores_pronunciation=student.get("scores", {}),
+                errors_pronunciation=None,
+                scores_l2_mdd=None,
+                errors_l2_mdd=None,
+                ensemble_scores=student.get("scores", {}),
+                transcript=student.get("transcript", ""),
+            )
+
             return {
                 "mode": "teacher_student",
                 "source_audio": str(audio),
@@ -474,6 +548,8 @@ class SpeakingPipeline:
                 "teacher": teacher,
                 "student": student,
                 "dialogue": dialogue,
+                "has_l2_mdd": self.l2_mdd is not None,
+                "overall_transformer_feedback": overall_tf,
             }
 
         speakers: Dict[str, Any] = {}
@@ -494,6 +570,7 @@ class SpeakingPipeline:
             "source_audio": str(audio),
             "duration_sec": split["duration_sec"],
             "speakers": speakers,
+            "has_l2_mdd": self.l2_mdd is not None,
         }
 
 
@@ -502,6 +579,7 @@ def main():
     p.add_argument("--audio", required=True)
     p.add_argument("--config", default=str(PRONUNCIATION_CONFIG))
     p.add_argument("--pronunciation-ckpt", default=None)
+    p.add_argument("--l2-mdd-ckpt", default=None)
     p.add_argument("--no-feedback", action="store_true")
     p.add_argument("--lang", choices=["vi", "en"], default="vi")
     p.add_argument("--output", default=None)
@@ -512,6 +590,7 @@ def main():
         args.config,
         args.device,
         args.pronunciation_ckpt,
+        l2_mdd_ckpt=args.l2_mdd_ckpt,
         enable_feedback=not args.no_feedback,
     )
     result = pipe.assess_conversation(args.audio, lang=args.lang)

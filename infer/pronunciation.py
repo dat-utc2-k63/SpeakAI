@@ -1,4 +1,4 @@
-"""Pronunciation scoring inference (SpeechOcean762 model)."""
+"""Pronunciation scoring inference (SpeechOcean762 model + L2-MDD model)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 from data.audio_preprocess import PreprocessConfig, load_waveform, truncate_waveform
 from data.cmudict import CMUDict
-from models.checkpoint_utils import load_model_weights
+from models.checkpoint_utils import load_model_weights, resolve_checkpoint
 from models.pronunciation_model import PronunciationAssessmentModel
 from models.pronunciation_scorer import PronunciationScorer
 from paths import PRONUNCIATION_CONFIG
@@ -141,6 +141,131 @@ class Predictor:
             # Feedback is handled in the Colab notebook directly
             pass
         return result
+
+
+class L2MDDPredictor:
+    """Predictor using the L2-MDD checkpoint for L2 learner pronunciation assessment.
+    
+    Same architecture as the pronunciation model but trained on L2 learner data,
+    making it more suitable for non-native speaker evaluation.
+    """
+
+    def __init__(
+        self,
+        config_path: str | Path | None = None,
+        checkpoint: Optional[str] = None,
+        device: Optional[str] = None,
+        load_progress: Optional[Any] = None,
+        model_step: str = "l2_mdd",
+        ckpt_step: str = "l2_mdd_ckpt",
+    ):
+        config_path = Path(config_path or PRONUNCIATION_CONFIG)
+        with open(config_path, encoding="utf-8") as f:
+            self.config = yaml.safe_load(f)
+        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.preprocess = PreprocessConfig.from_dict(self.config.get("audio_preprocess"))
+
+        if load_progress is not None:
+            load_progress.start(model_step, "L2-MDD Model")
+        try:
+            self.model = PronunciationAssessmentModel(self.config).to(self.device)
+            if load_progress is not None:
+                load_progress.finish(model_step)
+                load_progress.start(ckpt_step, "l2_mdd_best.pt")
+            try:
+                # Try explicit checkpoint first, then fall back to config resolution
+                ckpt_path = resolve_checkpoint(self.config, model="l2_mdd", explicit=checkpoint)
+                from models.checkpoint_utils import load_state_dict as _load_sd
+                self.model.load_state_dict(_load_sd(ckpt_path, self.device), strict=False)
+                self._ckpt_path = ckpt_path
+            except FileNotFoundError as e:
+                print(f"Warning (L2-MDD): {e}")
+                self._ckpt_path = None
+            except Exception as exc:
+                if load_progress is not None:
+                    load_progress.fail(ckpt_step, str(exc))
+                raise
+            if load_progress is not None:
+                load_progress.finish(ckpt_step, str(self._ckpt_path or "không có checkpoint"))
+        except Exception as exc:
+            if load_progress is not None:
+                load_progress.fail(model_step, str(exc))
+            raise
+
+        self.model.eval()
+        self.sr = self.preprocess.sample_rate
+        inf = self.config.get("inference") or {}
+        md = inf.get("max_duration_sec")
+        if md is None and "max_duration_sec" not in inf:
+            ds = self.config.get("train", {}).get("dataset", {})
+            md = ds.get("max_duration_sec")
+        self.max_duration_sec = None if md is None or md <= 0 else float(md)
+        self.cmudict = CMUDict(self.config["paths"].get("cmudict_path"))
+        mt = self.config["multitask"]
+        self.scorer = PronunciationScorer(mt.get("score_scale", 2.0), self.config.get("scorer", {}).get("weights"))
+
+    def _phones_from_text(self, text: str):
+        groups = self.cmudict.words_to_phoneme_groups(text)
+        tokens, words, ranges = [], [], []
+        for g in groups:
+            s = len(tokens)
+            tokens.extend(g["phones"])
+            words.append(g["word"])
+            ranges.append((s, len(tokens)))
+        return tokens, words, ranges
+
+    @torch.no_grad()
+    def predict(
+        self,
+        audio: str,
+        transcript: str,
+        feedback: bool = True,
+        lang: Optional[str] = None,
+        feedback_mode: str = "auto",
+        truncate: bool = False,
+        *,
+        apply_preprocess: bool = True,
+    ) -> Dict[str, Any]:
+        wav = load_waveform(audio, self.preprocess, apply_preprocess=apply_preprocess)
+        truncated = False
+        if truncate and self.max_duration_sec:
+            wav, truncated = truncate_waveform(wav, self.sr, self.max_duration_sec)
+        tokens, words, ranges = self._phones_from_text(transcript)
+        if not tokens:
+            raise ValueError(
+                f"Không tra được phoneme cho transcript (CMUdict): {transcript!r}"
+            )
+        out = self.model(
+            wav.unsqueeze(0).to(self.device),
+            torch.tensor([wav.shape[0]], device=self.device),
+            [tokens],
+            [ranges],
+            return_alignments=True,
+        )
+        pred = out["predictions"][0]
+        scores = self.scorer.aggregate_utterance(pred)
+        scores["final"] = self.scorer.final_score(pred)
+        alignments = [
+            {
+                "phoneme": a.phoneme,
+                "start_frame": a.start_frame,
+                "end_frame": a.end_frame,
+                "confidence": a.confidence,
+            }
+            for a in (out.get("alignments") or [[]])[0]
+        ]
+
+        errors = self.scorer.find_errors(pred, tokens, words, ranges, alignments=alignments)
+        return {
+            "transcript": transcript,
+            "scores": scores,
+            "errors": errors,
+            "truncated": truncated,
+            "max_duration_sec": self.max_duration_sec,
+            "alignments": alignments,
+            "feedback": None,
+            "feedback_source": None,
+        }
 
 
 def main():

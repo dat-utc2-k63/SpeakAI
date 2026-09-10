@@ -144,8 +144,8 @@ def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embe
             student_emb = np.mean(student_emb, axis=0)
         student_emb /= np.linalg.norm(student_emb)
         
-        # Gọi Pipeline
-        tasks[task_id]['step'] = 'Đang tách lời (Diarization) & Phân tích phát âm...'
+        # Gọi Pipeline (chạy cả 2 model: pronunciation + L2-MDD)
+        tasks[task_id]['step'] = 'Đang tách lời (Diarization) & Phân tích phát âm (2 models)...'
         raw_result = pipeline.assess_conversation(
             conv_path,
             teacher_embedding=teacher_emb,
@@ -153,18 +153,9 @@ def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embe
             score_teacher=score_teacher
         )
         
-        def apply_penalty(node):
-            if isinstance(node, dict):
-                for k, v in node.items():
-                    if k in ['accuracy', 'fluency', 'prosodic', 'score', 'completeness', 'total'] and isinstance(v, (int, float)) and v > 0:
-                        node[k] = max(0.0, v - (10.0 - v) * 0.30)
-                    else:
-                        apply_penalty(v)
-            elif isinstance(node, list):
-                for item in node:
-                    apply_penalty(item)
-                    
-        apply_penalty(raw_result)
+        # NOTE: Không áp dụng apply_penalty nữa.
+        # Điểm từ model đã được train và calibrate rồi, 
+        # apply_penalty trước đây trừ (10-v)*0.30 khiến điểm thấp bị kéo về 0.
         
         # Trích xuất file tổng hợp
         diar = raw_result.get('diarization', {})
@@ -178,20 +169,27 @@ def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embe
             tasks[task_id]['step'] = 'Bỏ qua LLM Feedback...'
             llm_feedback = 'Không có phản hồi (bỏ qua bởi người dùng).'
         else:
-            tasks[task_id]['step'] = 'Đang gọi LLM Qwen tạo Feedback cho từng lượt...'
+            tasks[task_id]['step'] = 'Đang tạo Feedback cho từng lượt nói...'
             teacher_ctx = 'Không có'
             for turn in raw_result.get('dialogue', {}).get('turns', []):
                 if turn['role'].upper() == 'TEACHER':
                     teacher_ctx = turn['transcript']
                 elif turn['role'].upper() == 'STUDENT':
-                    turn['llm_feedback'] = generate_turn_feedback(
-                        teacher_text=teacher_ctx, 
-                        student_text=turn['transcript'], 
-                        score=turn.get('scores', {}).get('accuracy', 0), 
-                        errors=turn.get('errors', {})
-                    )
+                    # Use transformer feedback from the model if available
+                    tf = turn.get('transformer_feedback', {})
+                    if tf and tf.get('summary'):
+                        turn['llm_feedback'] = tf['summary']
+                        if tf.get('tips'):
+                            turn['llm_feedback'] += '\n' + '\n'.join(tf['tips'][:3])
+                    else:
+                        turn['llm_feedback'] = generate_turn_feedback(
+                            teacher_text=teacher_ctx, 
+                            student_text=turn['transcript'], 
+                            score=turn.get('scores', {}).get('accuracy', 0), 
+                            errors=turn.get('errors', {})
+                        )
             
-            tasks[task_id]['step'] = 'Đang gọi LLM Qwen tạo Feedback tổng hợp...'
+            tasks[task_id]['step'] = 'Đang tạo Feedback tổng hợp...'
             llm_feedback = generate_overall_summary(raw_result)
         
         # Chuyển đổi đường dẫn file cục bộ thành Public URL

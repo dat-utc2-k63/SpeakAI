@@ -12,7 +12,7 @@ PathLike = Union[str, Path]
 
 DEFAULT_MODEL_DIR = Path("transformer_models")
 PRONUNCIATION_NAMES = ("pronunciation.pt", "best_model.pt")
-MDD_NAMES = ("l2_mdd.pt", "best_model.pt")
+MDD_NAMES = ("l2_mdd_best.pt", "l2_mdd.pt", "best_model.pt")
 
 
 def _first_existing(base: Path, names: tuple[str, ...]) -> Optional[Path]:

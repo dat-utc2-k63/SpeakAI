@@ -301,9 +301,12 @@
 
       <!-- RESULTS -->
       <div id="assessResults" class="d-none">
-        <!-- Score overview -->
+        <!-- Score overview with level badge -->
         <div class="section-card mb-4">
-          <h6 class="fw-bold mb-4"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Điểm Tổng Quát</h6>
+          <div class="d-flex justify-content-between align-items-start mb-4">
+            <h6 class="fw-bold mb-0"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Điểm Tổng Quát (Ensemble)</h6>
+            <span class="badge fs-6" id="resLevelBadge">--</span>
+          </div>
           <div class="row g-3">
             <div class="col-6 col-lg-3">
               <div class="score-card score-card-total">
@@ -332,6 +335,37 @@
                 <div class="score-value" id="resPro">--</div>
                 <div class="score-sub">/ 10</div>
               </div>
+            </div>
+          </div>
+          <!-- Model comparison info -->
+          <div id="modelComparisonInfo" class="d-none mt-3 p-3 rounded-3" style="background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.15);">
+            <div class="small text-muted mb-2"><i class="bi bi-cpu me-1"></i>So sánh 2 mô hình Transformer</div>
+            <div class="table-responsive">
+              <table class="table table-sm table-borderless mb-0 small">
+                <thead>
+                  <tr>
+                    <th class="text-muted">Tiêu chí</th>
+                    <th class="text-center text-info">SpeechOcean762</th>
+                    <th class="text-center text-warning">L2-MDD</th>
+                    <th class="text-center text-primary fw-bold">Ensemble</th>
+                  </tr>
+                </thead>
+                <tbody id="modelComparisonBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Transformer AI Feedback -->
+        <div class="section-card mb-4 tf-feedback-section">
+          <h6 class="fw-bold mb-3"><i class="bi bi-cpu me-2 text-info"></i>Phân tích AI Chi tiết (Transformer)</h6>
+          <div id="transformerFeedbackBox">
+            <!-- Summary -->
+            <div id="tfSummaryBox" class="mb-3 p-3 rounded-3" style="background: rgba(79, 70, 229, 0.08); border-left: 3px solid var(--color-indigo);"></div>
+            <!-- Tips -->
+            <div id="tfTipsBox" class="d-none">
+              <div class="small fw-semibold mb-2"><i class="bi bi-lightbulb me-1 text-warning"></i>Gợi ý luyện tập</div>
+              <div id="tfTipsList" class="d-flex flex-column gap-2"></div>
             </div>
           </div>
         </div>
