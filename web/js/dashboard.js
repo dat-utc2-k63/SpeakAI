@@ -476,99 +476,132 @@ import { supabase } from './supabase.js';
 
         function renderTurnApi(turn) {
           const isTeacher = turn.role === 'teacher';
-          const audioHtml = turn.audio ? `<audio controls src="${turn.audio}" class="w-100 mt-2" style="height: 30px;"></audio>` : '';
+          const sc = turn.scores || { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
+          const errs = turn.errors || {};
+          const badWords = errs.words ? errs.words.filter(w => w.score < 7.0) : [];
+          const badPhonemes = errs.phonemes ? errs.phonemes.filter(p => p.score < 7.0) : [];
+          const audioHtml = turn.audio ? `
+            <div class="mini-audio-pill mt-2">
+              <i class="bi bi-volume-up text-info"></i>
+              <audio controls src="${turn.audio}"></audio>
+            </div>` : '';
 
           if (isTeacher) {
             const scT = turn.scores;
-            const errsT = turn.errors || {};
-            const badWordsT = errsT.words ? errsT.words.filter(w => w.score < 7.0).map(w => w.word) : [];
-
             return `
       <div class="timeline-item timeline-teacher">
         <div class="timeline-dot teacher-dot"><i class="bi bi-person-video3"></i></div>
-        <div class="timeline-bubble teacher-bubble">
-          <div class="d-flex justify-content-between align-items-center mb-1">
-            <div class="small text-muted">Giáo viên</div>
-            ${scT ? `<div class="d-flex gap-2">
-              <span class="badge bg-primary">Total: ${scT.total?.toFixed(1)}</span>
-              <span class="badge bg-secondary">Acc: ${scT.accuracy?.toFixed(1)}</span>
-              <span class="badge bg-secondary">Flu: ${scT.fluency?.toFixed(1)}</span>
+        <div class="speech-bubble-enhanced teacher-bubble-enhanced">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="small text-muted fw-semibold"><i class="bi bi-person-badge me-1 text-primary"></i>Giáo viên</div>
+            ${scT ? `
+            <div class="score-pill-group">
+              <span class="score-pill-total" style="background: var(--color-indigo);">Total: ${scT.total?.toFixed(1)}</span>
+              <span class="score-pill-sub">Acc: ${scT.accuracy?.toFixed(1)}</span>
+              <span class="score-pill-sub">Flu: ${scT.fluency?.toFixed(1)}</span>
             </div>` : ''}
           </div>
-          <div>${turn.transcript}</div>
-          ${badWordsT.length ? `<div class="mt-2"><small class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Từ cần sửa: ${badWordsT.map(w => `<code>${w}</code>`).join(', ')}</small></div>` : ''}
+          <div class="fs-6 fw-normal text-white-50">${turn.transcript}</div>
           ${audioHtml}
         </div>
       </div>`;
           }
 
-          const sc = turn.scores || { total: 0, accuracy: 0, fluency: 0 };
-          const errs = turn.errors || {};
-          const badWords = errs.words ? errs.words.filter(w => w.score < 7.0) : [];
-          const badPhonemes = errs.phonemes ? errs.phonemes.filter(p => p.score < 7.0) : [];
-          const tf = turn.transformer_feedback || {};
-            
-          // Build enhanced feedback block
-          let feedbackHtml = '';
-          
-          // Transformer feedback summary (priority)
-          if (tf.summary) {
-            feedbackHtml += `<div class="mt-2 tf-turn-feedback">
-              <div class="small mb-1"><i class="bi bi-cpu me-1 text-info"></i><strong>Phân tích Transformer:</strong></div>
-              <div class="small text-white-50">${simpleMarkdown(tf.summary)}</div>`;
-            // Show tips for this turn
-            if (tf.tips && tf.tips.length > 0) {
-              feedbackHtml += `<div class="mt-1">`;
-              for (const tip of tf.tips.slice(0, 3)) {
-                feedbackHtml += `<div class="small text-white-50 ms-2">${tip}</div>`;
-              }
-              feedbackHtml += `</div>`;
-            }
-            feedbackHtml += `</div>`;
-          } else if (turn.llm_feedback) {
-            feedbackHtml = `<div class="mt-2" style="background: rgba(255,193,7,0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #ffc107;">
-              <div class="small text-warning"><i class="bi bi-robot me-1"></i>${simpleMarkdown(turn.llm_feedback)}</div>
-            </div>`;
-          } else if (badWords.length > 0 || badPhonemes.length > 0) {
-            feedbackHtml = `<div class="mt-2" style="background: rgba(255,193,7,0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #ffc107;">
-              <div class="small text-warning mb-1"><i class="bi bi-exclamation-triangle me-1"></i><strong>Cần cải thiện phát âm:</strong></div>`;
-            if (badWords.length > 0) {
-              feedbackHtml += `<div class="small text-white-50 ms-3">- Từ phát âm yếu: ${badWords.map(w => `<strong class="text-white">"${w.word}"</strong>${w.word_ipa ? ` <code class="text-info">${w.word_ipa}</code>` : ''} <span class="text-muted">(${w.score?.toFixed(1)})</span>`).join(', ')}</div>`;
-            }
-            if (badPhonemes.length > 0) {
-              feedbackHtml += `<div class="small text-white-50 ms-3">- Âm sai/yếu: ${badPhonemes.map(p => {
-                let tipStr = p.tip ? ` <span class="text-muted fst-italic">— ${p.tip}</span>` : '';
-                let ipaStr = p.ipa || ('/' + p.phoneme + '/');
-                let inWordStr = p.word ? ` trong từ <strong class="text-white">"${p.word}"</strong>${p.word_ipa ? ` <code class="text-info">${p.word_ipa}</code>` : ''}` : '';
-                return `<strong class="text-warning">${ipaStr}</strong>${inWordStr} <span class="text-muted">(${p.score?.toFixed(1)})</span>${tipStr}`;
-              }).join(', ')}</div>`;
-            }
-            feedbackHtml += `</div>`;
+          // Build Word Token Stream with IPA
+          let words = turn.words_detail;
+          if (!words || words.length === 0) {
+            const textWords = (turn.transcript || '').split(/\s+/).filter(Boolean);
+            const errWordsMap = {};
+            badWords.forEach(w => { errWordsMap[w.word.toLowerCase()] = w; });
+            words = textWords.map(tw => {
+              const clean = tw.replace(/[^a-zA-Z']/g, '').toLowerCase();
+              const ew = errWordsMap[clean];
+              const score = ew ? ew.score : 8.5;
+              const status = score >= 7.5 ? 'good' : (score >= 5.5 ? 'warning' : 'bad');
+              return {
+                word: tw,
+                word_ipa: ew?.word_ipa || '',
+                score: score,
+                status: status
+              };
+            });
           }
 
-          // Simple L2-MDD turn note if available
+          const wordTokensHtml = words.map(w => {
+            const ipaDisplay = w.word_ipa ? `<span class="word-ipa">${w.word_ipa}</span>` : '';
+            const titleAttr = `Điểm: ${w.score?.toFixed(1)}/10${w.word_ipa ? ' · ' + w.word_ipa : ''}`;
+            return `<div class="word-token ${w.status || 'good'}" title="${titleAttr}">
+              <span class="word-text">${w.word}</span>
+              ${ipaDisplay}
+            </div>`;
+          }).join('');
+
+          // Phoneme pills
+          let phonemePillsHtml = '';
+          if (badPhonemes.length > 0) {
+            phonemePillsHtml = `
+              <div class="mt-2 pt-2" style="border-top: 1px solid rgba(255,255,255,0.06);">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                  <span class="small fw-semibold text-warning" style="font-size: 0.78rem;">
+                    <i class="bi bi-soundwave me-1"></i>Âm vị cần lưu ý:
+                  </span>
+                </div>
+                <div class="phoneme-pills-row">
+                  ${badPhonemes.map(p => {
+                    const ipaStr = p.ipa || ('/' + p.phoneme + '/');
+                    const inWord = p.word ? ` trong "${p.word}"` : '';
+                    const tipText = p.tip ? ` — ${p.tip}` : '';
+                    const title = `Điểm: ${p.score?.toFixed(1)}/10${inWord}${tipText}`;
+                    return `
+                      <span class="phoneme-pill-tag ${p.score < 5.0 ? '' : 'warning'}" title="${title}">
+                        <span class="tag-ipa">${ipaStr}</span>
+                        ${p.word ? `<span class="tag-word">"${p.word}"</span>` : ''}
+                        <span class="tag-score">${p.score?.toFixed(1)}</span>
+                      </span>`;
+                  }).join('')}
+                </div>
+              </div>`;
+          }
+
+          // L2-MDD Coach card
+          let l2CoachHtml = '';
           if (turn.l2_mdd_feedback) {
-            feedbackHtml += `
-              <div class="mt-2 p-2 rounded-2 small" style="background: rgba(99, 102, 241, 0.08); border-left: 3px solid #6366f1;">
-                <span class="text-info"><i class="bi bi-lightbulb me-1"></i>${simpleMarkdown(turn.l2_mdd_feedback)}</span>
+            const cleanFeedback = turn.l2_mdd_feedback.replace(/^L2-MDD\s*(lưu ý)?:\s*/i, '');
+            l2CoachHtml = `
+              <div class="coach-card">
+                <div class="coach-icon"><i class="bi bi-stars"></i></div>
+                <div class="coach-body">
+                  <div class="coach-header">Trợ lý phát âm L2-MDD</div>
+                  <div>${simpleMarkdown(cleanFeedback)}</div>
+                </div>
               </div>`;
           }
 
           return `
     <div class="timeline-item timeline-student">
-      <div class="timeline-bubble student-bubble">
+      <div class="speech-bubble-enhanced student-bubble-enhanced">
         <div class="d-flex justify-content-between align-items-center mb-1">
-          <div class="small text-muted">Học viên</div>
-          <div>
-            <div class="d-flex gap-2">
-              <span class="badge bg-primary">Total: ${(sc.total || 0).toFixed(1)}</span>
-              <span class="badge bg-secondary">Acc: ${(sc.accuracy || 0).toFixed(1)}</span>
-              <span class="badge bg-secondary">Flu: ${(sc.fluency || 0).toFixed(1)}</span>
-            </div>
+          <div class="small text-muted fw-semibold"><i class="bi bi-mortarboard me-1 text-teal"></i>Học viên</div>
+          <div class="score-pill-group">
+            <span class="score-pill-total">Total: ${(sc.total || 0).toFixed(1)}</span>
+            <span class="score-pill-sub">Acc: ${(sc.accuracy || 0).toFixed(1)}</span>
+            <span class="score-pill-sub">Flu: ${(sc.fluency || 0).toFixed(1)}</span>
+            <span class="score-pill-sub">Pro: ${(sc.prosodic || 0).toFixed(1)}</span>
           </div>
         </div>
-        <div>${turn.transcript}</div>
-        ${feedbackHtml}
+
+        <!-- Word-by-word interactive stream with IPA -->
+        <div class="word-token-stream">
+          ${wordTokensHtml}
+        </div>
+
+        <!-- Phoneme correction tags -->
+        ${phonemePillsHtml}
+
+        <!-- L2-MDD AI Coach tip -->
+        ${l2CoachHtml}
+
+        <!-- Audio Player -->
         ${audioHtml}
       </div>
       <div class="timeline-dot student-dot"><i class="bi bi-mortarboard"></i></div>

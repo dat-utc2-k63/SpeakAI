@@ -383,6 +383,7 @@ class SpeakingPipeline:
             "feedback_source": pron_result.get("feedback_source"),
             "transformer_feedback": transformer_feedback,
             "l2_mdd_feedback": l2_turn_feedback,
+            "words_detail": pron_result.get("words_detail"),
         }
 
     def _assess_speaker_sentences(

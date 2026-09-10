@@ -336,6 +336,61 @@ class PronunciationScorer:
 
         return errors
 
+    def build_words_detail(
+        self,
+        predictions: Dict[str, torch.Tensor],
+        phoneme_tokens: List[str],
+        word_texts: List[str],
+        word_phone_ranges: List[tuple],
+    ) -> List[Dict[str, Any]]:
+        """Build detailed word-by-word analysis with IPA and constituent phonemes for interactive UI."""
+        words_detail = []
+        pa = predictions.get("phoneme_accuracy")
+        wt_acc = predictions.get("word_accuracy")
+        wt_stress = predictions.get("word_stress")
+        wt_total = predictions.get("word_total")
+
+        for i, word in enumerate(word_texts):
+            start_idx, end_idx = word_phone_ranges[i] if i < len(word_phone_ranges) else (0, 0)
+            w_phones = phoneme_tokens[start_idx:end_idx] if start_idx < end_idx else []
+            w_ipa = phones_to_word_ipa(w_phones)
+
+            # Determine word score
+            if wt_total is not None and isinstance(wt_total, torch.Tensor) and i < len(wt_total):
+                w_score = self.to_display_scale(wt_total[i].item())
+            elif wt_acc is not None and isinstance(wt_acc, torch.Tensor) and i < len(wt_acc):
+                stress = wt_stress[i].item() if (wt_stress is not None and isinstance(wt_stress, torch.Tensor) and i < len(wt_stress)) else wt_acc[i].item()
+                w_score = self.to_display_scale((wt_acc[i].item() + stress) / 2.0)
+            else:
+                w_score = 8.0
+
+            w_status = "good" if w_score >= 7.5 else ("warning" if w_score >= 5.5 else "bad")
+
+            # Constituent phonemes
+            phones_list = []
+            for p_idx in range(start_idx, end_idx):
+                p_tok = phoneme_tokens[p_idx]
+                p_score = self.to_display_scale(pa[p_idx].item()) if (pa is not None and isinstance(pa, torch.Tensor) and p_idx < len(pa)) else w_score
+                p_status = "good" if p_score >= 7.5 else ("warning" if p_score >= 5.5 else "bad")
+                phones_list.append({
+                    "phoneme": p_tok,
+                    "ipa": format_phone_ipa(p_tok),
+                    "ipa_char": phone_to_ipa(p_tok),
+                    "score": p_score,
+                    "status": p_status,
+                    "tip": _get_phoneme_tip(p_tok),
+                })
+
+            words_detail.append({
+                "word": word,
+                "word_ipa": w_ipa,
+                "score": w_score,
+                "status": w_status,
+                "phonemes": phones_list,
+            })
+
+        return words_detail
+
     # ── L2-MDD Per-Turn Feedback ────────────────────────────────────
     @staticmethod
     def generate_l2_turn_feedback(errors: Optional[Dict[str, List[dict]]]) -> Optional[str]:

@@ -127,10 +127,12 @@ class Predictor:
         ]
         
         errors = self.scorer.find_errors(pred, tokens, words, ranges, alignments=alignments)
+        words_detail = self.scorer.build_words_detail(pred, tokens, words, ranges)
         result = {
             "transcript": transcript,
             "scores": scores,
             "errors": errors,
+            "words_detail": words_detail,
             "truncated": truncated,
             "max_duration_sec": self.max_duration_sec,
             "alignments": alignments,
@@ -256,10 +258,12 @@ class L2MDDPredictor:
         ]
 
         errors = self.scorer.find_errors(pred, tokens, words, ranges, alignments=alignments)
+        words_detail = self.scorer.build_words_detail(pred, tokens, words, ranges)
         return {
             "transcript": transcript,
             "scores": scores,
             "errors": errors,
+            "words_detail": words_detail,
             "truncated": truncated,
             "max_duration_sec": self.max_duration_sec,
             "alignments": alignments,
