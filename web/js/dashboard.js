@@ -547,20 +547,6 @@ import { supabase } from './supabase.js';
               </div>`;
           }
 
-          // L2-MDD Coach card
-          let l2CoachHtml = '';
-          if (turn.l2_mdd_feedback) {
-            const cleanFeedback = turn.l2_mdd_feedback.replace(/^L2-MDD\s*(lưu ý)?:\s*/i, '');
-            l2CoachHtml = `
-              <div class="coach-card">
-                <div class="coach-icon"><i class="bi bi-stars"></i></div>
-                <div class="coach-body">
-                  <div class="coach-header">Trợ lý phát âm L2-MDD</div>
-                  <div>${simpleMarkdown(cleanFeedback)}</div>
-                </div>
-              </div>`;
-          }
-
           return `
     <div class="timeline-item timeline-student">
       <div class="speech-bubble-enhanced student-bubble-enhanced">
@@ -581,9 +567,6 @@ import { supabase } from './supabase.js';
 
         <!-- Phoneme correction tags -->
         ${phonemePillsHtml}
-
-        <!-- L2-MDD AI Coach tip -->
-        ${l2CoachHtml}
 
         <!-- Audio Player -->
         ${audioHtml}
