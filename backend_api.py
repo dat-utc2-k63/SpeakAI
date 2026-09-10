@@ -3,6 +3,8 @@ import uuid
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
+from pathlib import Path
 import uvicorn
 import shutil
 import json
@@ -203,18 +205,23 @@ def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embe
             tasks[task_id]['step'] = 'Đang tạo Feedback tổng hợp...'
             llm_feedback = generate_overall_summary(raw_result)
         
-        # Chuyển đổi đường dẫn file cục bộ thành Public URL
+        # Chuyển đổi đường dẫn file cục bộ thành Public URL & sanitize Path objects
         def convert_paths_to_urls(node):
             if isinstance(node, dict):
-                for k, v in node.items():
+                for k, v in list(node.items()):
+                    if isinstance(v, (os.PathLike, Path)):
+                        v = str(v)
+                        node[k] = v
                     if (k == 'audio' or k == 'full_audio') and isinstance(v, str) and v.startswith('/tmp/SpeakAI_Audio/'):
                         rel_path = v.replace('/tmp/SpeakAI_Audio/', '')
                         node[k] = f'{PUBLIC_URL}/audio/{rel_path}'
                     else:
                         convert_paths_to_urls(v)
             elif isinstance(node, list):
-                for item in node:
-                    convert_paths_to_urls(item)
+                for i in range(len(node)):
+                    if isinstance(node[i], (os.PathLike, Path)):
+                        node[i] = str(node[i])
+                    convert_paths_to_urls(node[i])
                     
         convert_paths_to_urls(raw_result)
         
@@ -236,7 +243,7 @@ def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embe
 def assess_status(task_id: str):
     if task_id not in tasks:
         return JSONResponse({'success': False, 'error': 'Task not found'}, status_code=404)
-    return JSONResponse({'success': True, 'data': tasks[task_id]})
+    return JSONResponse({'success': True, 'data': jsonable_encoder(tasks[task_id])})
 
 # Khởi chạy Uvicorn
 config = uvicorn.Config(app, host='0.0.0.0', port=8000)

@@ -40,6 +40,8 @@ def _build_dialogue(
             "scores": s.get("scores"),
             "errors": s.get("errors"),
             "transformer_feedback": s.get("transformer_feedback"),
+            "words_detail": s.get("words_detail"),
+            "l2_mdd_feedback": s.get("l2_mdd_feedback"),
         })
     for s in student_sentences:
         turns.append({
@@ -52,6 +54,8 @@ def _build_dialogue(
             "scores": s.get("scores"),
             "errors": s.get("errors"),
             "transformer_feedback": s.get("transformer_feedback"),
+            "words_detail": s.get("words_detail"),
+            "l2_mdd_feedback": s.get("l2_mdd_feedback"),
         })
     turns.sort(key=lambda t: (t.get("start_sec") or 0, 0 if t["role"] == "teacher" else 1))
 
@@ -232,8 +236,8 @@ class SpeakingPipeline:
             "student_segments": result.student_segments,
         }
         if result.teacher_path and result.student_path:
-            out["teacher"] = result.teacher_path
-            out["student"] = result.student_path
+            out["teacher"] = str(result.teacher_path)
+            out["student"] = str(result.student_path)
         return out
 
     def _collect_speaker_segments(
@@ -559,8 +563,8 @@ class SpeakingPipeline:
                 "has_l2_mdd": self.l2_mdd is not None,
                 "overall_transformer_feedback": overall_tf,
                 "diarization": {
-                    "teacher": split.get("teacher"),
-                    "student": split.get("student"),
+                    "teacher": str(split["teacher"]) if split.get("teacher") else None,
+                    "student": str(split["student"]) if split.get("student") else None,
                 },
             }
 
@@ -584,8 +588,8 @@ class SpeakingPipeline:
             "speakers": speakers,
             "has_l2_mdd": self.l2_mdd is not None,
             "diarization": {
-                "teacher": split.get("teacher"),
-                "student": split.get("student"),
+                "teacher": str(split["teacher"]) if split.get("teacher") else None,
+                "student": str(split["student"]) if split.get("student") else None,
             },
         }
 

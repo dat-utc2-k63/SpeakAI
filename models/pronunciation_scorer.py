@@ -364,8 +364,6 @@ class PronunciationScorer:
             else:
                 w_score = 8.0
 
-            w_status = "good" if w_score >= 7.5 else ("warning" if w_score >= 5.5 else "bad")
-
             # Constituent phonemes
             phones_list = []
             for p_idx in range(start_idx, end_idx):
@@ -380,6 +378,21 @@ class PronunciationScorer:
                     "status": p_status,
                     "tip": _get_phoneme_tip(p_tok),
                 })
+
+            if phones_list:
+                phone_avg = sum(p["score"] for p in phones_list) / len(phones_list)
+                phone_min = min(p["score"] for p in phones_list)
+                # Blend word prediction with phoneme accuracy so word scores accurately reflect mispronounced sounds
+                if wt_total is not None and isinstance(wt_total, torch.Tensor) and i < len(wt_total):
+                    w_score = round(0.6 * w_score + 0.4 * phone_avg, 1)
+                elif wt_acc is not None and isinstance(wt_acc, torch.Tensor) and i < len(wt_acc):
+                    w_score = round(0.5 * w_score + 0.5 * phone_avg, 1)
+                else:
+                    w_score = round(phone_avg, 1)
+                if phone_min < 5.0 and w_score > 6.5:
+                    w_score = round(max(phone_min + 1.0, 5.0), 1)
+
+            w_status = "good" if w_score >= 7.5 else ("warning" if w_score >= 5.5 else "bad")
 
             words_detail.append({
                 "word": word,

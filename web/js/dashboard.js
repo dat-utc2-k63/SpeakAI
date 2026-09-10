@@ -445,24 +445,7 @@ import { supabase } from './supabase.js';
             }
           }
 
-          let fullAudioHtml = '';
-          if (resultObj.teacher && resultObj.teacher.full_audio) {
-            let tScore = '';
-            if (resultObj.teacher.scores) {
-              const s = resultObj.teacher.scores;
-              tScore = `<span class="badge bg-primary ms-2">Total: ${s.total?.toFixed(1)}</span> <span class="badge bg-secondary">Acc: ${s.accuracy?.toFixed(1)}</span> <span class="badge bg-secondary">Flu: ${s.fluency?.toFixed(1)}</span> <span class="badge bg-secondary">Pro: ${s.prosodic?.toFixed(1)}</span>`;
-            }
-            fullAudioHtml += `<div class="mb-2"><strong>Giọng Giáo viên:</strong>${tScore}<br><audio controls src="${resultObj.teacher.full_audio}" class="w-100 mt-1" style="height: 35px;"></audio></div>`;
-          }
-          if (resultObj.student && resultObj.student.full_audio) {
-            fullAudioHtml += `<div><strong>Giọng Học viên:</strong><br><audio controls src="${resultObj.student.full_audio}" class="w-100 mt-1" style="height: 35px;"></audio></div>`;
-          }
-          if (fullAudioHtml) {
-            fullAudioHtml = `<div class="p-3 mb-4 rounded bg-light border">${fullAudioHtml}</div>`;
-          }
-
-          document.getElementById('dialogueTimeline').innerHTML = fullAudioHtml + (resultObj.dialogue.turns || []).map(renderTurnApi).join('');
-          document.getElementById('llmFeedbackBox').innerHTML = simpleMarkdown(llmFeedback || "Chưa có feedback.");
+          document.getElementById('dialogueTimeline').innerHTML = (resultObj.dialogue.turns || []).map(renderTurnApi).join('');
           document.getElementById('assessTitleInput').value = '';
           document.getElementById('assessResults').classList.remove('d-none');
           document.getElementById('runAssessBtn').disabled = false;
@@ -513,10 +496,11 @@ import { supabase } from './supabase.js';
             const textWords = (turn.transcript || '').split(/\s+/).filter(Boolean);
             const errWordsMap = {};
             badWords.forEach(w => { errWordsMap[w.word.toLowerCase()] = w; });
+            const defaultWordScore = (sc.accuracy > 0 ? sc.accuracy : (sc.total > 0 ? sc.total : 7.5));
             words = textWords.map(tw => {
               const clean = tw.replace(/[^a-zA-Z']/g, '').toLowerCase();
               const ew = errWordsMap[clean];
-              const score = ew ? ew.score : 8.5;
+              const score = ew ? ew.score : defaultWordScore;
               const status = score >= 7.5 ? 'good' : (score >= 5.5 ? 'warning' : 'bad');
               return {
                 word: tw,
@@ -893,22 +877,6 @@ import { supabase } from './supabase.js';
           const levelColors = { excellent: 'bg-success', good: 'bg-info', average: 'bg-warning text-dark', weak: 'bg-danger', critical: 'bg-danger' };
           const levelBadgeHtml = `<span class="badge fs-6 ${levelColors[level] || 'bg-secondary'}">${levelLabels[level] || level}</span>`;
 
-          let fullAudioHtml = '';
-          if (r.teacher && r.teacher.full_audio) {
-            let tScore = '';
-            if (r.teacher.scores) {
-              const s = r.teacher.scores;
-              tScore = `<span class="badge bg-primary ms-2">Total: ${s.total?.toFixed(1)}</span> <span class="badge bg-secondary">Acc: ${s.accuracy?.toFixed(1)}</span> <span class="badge bg-secondary">Flu: ${s.fluency?.toFixed(1)}</span> <span class="badge bg-secondary">Pro: ${s.prosodic?.toFixed(1)}</span>`;
-            }
-            fullAudioHtml += `<div class="mb-2"><strong>Giọng Giáo viên:</strong>${tScore}<br><audio controls src="${r.teacher.full_audio}" class="w-100 mt-1" style="height: 35px;"></audio></div>`;
-          }
-          if (r.student && r.student.full_audio) {
-            fullAudioHtml += `<div><strong>Giọng Học viên:</strong><br><audio controls src="${r.student.full_audio}" class="w-100 mt-1" style="height: 35px;"></audio></div>`;
-          }
-          if (fullAudioHtml) {
-            fullAudioHtml = `<div class="p-3 mb-4 rounded bg-light border">${fullAudioHtml}</div>`;
-          }
-
           // Transformer feedback HTML
           let tfHtml = '';
           if (otf.summary) {
@@ -972,15 +940,7 @@ import { supabase } from './supabase.js';
     <!-- Dialogue timeline -->
     <div class="section-card mb-4">
       <h6 class="fw-bold mb-4"><i class="bi bi-chat-left-text me-2 text-primary"></i>Chi tiết từng lượt nói</h6>
-      <div class="timeline">${fullAudioHtml + turns.map(renderTurnApi).join('')}</div>
-    </div>
-
-    <!-- LLM Feedback -->
-    <div class="section-card mb-4">
-      <h6 class="fw-bold mb-3"><i class="bi bi-robot me-2 text-primary"></i>Nhận xét AI Tổng hợp</h6>
-      <div class="feedback-box">
-        ${simpleMarkdown(a.llm_feedback || '')}
-      </div>
+      <div class="timeline">${turns.map(renderTurnApi).join('')}</div>
     </div>
   `;
           new bootstrap.Modal(document.getElementById('assessDetailModal')).show();
