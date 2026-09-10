@@ -348,9 +348,8 @@ class SpeakingPipeline:
         pron_scores = pron_result["scores"]
         pron_errors = pron_result["errors"]
 
-        # ── Run L2-MDD model if available ──
-        l2_scores = None
-        l2_errors = None
+        # ── Run L2-MDD model for per-turn feedback only (no scoring) ──
+        l2_turn_feedback = None
         if self.l2_mdd is not None:
             try:
                 l2_result = self.l2_mdd.predict(
@@ -358,26 +357,19 @@ class SpeakingPipeline:
                     feedback_mode=feedback_mode, truncate=truncate,
                     apply_preprocess=apply_preprocess,
                 )
-                l2_scores = l2_result["scores"]
-                l2_errors = l2_result["errors"]
+                l2_errors = l2_result.get("errors", {})
+                l2_turn_feedback = PronunciationScorer.generate_l2_turn_feedback(l2_errors)
             except Exception as e:
-                print(f"  ⚠️ L2-MDD prediction failed: {e}")
+                print(f"  ⚠️ L2-MDD turn feedback failed: {e}")
 
-        # ── Ensemble scores ──
-        if l2_scores:
-            final_scores = PronunciationScorer.ensemble_scores(pron_scores, l2_scores)
-            final_errors = PronunciationScorer.merge_errors(pron_errors, l2_errors or {})
-        else:
-            final_scores = pron_scores
-            final_errors = pron_errors
+        # SpeechOcean762 is the SOLE scoring model (no ensemble)
+        final_scores = pron_scores
+        final_errors = pron_errors
 
-        # ── Generate transformer feedback ──
+        # Generate per-turn feedback from SpeechOcean
         transformer_feedback = PronunciationScorer.generate_transformer_feedback(
             scores_pronunciation=pron_scores,
             errors_pronunciation=pron_errors,
-            scores_l2_mdd=l2_scores,
-            errors_l2_mdd=l2_errors,
-            ensemble_scores=final_scores,
             transcript=transcript,
         )
 
@@ -390,8 +382,7 @@ class SpeakingPipeline:
             "feedback": pron_result.get("feedback"),
             "feedback_source": pron_result.get("feedback_source"),
             "transformer_feedback": transformer_feedback,
-            "scores_pronunciation": pron_scores,
-            "scores_l2_mdd": l2_scores,
+            "l2_mdd_feedback": l2_turn_feedback,
         }
 
     def _assess_speaker_sentences(
@@ -531,13 +522,10 @@ class SpeakingPipeline:
                 student["pronunciation_feedback"] = lang_fb.get("pronunciation_feedback")
                 student["pronunciation_feedback_source"] = lang_fb.get("pronunciation_feedback_source")
 
-            # ── Build overall transformer feedback for the student ──
+            # ── Build overall transformer feedback for the student (SpeechOcean only) ──
             overall_tf = PronunciationScorer.generate_transformer_feedback(
                 scores_pronunciation=student.get("scores", {}),
                 errors_pronunciation=None,
-                scores_l2_mdd=None,
-                errors_l2_mdd=None,
-                ensemble_scores=student.get("scores", {}),
                 transcript=student.get("transcript", ""),
             )
 

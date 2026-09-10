@@ -175,19 +175,30 @@ def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embe
                 if turn['role'].upper() == 'TEACHER':
                     teacher_ctx = turn['transcript']
                 elif turn['role'].upper() == 'STUDENT':
-                    # Use transformer feedback from the model if available
+                    # Use SpeechOcean feedback as primary
                     tf = turn.get('transformer_feedback', {})
+                    l2_note = turn.get('l2_mdd_feedback')
+                    turn_parts = []
                     if tf and tf.get('summary'):
-                        turn['llm_feedback'] = tf['summary']
+                        turn_parts.append(tf['summary'])
                         if tf.get('tips'):
-                            turn['llm_feedback'] += '\n' + '\n'.join(tf['tips'][:3])
+                            turn_parts.extend(tf['tips'][:2])
                     else:
-                        turn['llm_feedback'] = generate_turn_feedback(
+                        fb = generate_turn_feedback(
                             teacher_text=teacher_ctx, 
                             student_text=turn['transcript'], 
                             score=turn.get('scores', {}).get('accuracy', 0), 
-                            errors=turn.get('errors', {})
+                            errors=turn.get('errors', {}),
+                            l2_note=l2_note
                         )
+                        if fb:
+                            turn_parts.append(fb)
+                    
+                    # Attach simple L2-MDD note to the turn if not already in turn_parts
+                    if l2_note and not any(l2_note in p for p in turn_parts):
+                        turn_parts.append(f"💡 {l2_note}")
+
+                    turn['llm_feedback'] = '\n'.join(turn_parts)
             
             tasks[task_id]['step'] = 'Đang tạo Feedback tổng hợp...'
             llm_feedback = generate_overall_summary(raw_result)

@@ -12,33 +12,156 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 
 
+# ── Standard ARPAbet to IPA Mapping ─────────────────────────────────
+ARPABET_TO_IPA: Dict[str, str] = {
+    # Vowels & Diphthongs
+    "AA": "ɑː",
+    "AE": "æ",
+    "AH0": "ə",
+    "AH": "ʌ",
+    "AH1": "ʌ",
+    "AH2": "ʌ",
+    "AO": "ɔː",
+    "AW": "aʊ",
+    "AY": "aɪ",
+    "EH": "e",
+    "ER": "ɜːr",
+    "ER0": "ər",
+    "ER1": "ɜːr",
+    "ER2": "ɜːr",
+    "EY": "eɪ",
+    "IH": "ɪ",
+    "IH0": "ɪ",
+    "IH1": "ɪ",
+    "IH2": "ɪ",
+    "IY": "iː",
+    "IY0": "i",
+    "IY1": "iː",
+    "IY2": "iː",
+    "OW": "oʊ",
+    "OY": "ɔɪ",
+    "UH": "ʊ",
+    "UW": "uː",
+    # Consonants
+    "B": "b",
+    "CH": "tʃ",
+    "D": "d",
+    "DH": "ð",
+    "F": "f",
+    "G": "ɡ",
+    "HH": "h",
+    "JH": "dʒ",
+    "K": "k",
+    "L": "l",
+    "M": "m",
+    "N": "n",
+    "NG": "ŋ",
+    "P": "p",
+    "R": "r",
+    "S": "s",
+    "SH": "ʃ",
+    "T": "t",
+    "TH": "θ",
+    "V": "v",
+    "W": "w",
+    "Y": "j",
+    "Z": "z",
+    "ZH": "ʒ",
+}
+
+def phone_to_ipa(phoneme: str) -> str:
+    """Convert ARPAbet phoneme (e.g. 'TH', 'AE1') to standard IPA symbol (e.g. 'θ', 'æ')."""
+    if not phoneme:
+        return ""
+    if phoneme in ARPABET_TO_IPA:
+        return ARPABET_TO_IPA[phoneme]
+    base = phoneme.rstrip("012")
+    return ARPABET_TO_IPA.get(base, base.lower())
+
+def format_phone_ipa(phoneme: str) -> str:
+    """Format single phoneme in standard IPA notation e.g. /θ/, /ð/."""
+    ipa = phone_to_ipa(phoneme)
+    return f"/{ipa}/" if ipa else f"/{phoneme}/"
+
+def phones_to_word_ipa(phones: List[str]) -> str:
+    """Convert sequence of ARPAbet phonemes to standard dictionary word IPA.
+    
+    e.g. ['TH', 'IH1', 'NG', 'K'] -> '/θɪŋk/'
+         ['W', 'EH1', 'DH', 'ER0'] -> '/ˈweðər/'
+    """
+    if not phones:
+        return ""
+    vowels = {"AA", "AE", "AH", "AO", "AW", "AY", "EH", "ER", "EY", "IH", "IY", "OW", "OY", "UH", "UW"}
+    vowel_indices = [i for i, p in enumerate(phones) if p.rstrip("012") in vowels]
+    primary_stress_idx = next((i for i, p in enumerate(phones) if len(p) > 1 and p[-1] == "1"), None)
+    
+    stress_mark_at = None
+    if len(vowel_indices) > 1 and primary_stress_idx is not None:
+        k = primary_stress_idx
+        while k > 0 and (phones[k - 1].rstrip("012") not in vowels):
+            k -= 1
+        stress_mark_at = k
+        
+    parts = []
+    for i, p in enumerate(phones):
+        if stress_mark_at is not None and i == stress_mark_at:
+            parts.append("ˈ")
+        parts.append(phone_to_ipa(p))
+        
+    return f"/{''.join(parts)}/"
+
+
 # ── IPA / ARPAbet helpers for human-readable feedback ──────────────
 _PHONEME_TIPS: Dict[str, str] = {
     "TH": "Đặt lưỡi giữa hai hàm răng, thổi nhẹ (think, three)",
+    "θ": "Đặt lưỡi giữa hai hàm răng, thổi nhẹ (think, three)",
     "DH": "Đặt lưỡi giữa hai hàm răng, rung dây thanh (this, that)",
+    "ð": "Đặt lưỡi giữa hai hàm răng, rung dây thanh (this, that)",
     "R": "Cuộn lưỡi nhẹ ra sau, không chạm vòm miệng (red, run)",
+    "r": "Cuộn lưỡi nhẹ ra sau, không chạm vòm miệng (red, run)",
     "L": "Đầu lưỡi chạm nướu trên, giữ giọng (light, love)",
+    "l": "Đầu lưỡi chạm nướu trên, giữ giọng (light, love)",
     "V": "Răng trên chạm môi dưới, rung dây thanh (very, voice)",
+    "v": "Răng trên chạm môi dưới, rung dây thanh (very, voice)",
     "W": "Tròn môi, giống âm 'u' ngắn (water, we)",
+    "w": "Tròn môi, giống âm 'u' ngắn (water, we)",
     "Z": "Giống âm 's' nhưng rung dây thanh (zoo, buzz)",
+    "z": "Giống âm 's' nhưng rung dây thanh (zoo, buzz)",
     "ZH": "Giống âm 'sh' nhưng rung dây thanh (measure, vision)",
+    "ʒ": "Giống âm 'sh' nhưng rung dây thanh (measure, vision)",
     "SH": "Đẩy môi ra trước, luồng hơi rộng (she, ship)",
+    "ʃ": "Đẩy môi ra trước, luồng hơi rộng (she, ship)",
     "CH": "Kết hợp âm 't' + 'sh' nhanh (church, check)",
+    "tʃ": "Kết hợp âm 't' + 'sh' nhanh (church, check)",
     "JH": "Kết hợp âm 'd' + 'zh' nhanh (judge, jump)",
+    "dʒ": "Kết hợp âm 'd' + 'zh' nhanh (judge, jump)",
     "NG": "Phần sau lưỡi chạm vòm mềm (sing, ring)",
-    "AE1": "Mở miệng rộng, kéo dài (cat, bad)",
-    "IH0": "Ngắn hơn 'ee', thả lỏng (bit, sit)",
-    "UH1": "Ngắn, tròn môi nhẹ (book, put)",
-    "ER0": "Âm 'r' kéo dài, cuộn lưỡi (butter, teacher)",
+    "ŋ": "Phần sau lưỡi chạm vòm mềm (sing, ring)",
+    "AE": "Mở miệng rộng, kéo dài (cat, bad)",
+    "æ": "Mở miệng rộng, kéo dài (cat, bad)",
+    "IH": "Ngắn hơn 'ee', thả lỏng (bit, sit)",
+    "ɪ": "Ngắn hơn 'ee', thả lỏng (bit, sit)",
+    "UH": "Ngắn, tròn môi nhẹ (book, put)",
+    "ʊ": "Ngắn, tròn môi nhẹ (book, put)",
+    "ER": "Âm 'r' kéo dài, cuộn lưỡi (butter, teacher)",
+    "ɜːr": "Âm 'r' kéo dài, cuộn lưỡi (butter, teacher)",
+    "ər": "Âm 'r' nhẹ, lướt nhanh (butter, teacher)",
     "AH0": "Âm schwa - ngắn, nhẹ (about, sofa)",
+    "ə": "Âm schwa - ngắn, nhẹ (about, sofa)",
+    "IY": "Cười nhẹ, kéo dài âm 'ee' (see, seat)",
+    "iː": "Cười nhẹ, kéo dài âm 'ee' (see, seat)",
 }
 
 def _get_phoneme_tip(phoneme: str) -> str:
-    """Return a pronunciation tip for a phoneme, or a generic one."""
-    # Strip stress digits for lookup
-    base = phoneme.rstrip("012")
+    """Return a pronunciation tip for a phoneme (supports ARPAbet or IPA)."""
+    if not phoneme:
+        return ""
     if phoneme in _PHONEME_TIPS:
         return _PHONEME_TIPS[phoneme]
+    ipa = phone_to_ipa(phoneme)
+    if ipa in _PHONEME_TIPS:
+        return _PHONEME_TIPS[ipa]
+    base = phoneme.rstrip("012")
     if base in _PHONEME_TIPS:
         return _PHONEME_TIPS[base]
     return ""
@@ -137,7 +260,8 @@ class PronunciationScorer:
         threshold: Optional[float] = None,
     ) -> Dict[str, List[dict]]:
         """
-        Identify low-scoring phonemes/words for LLM feedback, grouped by severity.
+        Identify low-scoring phonemes/words for feedback, grouped by severity,
+        with standard IPA and word IPA for clear cross-referencing.
 
         Returns:
             {"phonemes": [...], "words": [...]} with scores on 0-10 scale and severity.
@@ -145,6 +269,20 @@ class PronunciationScorer:
         thr = threshold if threshold is not None else self.phoneme_low_threshold
         display_thr = self.to_display_scale(thr)
         errors = {"phonemes": [], "words": []}
+
+        # Map each phoneme index to its containing word and word IPA
+        phone_to_word: Dict[int, dict] = {}
+        word_ipas: List[str] = []
+        for w_idx, (start_idx, end_idx) in enumerate(word_phone_ranges):
+            w_text = word_texts[w_idx] if w_idx < len(word_texts) else ""
+            w_phones = phoneme_tokens[start_idx:end_idx] if start_idx < end_idx else []
+            w_ipa = phones_to_word_ipa(w_phones)
+            word_ipas.append(w_ipa)
+            for p_idx in range(start_idx, end_idx):
+                phone_to_word[p_idx] = {
+                    "word": w_text,
+                    "word_ipa": w_ipa,
+                }
 
         def get_severity(score_10: float) -> str:
             if score_10 < 4.0:
@@ -158,16 +296,17 @@ class PronunciationScorer:
         if pa is not None and isinstance(pa, torch.Tensor):
             for i, (tok, score) in enumerate(zip(phoneme_tokens, pa.tolist())):
                 display_score = self.to_display_scale(score)
-                
-                # We no longer filter out low confidence/short phonemes because the user explicitly said:
-                # "confidence < 0.5 -> noise: Không nên kết luận như vậy"
                 valid = True
 
                 if valid and display_score < display_thr:
+                    w_info = phone_to_word.get(i, {})
                     errors["phonemes"].append(
                         {
                             "index": i,
                             "phoneme": tok,
+                            "ipa": format_phone_ipa(tok),
+                            "word": w_info.get("word", ""),
+                            "word_ipa": w_info.get("word_ipa", ""),
                             "score": display_score,
                             "severity": get_severity(display_score),
                             "tip": _get_phoneme_tip(tok),
@@ -181,31 +320,15 @@ class PronunciationScorer:
                 stress_score = wt_stress[i].item() if (wt_stress is not None and isinstance(wt_stress, torch.Tensor) and i < len(wt_stress)) else acc_score
                 combined_score = (acc_score + stress_score) / 2.0
                 display_score = self.to_display_scale(combined_score)
-                
-                # Word confidence and frames derived from constituent phonemes
                 valid = True
-                if alignments and i < len(word_phone_ranges):
-                    start_idx, end_idx = word_phone_ranges[i]
-                    word_conf = 0.0
-                    word_dur = 0
-                    count = 0
-                    for p_idx in range(start_idx, end_idx):
-                        if p_idx < len(alignments):
-                            al = alignments[p_idx]
-                            word_conf += al.get("confidence", 1.0)
-                            word_dur += (al.get("end_frame", 2) - al.get("start_frame", 0))
-                            count += 1
-                    if count > 0:
-                        word_conf /= count
-                        # We no longer filter out low confidence/short words
-                        # if word_conf < 0.5 or word_dur < 2:
-                        #     valid = False
 
                 if valid and display_score < display_thr:
+                    w_ipa = word_ipas[i] if i < len(word_ipas) else ""
                     errors["words"].append(
                         {
                             "index": i, 
                             "word": word, 
+                            "word_ipa": w_ipa,
                             "score": display_score,
                             "severity": get_severity(display_score)
                         }
@@ -213,51 +336,69 @@ class PronunciationScorer:
 
         return errors
 
-    # ── Ensemble Scoring ────────────────────────────────────────────
+    # ── L2-MDD Per-Turn Feedback ────────────────────────────────────
     @staticmethod
-    def ensemble_scores(
-        scores_a: Dict[str, float],
-        scores_b: Dict[str, float],
-        weight_a: float = 0.5,
-        weight_b: float = 0.5,
-    ) -> Dict[str, float]:
-        """Combine scores from two models (e.g. pronunciation + L2-MDD).
+    def generate_l2_turn_feedback(errors: Optional[Dict[str, List[dict]]]) -> Optional[str]:
+        """Generate simple per-turn feedback from L2-MDD model using standard IPA symbols.
         
-        If one model's scores are missing for an aspect, use the other's.
+        SpeechOcean762 handles all scoring; L2-MDD only spots L2 learner pronunciation errors
+        and gives a concise note with IPA for the individual turn.
         """
-        all_keys = set(list(scores_a.keys()) + list(scores_b.keys()))
-        combined = {}
-        for key in all_keys:
-            a_val = scores_a.get(key)
-            b_val = scores_b.get(key)
-            if a_val is not None and b_val is not None:
-                combined[key] = round(weight_a * a_val + weight_b * b_val, 2)
-            elif a_val is not None:
-                combined[key] = round(a_val, 2)
-            elif b_val is not None:
-                combined[key] = round(b_val, 2)
-        return combined
+        if not errors:
+            return None
 
-    @staticmethod
-    def merge_errors(
-        errors_a: Dict[str, List[dict]],
-        errors_b: Dict[str, List[dict]],
-    ) -> Dict[str, List[dict]]:
-        """Merge error lists from two models, keeping the worst score for duplicates."""
-        merged: Dict[str, List[dict]] = {"phonemes": [], "words": []}
+        weak_phones = [p for p in errors.get("phonemes", []) if p.get("score", 10.0) < 6.5]
+        weak_words = [w for w in errors.get("words", []) if w.get("score", 10.0) < 6.5]
 
-        for category in ("phonemes", "words"):
-            key_field = "phoneme" if category == "phonemes" else "word"
-            seen: Dict[str, dict] = {}
-            for err in errors_a.get(category, []) + errors_b.get(category, []):
-                k = f"{err.get('index', '')}_{err.get(key_field, '')}"
-                if k not in seen or err["score"] < seen[k]["score"]:
-                    seen[k] = err
-            merged[category] = sorted(seen.values(), key=lambda x: x["score"])
+        if not weak_phones and not weak_words:
+            return "L2-MDD: Phát âm rõ ràng, không phát hiện lỗi phát âm đáng kể."
 
-        return merged
+        parts = []
+        if weak_phones:
+            seen_ph = set()
+            ph_tips = []
+            for p in weak_phones:
+                ph_raw = p.get("phoneme", "")
+                ph_ipa = p.get("ipa") or format_phone_ipa(ph_raw)
+                w_text = p.get("word", "")
+                w_ipa = p.get("word_ipa", "")
 
-    # ── Transformer Feedback Generation ─────────────────────────────
+                key = f"{ph_ipa}_{w_text}"
+                if key not in seen_ph:
+                    seen_ph.add(key)
+                    tip = p.get("tip") or _get_phoneme_tip(ph_raw)
+                    item = f"âm {ph_ipa}"
+                    if w_text:
+                        item += f" trong \"{w_text}\""
+                        if w_ipa:
+                            item += f" ({w_ipa})"
+                    if tip:
+                        item += f" — {tip}"
+                    ph_tips.append(item)
+
+            if ph_tips:
+                parts.append("chú ý " + "; ".join(ph_tips[:3]))
+
+        if weak_words:
+            seen_w = set()
+            w_list = []
+            for w in weak_words:
+                wd = w.get("word", "")
+                w_ipa = w.get("word_ipa", "")
+                if wd and wd not in seen_w:
+                    seen_w.add(wd)
+                    item = f'"{wd}"'
+                    if w_ipa:
+                        item += f" ({w_ipa})"
+                    w_list.append(item)
+            if w_list:
+                parts.append(f"từ cần đọc rõ: {', '.join(w_list[:3])}")
+
+        if not parts:
+            return None
+        return "L2-MDD lưu ý: " + ". ".join(parts) + "."
+
+    # ── SpeechOcean Feedback Generation (No L2-MDD in overall) ──────
     @staticmethod
     def generate_transformer_feedback(
         scores_pronunciation: Optional[Dict[str, float]] = None,
@@ -267,42 +408,42 @@ class PronunciationScorer:
         ensemble_scores: Optional[Dict[str, float]] = None,
         transcript: str = "",
     ) -> Dict[str, Any]:
-        """Generate structured feedback from both transformer models.
-        
-        Returns a dict with:
-        - pronunciation_model: individual model analysis
-        - l2_mdd_model: individual model analysis
-        - summary: concise Vietnamese summary
-        - tips: list of actionable improvement tips
-        - level: overall level (excellent/good/average/weak/critical)
-        """
+        """Generate structured feedback based purely on SpeechOcean762 scores with standard IPA."""
         feedback: Dict[str, Any] = {}
 
-        # Individual model results
-        if scores_pronunciation:
-            weak_words_p = [w for w in (errors_pronunciation or {}).get("words", []) if w["score"] < 7.0]
-            weak_phones_p = [p for p in (errors_pronunciation or {}).get("phonemes", []) if p["score"] < 7.0]
+        ref_scores = scores_pronunciation or ensemble_scores or {}
+        ref_errors = errors_pronunciation or {}
+
+        if ref_scores:
+            weak_words_p = [w for w in ref_errors.get("words", []) if w.get("score", 10.0) < 7.0]
+            weak_phones_p = [p for p in ref_errors.get("phonemes", []) if p.get("score", 10.0) < 7.0]
             feedback["pronunciation_model"] = {
-                "scores": scores_pronunciation,
-                "weak_words": [{"word": w["word"], "score": w["score"], "severity": w["severity"]} for w in weak_words_p],
-                "weak_phonemes": [{"phoneme": p["phoneme"], "score": p["score"], "severity": p["severity"], "tip": p.get("tip", "")} for p in weak_phones_p],
+                "scores": ref_scores,
+                "weak_words": [
+                    {
+                        "word": w["word"], 
+                        "word_ipa": w.get("word_ipa", ""), 
+                        "score": w["score"], 
+                        "severity": w["severity"]
+                    } for w in weak_words_p
+                ],
+                "weak_phonemes": [
+                    {
+                        "phoneme": p["phoneme"], 
+                        "ipa": p.get("ipa") or format_phone_ipa(p["phoneme"]),
+                        "word": p.get("word", ""),
+                        "word_ipa": p.get("word_ipa", ""),
+                        "score": p["score"], 
+                        "severity": p["severity"], 
+                        "tip": p.get("tip", "")
+                    } for p in weak_phones_p
+                ],
             }
 
-        if scores_l2_mdd:
-            weak_words_m = [w for w in (errors_l2_mdd or {}).get("words", []) if w["score"] < 7.0]
-            weak_phones_m = [p for p in (errors_l2_mdd or {}).get("phonemes", []) if p["score"] < 7.0]
-            feedback["l2_mdd_model"] = {
-                "scores": scores_l2_mdd,
-                "weak_words": [{"word": w["word"], "score": w["score"], "severity": w["severity"]} for w in weak_words_m],
-                "weak_phonemes": [{"phoneme": p["phoneme"], "score": p["score"], "severity": p["severity"], "tip": p.get("tip", "")} for p in weak_phones_m],
-            }
-
-        # Use ensemble scores for summary
-        ref_scores = ensemble_scores or scores_pronunciation or scores_l2_mdd or {}
-        total = ref_scores.get("total", ref_scores.get("final", 0))
-        acc = ref_scores.get("accuracy", 0)
-        flu = ref_scores.get("fluency", 0)
-        pro = ref_scores.get("prosodic", 0)
+        total = ref_scores.get("total", ref_scores.get("final", 0.0))
+        acc = ref_scores.get("accuracy", 0.0)
+        flu = ref_scores.get("fluency", 0.0)
+        pro = ref_scores.get("prosodic", 0.0)
 
         # Determine level
         if total >= 8.5:
@@ -351,38 +492,29 @@ class PronunciationScorer:
 
         feedback["summary"] = "\n".join(summary_parts)
 
-        # Build tips from error analysis
+        # Build tips from SpeechOcean error analysis using IPA
         tips: List[str] = []
-        # Collect all weak phonemes from both models
-        all_weak_phones: Dict[str, dict] = {}
-        for model_key in ("pronunciation_model", "l2_mdd_model"):
-            model_data = feedback.get(model_key, {})
-            for p in model_data.get("weak_phonemes", []):
-                ph = p["phoneme"]
-                if ph not in all_weak_phones or p["score"] < all_weak_phones[ph]["score"]:
-                    all_weak_phones[ph] = p
-
-        # Sort by severity (lowest score first)
-        sorted_phones = sorted(all_weak_phones.values(), key=lambda x: x["score"])
+        model_data = feedback.get("pronunciation_model", {})
+        weak_phones = model_data.get("weak_phonemes", [])
+        sorted_phones = sorted(weak_phones, key=lambda x: x["score"])
         for p in sorted_phones[:5]:  # Top 5 worst phonemes
             tip = p.get("tip", "")
+            ph_ipa = p.get("ipa") or format_phone_ipa(p.get("phoneme", ""))
+            w_text = p.get("word", "")
+            w_ipa = p.get("word_ipa", "")
+            in_word = f" trong từ \"{w_text}\" ({w_ipa})" if (w_text and w_ipa) else (f" trong từ \"{w_text}\"" if w_text else "")
+            
             if tip:
-                tips.append(f"🔤 Âm /{p['phoneme']}/: {tip} (điểm: {p['score']:.1f})")
+                tips.append(f"🔤 Âm {ph_ipa}{in_word}: {tip} (điểm: {p['score']:.1f})")
             else:
-                tips.append(f"🔤 Luyện phát âm /{p['phoneme']}/ (điểm: {p['score']:.1f})")
+                tips.append(f"🔤 Luyện phát âm {ph_ipa}{in_word} (điểm: {p['score']:.1f})")
 
-        # Collect weak words
-        all_weak_words: Dict[str, dict] = {}
-        for model_key in ("pronunciation_model", "l2_mdd_model"):
-            model_data = feedback.get(model_key, {})
-            for w in model_data.get("weak_words", []):
-                word = w["word"]
-                if word not in all_weak_words or w["score"] < all_weak_words[word]["score"]:
-                    all_weak_words[word] = w
-
-        sorted_words = sorted(all_weak_words.values(), key=lambda x: x["score"])
+        weak_words = model_data.get("weak_words", [])
+        sorted_words = sorted(weak_words, key=lambda x: x["score"])
         for w in sorted_words[:5]:  # Top 5 worst words
-            tips.append(f"📝 Từ \"{w['word']}\": cần luyện phát âm rõ hơn (điểm: {w['score']:.1f})")
+            w_ipa = w.get("word_ipa", "")
+            ipa_str = f" ({w_ipa})" if w_ipa else ""
+            tips.append(f"📝 Từ \"{w['word']}\"{ipa_str}: cần luyện phát âm rõ hơn (điểm: {w['score']:.1f})")
 
         feedback["tips"] = tips
 

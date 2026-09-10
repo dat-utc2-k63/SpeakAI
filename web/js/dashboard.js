@@ -400,47 +400,9 @@ import { supabase } from './supabase.js';
           levelBadge.textContent = levelLabels[level] || level;
           levelBadge.className = `badge fs-6 ${levelColors[level] || 'bg-secondary'}`;
 
-          // Model comparison table
+          // Hide model comparison table (SpeechOcean762 is sole scoring model)
           const comparisonInfo = document.getElementById('modelComparisonInfo');
-          const comparisonBody = document.getElementById('modelComparisonBody');
-          if (resultObj.has_l2_mdd && sentences.length > 0) {
-            // Aggregate per-model scores from sentences
-            let pronScores = { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
-            let mddScores = { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
-            let countPron = 0, countMdd = 0;
-            for (const s of sentences) {
-              if (s.scores_pronunciation) {
-                for (const k of ['total', 'accuracy', 'fluency', 'prosodic']) {
-                  pronScores[k] += (s.scores_pronunciation[k] || 0);
-                }
-                countPron++;
-              }
-              if (s.scores_l2_mdd) {
-                for (const k of ['total', 'accuracy', 'fluency', 'prosodic']) {
-                  mddScores[k] += (s.scores_l2_mdd[k] || 0);
-                }
-                countMdd++;
-              }
-            }
-            if (countPron > 0) { for (const k in pronScores) pronScores[k] /= countPron; }
-            if (countMdd > 0) { for (const k in mddScores) mddScores[k] /= countMdd; }
-
-            const rows = [
-              ['Tổng', pronScores.total, mddScores.total, total],
-              ['Accuracy', pronScores.accuracy, mddScores.accuracy, acc],
-              ['Fluency', pronScores.fluency, mddScores.fluency, flu],
-              ['Prosody', pronScores.prosodic, mddScores.prosodic, pro],
-            ];
-            comparisonBody.innerHTML = rows.map(([label, a, b, e]) => `
-              <tr>
-                <td>${label}</td>
-                <td class="text-center"><span class="badge bg-info bg-opacity-25 text-info">${a.toFixed(1)}</span></td>
-                <td class="text-center"><span class="badge bg-warning bg-opacity-25 text-warning">${b.toFixed(1)}</span></td>
-                <td class="text-center"><span class="badge bg-primary">${e.toFixed(1)}</span></td>
-              </tr>
-            `).join('');
-            comparisonInfo.classList.remove('d-none');
-          } else {
+          if (comparisonInfo) {
             comparisonInfo.classList.add('d-none');
           }
 
@@ -571,24 +533,25 @@ import { supabase } from './supabase.js';
             feedbackHtml = `<div class="mt-2" style="background: rgba(255,193,7,0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #ffc107;">
               <div class="small text-warning mb-1"><i class="bi bi-exclamation-triangle me-1"></i><strong>Cần cải thiện phát âm:</strong></div>`;
             if (badWords.length > 0) {
-              feedbackHtml += `<div class="small text-white-50 ms-3">- Từ phát âm yếu: ${badWords.map(w => `<strong class="text-white">${w.word}</strong> <span class="text-muted">(${w.score?.toFixed(1)})</span>`).join(', ')}</div>`;
+              feedbackHtml += `<div class="small text-white-50 ms-3">- Từ phát âm yếu: ${badWords.map(w => `<strong class="text-white">"${w.word}"</strong>${w.word_ipa ? ` <code class="text-info">${w.word_ipa}</code>` : ''} <span class="text-muted">(${w.score?.toFixed(1)})</span>`).join(', ')}</div>`;
             }
             if (badPhonemes.length > 0) {
               feedbackHtml += `<div class="small text-white-50 ms-3">- Âm sai/yếu: ${badPhonemes.map(p => {
                 let tipStr = p.tip ? ` <span class="text-muted fst-italic">— ${p.tip}</span>` : '';
-                return `<strong class="text-warning">/${p.phoneme}/</strong> <span class="text-muted">(${p.score?.toFixed(1)})</span>${tipStr}`;
+                let ipaStr = p.ipa || ('/' + p.phoneme + '/');
+                let inWordStr = p.word ? ` trong từ <strong class="text-white">"${p.word}"</strong>${p.word_ipa ? ` <code class="text-info">${p.word_ipa}</code>` : ''}` : '';
+                return `<strong class="text-warning">${ipaStr}</strong>${inWordStr} <span class="text-muted">(${p.score?.toFixed(1)})</span>${tipStr}`;
               }).join(', ')}</div>`;
             }
             feedbackHtml += `</div>`;
           }
 
-          // Score comparison badges if L2-MDD is available
-          let modelBadges = '';
-          if (turn.scores_pronunciation && turn.scores_l2_mdd) {
-            modelBadges = `<div class="d-flex gap-1 mt-1 flex-wrap">
-              <span class="badge bg-info bg-opacity-25 text-info" style="font-size: 0.65em;">SO762: ${turn.scores_pronunciation.total?.toFixed(1)}</span>
-              <span class="badge bg-warning bg-opacity-25 text-warning" style="font-size: 0.65em;">L2-MDD: ${turn.scores_l2_mdd.total?.toFixed(1)}</span>
-            </div>`;
+          // Simple L2-MDD turn note if available
+          if (turn.l2_mdd_feedback) {
+            feedbackHtml += `
+              <div class="mt-2 p-2 rounded-2 small" style="background: rgba(99, 102, 241, 0.08); border-left: 3px solid #6366f1;">
+                <span class="text-info"><i class="bi bi-lightbulb me-1"></i>${simpleMarkdown(turn.l2_mdd_feedback)}</span>
+              </div>`;
           }
 
           return `
@@ -602,7 +565,6 @@ import { supabase } from './supabase.js';
               <span class="badge bg-secondary">Acc: ${(sc.accuracy || 0).toFixed(1)}</span>
               <span class="badge bg-secondary">Flu: ${(sc.fluency || 0).toFixed(1)}</span>
             </div>
-            ${modelBadges}
           </div>
         </div>
         <div>${turn.transcript}</div>
@@ -937,7 +899,7 @@ import { supabase } from './supabase.js';
     <!-- Score overview -->
     <div class="section-card mb-4">
       <div class="d-flex justify-content-between align-items-start mb-4">
-        <h6 class="fw-bold mb-0"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Điểm Tổng Quát${r.has_l2_mdd ? ' (Ensemble)' : ''}</h6>
+        <h6 class="fw-bold mb-0"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Điểm Tổng Quát (SpeechOcean762)</h6>
         ${levelBadgeHtml}
       </div>
       <div class="row g-3">
