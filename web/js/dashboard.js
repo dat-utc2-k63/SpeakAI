@@ -408,40 +408,11 @@ import { supabase } from './supabase.js';
 
           // Transformer feedback panel
           const tfSummaryBox = document.getElementById('tfSummaryBox');
-          const tfTipsBox = document.getElementById('tfTipsBox');
-          const tfTipsList = document.getElementById('tfTipsList');
-          if (otf && otf.summary) {
-            tfSummaryBox.innerHTML = simpleMarkdown(otf.summary);
-          } else {
-            tfSummaryBox.innerHTML = '<span class="text-muted">Đang phân tích...</span>';
-          }
-          if (otf && otf.tips && otf.tips.length > 0) {
-            tfTipsBox.classList.remove('d-none');
-            tfTipsList.innerHTML = otf.tips.map(tip => `
-              <div class="p-2 rounded-2 small" style="background: rgba(255,193,7,0.06); border: 1px solid rgba(255,193,7,0.12);">
-                ${tip}
-              </div>
-            `).join('');
-          } else {
-            // Collect tips from individual turns
-            const allTips = [];
-            for (const turn of (resultObj.dialogue?.turns || [])) {
-              const tf = turn.transformer_feedback;
-              if (tf && tf.tips) {
-                for (const tip of tf.tips) {
-                  if (!allTips.includes(tip)) allTips.push(tip);
-                }
-              }
-            }
-            if (allTips.length > 0) {
-              tfTipsBox.classList.remove('d-none');
-              tfTipsList.innerHTML = allTips.slice(0, 8).map(tip => `
-                <div class="p-2 rounded-2 small" style="background: rgba(255,193,7,0.06); border: 1px solid rgba(255,193,7,0.12);">
-                  ${tip}
-                </div>
-              `).join('');
+          if (tfSummaryBox) {
+            if (otf && otf.summary) {
+              tfSummaryBox.innerHTML = simpleMarkdown(otf.summary);
             } else {
-              tfTipsBox.classList.add('d-none');
+              tfSummaryBox.innerHTML = '<span class="text-muted">Đang phân tích...</span>';
             }
           }
 
@@ -869,13 +840,6 @@ import { supabase } from './supabase.js';
       <div class="mb-3 p-3 rounded-3" style="background: rgba(79, 70, 229, 0.08); border-left: 3px solid var(--color-indigo);">
         ${simpleMarkdown(otf.summary)}
       </div>
-      ${otf.tips && otf.tips.length > 0 ? `
-      <div>
-        <div class="small fw-semibold mb-2"><i class="bi bi-lightbulb me-1 text-warning"></i>Gợi ý luyện tập</div>
-        <div class="d-flex flex-column gap-2">
-          ${otf.tips.map(tip => `<div class="p-2 rounded-2 small" style="background: rgba(255,193,7,0.06); border: 1px solid rgba(255,193,7,0.12);">${tip}</div>`).join('')}
-        </div>
-      </div>` : ''}
     </div>`;
           }
 
