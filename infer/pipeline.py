@@ -184,9 +184,9 @@ class SpeakingPipeline:
                 ckpt_step="l2_mdd_ckpt",
             )
             self.l2_mdd.preprocess = self.preprocess
-            print("✅ L2-MDD model loaded successfully")
+            print("[OK] L2-MDD model loaded successfully")
         except Exception as e:
-            print(f"⚠️ L2-MDD model not available: {e}")
+            print(f"[WARN] L2-MDD model not available: {e}")
             self.l2_mdd = None
         
         if not SPEAKER_DIARIZE_DIR.is_dir():
@@ -353,8 +353,10 @@ class SpeakingPipeline:
         pron_scores = pron_result["scores"]
         pron_errors = pron_result["errors"]
 
-        # ── Run L2-MDD model for per-turn feedback only (no scoring) ──
+        # ── Run L2-MDD model for full-phoneme scanning & ASHA error diagnosis ──
         l2_turn_feedback = None
+        final_errors = pron_errors
+        l2_scan = None
         if self.l2_mdd is not None:
             try:
                 l2_result = self.l2_mdd.predict(
@@ -363,18 +365,41 @@ class SpeakingPipeline:
                     apply_preprocess=apply_preprocess,
                 )
                 l2_errors = l2_result.get("errors", {})
+                l2_scan = l2_result.get("scan_result")
                 l2_turn_feedback = PronunciationScorer.generate_l2_turn_feedback(l2_errors)
+                # L2-MDD is the primary source for phoneme error detection (ASHA Target -> Actual)
+                if l2_errors and l2_errors.get("phonemes") is not None:
+                    final_errors = l2_errors
             except Exception as e:
-                print(f"  ⚠️ L2-MDD turn feedback failed: {e}")
+                print(f"  [WARN] L2-MDD phoneme scan failed: {e}")
 
-        # SpeechOcean762 is the SOLE scoring model (no ensemble)
+        # SpeechOcean762 is the SOLE scoring model for utterance metrics (Total, Acc, Flu, Pro)
         final_scores = pron_scores
-        final_errors = pron_errors
 
-        # Generate per-turn feedback from SpeechOcean
+        # Enrich words_detail with L2-MDD ASHA diagnostic tips
+        words_detail = pron_result.get("words_detail") or []
+        if final_errors and final_errors.get("phonemes"):
+            suspicious_map = {p.get("index"): p for p in final_errors["phonemes"] if p.get("index") is not None}
+            p_counter = 0
+            for w in words_detail:
+                w_has_err = False
+                for ph in w.get("phonemes", []):
+                    if p_counter in suspicious_map:
+                        diag = suspicious_map[p_counter]
+                        ph["status"] = "bad" if diag.get("severity") == "critical" else "warning"
+                        ph["target_ipa"] = diag.get("target_ipa")
+                        ph["actual_ipa"] = diag.get("actual_ipa")
+                        ph["rule_name_vi"] = diag.get("rule_name_vi")
+                        ph["tip"] = diag.get("articulatory_tip") or ph.get("tip")
+                        w_has_err = True
+                    p_counter += 1
+                if w_has_err and w.get("status") == "good":
+                    w["status"] = "warning"
+
+        # Generate per-turn feedback
         transformer_feedback = PronunciationScorer.generate_transformer_feedback(
             scores_pronunciation=pron_scores,
-            errors_pronunciation=pron_errors,
+            errors_pronunciation=final_errors,
             transcript=transcript,
         )
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import threading
 from pathlib import Path
@@ -66,7 +67,8 @@ class WhisperTranscriber:
             device or resolve_device({"asr": asr_cfg}, asr_cfg.get("device"))
         )
         self.language = language
-        self.max_new_tokens = max_new_tokens
+        if model_name and not os.path.exists(model_name) and (model_name.startswith("/") or "\\" in model_name):
+            model_name = "openai/whisper-small.en"
         self.model_name = model_name
         dtype = _parse_dtype(torch_dtype, self.device)
 

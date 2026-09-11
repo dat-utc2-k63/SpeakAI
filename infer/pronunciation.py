@@ -73,7 +73,13 @@ class Predictor:
         self.max_duration_sec = None if md is None or md <= 0 else float(md)
         self.cmudict = CMUDict(self.config["paths"].get("cmudict_path"))
         mt = self.config["multitask"]
-        self.scorer = PronunciationScorer(mt.get("score_scale", 2.0), self.config.get("scorer", {}).get("weights"))
+        scorer_cfg = self.config.get("scorer") or {}
+        self.scorer = PronunciationScorer(
+            score_scale=mt.get("score_scale", 5.0),
+            weights=scorer_cfg.get("weights"),
+            phoneme_low_threshold=scorer_cfg.get("phoneme_low_threshold", 1.4),
+            calibration=scorer_cfg.get("calibration"),
+        )
 
     def _phones_from_text(self, text: str):
         groups = self.cmudict.words_to_phoneme_groups(text)
@@ -101,6 +107,7 @@ class Predictor:
         truncated = False
         if truncate and self.max_duration_sec:
             wav, truncated = truncate_waveform(wav, self.sr, self.max_duration_sec)
+        duration_sec = float(wav.shape[0]) / float(self.sr) if self.sr else None
         tokens, words, ranges = self._phones_from_text(transcript)
         if not tokens:
             raise ValueError(
@@ -114,8 +121,8 @@ class Predictor:
             return_alignments=True,
         )
         pred = out["predictions"][0]
-        scores = self.scorer.aggregate_utterance(pred)
-        scores["final"] = self.scorer.final_score(pred)
+        scores = self.scorer.aggregate_utterance(pred, duration_sec=duration_sec)
+        scores["final"] = self.scorer.final_score(pred, duration_sec=duration_sec)
         alignments = [
             {
                 "phoneme": a.phoneme,
@@ -146,11 +153,7 @@ class Predictor:
 
 
 class L2MDDPredictor:
-    """Predictor using the L2-MDD checkpoint for L2 learner pronunciation assessment.
-    
-    Same architecture as the pronunciation model but trained on L2 learner data,
-    making it more suitable for non-native speaker evaluation.
-    """
+    """Predictor using the L2-MDD checkpoint for full-phoneme scanning and ASHA clinical diagnosis."""
 
     def __init__(
         self,
@@ -170,12 +173,19 @@ class L2MDDPredictor:
         if load_progress is not None:
             load_progress.start(model_step, "L2-MDD Model")
         try:
-            self.model = PronunciationAssessmentModel(self.config).to(self.device)
+            # Load WavLM model name with graceful fallback if path doesn't exist
+            wavlm_cfg = self.config.get("wavlm", {})
+            wavlm_name = wavlm_cfg.get("model_name", "microsoft/wavlm-large")
+            if wavlm_name and not os.path.exists(wavlm_name):
+                wavlm_name = "microsoft/wavlm-large"
+
+            from models.l2_mdd_model import L2MDDModel
+            self.model = L2MDDModel(wavlm_name=wavlm_name, ff_dim=2048).to(self.device)
+
             if load_progress is not None:
                 load_progress.finish(model_step)
                 load_progress.start(ckpt_step, "l2_mdd_best.pt")
             try:
-                # Try explicit checkpoint first, then fall back to config resolution
                 ckpt_path = resolve_checkpoint(self.config, model="l2_mdd", explicit=checkpoint)
                 from models.checkpoint_utils import load_state_dict as _load_sd
                 self.model.load_state_dict(_load_sd(ckpt_path, self.device), strict=False)
@@ -183,10 +193,6 @@ class L2MDDPredictor:
             except FileNotFoundError as e:
                 print(f"Warning (L2-MDD): {e}")
                 self._ckpt_path = None
-            except Exception as exc:
-                if load_progress is not None:
-                    load_progress.fail(ckpt_step, str(exc))
-                raise
             if load_progress is not None:
                 load_progress.finish(ckpt_step, str(self._ckpt_path or "không có checkpoint"))
         except Exception as exc:
@@ -198,13 +204,8 @@ class L2MDDPredictor:
         self.sr = self.preprocess.sample_rate
         inf = self.config.get("inference") or {}
         md = inf.get("max_duration_sec")
-        if md is None and "max_duration_sec" not in inf:
-            ds = self.config.get("train", {}).get("dataset", {})
-            md = ds.get("max_duration_sec")
         self.max_duration_sec = None if md is None or md <= 0 else float(md)
         self.cmudict = CMUDict(self.config["paths"].get("cmudict_path"))
-        mt = self.config["multitask"]
-        self.scorer = PronunciationScorer(mt.get("score_scale", 2.0), self.config.get("scorer", {}).get("weights"))
 
     def _phones_from_text(self, text: str):
         groups = self.cmudict.words_to_phoneme_groups(text)
@@ -215,6 +216,33 @@ class L2MDDPredictor:
             words.append(g["word"])
             ranges.append((s, len(tokens)))
         return tokens, words, ranges
+
+    @torch.no_grad()
+    def scan_phonemes(
+        self,
+        audio: str,
+        transcript: str,
+        sensitivity: float = 0.35,
+        apply_preprocess: bool = True,
+    ) -> Dict[str, Any]:
+        """Scan all phonemes in the utterance using L2-MDD and generate ASHA diagnoses."""
+        wav = load_waveform(audio, self.preprocess, apply_preprocess=apply_preprocess)
+        tokens, words, ranges = self._phones_from_text(transcript)
+        if not tokens:
+            return {"suspicious_phonemes": [], "all_phonemes": [], "num_suspicious": 0}
+
+        from models.pronunciation_scorer import phones_to_word_ipa
+        word_ipas = [phones_to_word_ipa(tokens[s:e]) for s, e in ranges]
+
+        return self.model.scan_phonemes(
+            waveform=wav.to(self.device),
+            wav_length=torch.tensor([wav.shape[0]], device=self.device),
+            phoneme_tokens=tokens,
+            words=words,
+            word_phone_ranges=ranges,
+            word_ipas=word_ipas,
+            sensitivity_threshold=sensitivity,
+        )
 
     @torch.no_grad()
     def predict(
@@ -228,47 +256,37 @@ class L2MDDPredictor:
         *,
         apply_preprocess: bool = True,
     ) -> Dict[str, Any]:
-        wav = load_waveform(audio, self.preprocess, apply_preprocess=apply_preprocess)
-        truncated = False
-        if truncate and self.max_duration_sec:
-            wav, truncated = truncate_waveform(wav, self.sr, self.max_duration_sec)
-        tokens, words, ranges = self._phones_from_text(transcript)
-        if not tokens:
-            raise ValueError(
-                f"Không tra được phoneme cho transcript (CMUdict): {transcript!r}"
-            )
-        out = self.model(
-            wav.unsqueeze(0).to(self.device),
-            torch.tensor([wav.shape[0]], device=self.device),
-            [tokens],
-            [ranges],
-            return_alignments=True,
-        )
-        pred = out["predictions"][0]
-        scores = self.scorer.aggregate_utterance(pred)
-        scores["final"] = self.scorer.final_score(pred)
-        alignments = [
-            {
-                "phoneme": a.phoneme,
-                "start_frame": a.start_frame,
-                "end_frame": a.end_frame,
-                "confidence": a.confidence,
-            }
-            for a in (out.get("alignments") or [[]])[0]
-        ]
+        """Scan phonemes and package into standard evaluation result."""
+        scan_res = self.scan_phonemes(audio, transcript, apply_preprocess=apply_preprocess)
+        suspicious = scan_res.get("suspicious_phonemes", [])
 
-        errors = self.scorer.find_errors(pred, tokens, words, ranges, alignments=alignments)
-        words_detail = self.scorer.build_words_detail(pred, tokens, words, ranges)
+        # Build errors dict formatted for downstream use
+        errors = {
+            "phonemes": suspicious,
+            "words": [],
+        }
+
+        # Collect unique suspicious words with their diagnostic notes
+        seen_words = set()
+        for p in suspicious:
+            w_text = p.get("word")
+            if w_text and w_text not in seen_words:
+                seen_words.add(w_text)
+                errors["words"].append({
+                    "word": w_text,
+                    "word_ipa": p.get("word_ipa", ""),
+                    "severity": p.get("severity", "warning"),
+                    "rule_name_vi": p.get("rule_name_vi", ""),
+                    "articulatory_tip": p.get("articulatory_tip", ""),
+                })
+
         return {
             "transcript": transcript,
-            "scores": scores,
             "errors": errors,
-            "words_detail": words_detail,
-            "truncated": truncated,
-            "max_duration_sec": self.max_duration_sec,
-            "alignments": alignments,
+            "scan_result": scan_res,
+            "num_suspicious": scan_res.get("num_suspicious", 0),
             "feedback": None,
-            "feedback_source": None,
+            "feedback_source": "l2_mdd_asha",
         }
 
 

@@ -15,6 +15,8 @@ INCLUDE_FILES = [
     "data/cmudict.py",
     "data/silence_split.py",
     "models/__init__.py",
+    "models/asha_phonology.py",
+    "models/l2_mdd_model.py",
     "models/checkpoint_utils.py",
     "models/ctc_aligner.py",
     "models/multitask_heads.py",
@@ -119,10 +121,20 @@ multitask:
 
 scorer:
   weights:
-    utterance_total: 0.4
-    word_total: 0.3
-    phoneme_accuracy: 0.3
+    utterance_total: 0.5
+    word_total: 0.25
+    phoneme_accuracy: 0.25
   phoneme_low_threshold: 1.2
+  calibration:
+    enabled: true
+    slope: 1.39
+    offset: -3.20
+    short_duration_sec: 3.5
+    short_duration_factor: 0.75
+    long_duration_sec: 6.0
+    long_duration_factor: 0.25
+    phone_slope: 7.0
+    phone_offset: -4.0
 
 sentence_split:
   min_silence_sec: 0.35
@@ -135,7 +147,7 @@ sentence_split:
   diarization_merge_gap_sec: 0.2
 """
 
-# models/__init__.py không có L2-MDD
+# models/__init__.py
 MODELS_INIT_CLEAN = """\
 from .wavlm_encoder import WavLMEncoder
 from .transformer_encoder import TaskTransformerEncoder
@@ -144,11 +156,13 @@ from .phoneme_graph import PhonemeGraphNetwork
 from .multitask_heads import MultiTaskHeads
 from .pronunciation_scorer import PronunciationScorer
 from .pronunciation_model import PronunciationAssessmentModel
+from .l2_mdd_model import L2MDDModel
+from .asha_phonology import ASHAPhonologicalAnalyzer
 
 __all__ = [
     "WavLMEncoder", "TaskTransformerEncoder", "CTCAligner",
     "PhonemeGraphNetwork", "MultiTaskHeads", "PronunciationScorer",
-    "PronunciationAssessmentModel",
+    "PronunciationAssessmentModel", "L2MDDModel", "ASHAPhonologicalAnalyzer",
 ]
 """
 

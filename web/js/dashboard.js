@@ -432,8 +432,10 @@ import { supabase } from './supabase.js';
           const isTeacher = turn.role === 'teacher';
           const sc = turn.scores || { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
           const errs = turn.errors || {};
-          const badWords = errs.words ? errs.words.filter(w => w.score < 7.0) : [];
-          const badPhonemes = errs.phonemes ? errs.phonemes.filter(p => p.score < 7.0) : [];
+          const badWords = errs.words ? errs.words.filter(w => (w.score !== undefined ? w.score < 7.0 : true)) : [];
+          const badPhonemes = errs.phonemes ? (
+            errs.phonemes.filter(p => p.is_suspicious || p.error_probability !== undefined || (p.score !== undefined && p.score < 7.0))
+          ) : [];
           const audioHtml = turn.audio ? `
             <div class="mini-audio-pill mt-2">
               <i class="bi bi-volume-up text-info"></i>
@@ -471,7 +473,7 @@ import { supabase } from './supabase.js';
             words = textWords.map(tw => {
               const clean = tw.replace(/[^a-zA-Z']/g, '').toLowerCase();
               const ew = errWordsMap[clean];
-              const score = ew ? ew.score : defaultWordScore;
+              const score = ew ? (ew.score || defaultWordScore) : defaultWordScore;
               const status = score >= 7.5 ? 'good' : (score >= 5.5 ? 'warning' : 'bad');
               return {
                 word: tw,
@@ -491,30 +493,38 @@ import { supabase } from './supabase.js';
             </div>`;
           }).join('');
 
-          // Phoneme pills
+          // Phoneme pills (L2-MDD & ASHA Phonology)
           let phonemePillsHtml = '';
           if (badPhonemes.length > 0) {
             phonemePillsHtml = `
               <div class="mt-2 pt-2" style="border-top: 1px solid rgba(255,255,255,0.06);">
                 <div class="d-flex align-items-center justify-content-between mb-1">
                   <span class="small fw-semibold text-warning" style="font-size: 0.78rem;">
-                    <i class="bi bi-soundwave me-1"></i>Âm vị cần lưu ý:
+                    <i class="bi bi-soundwave me-1"></i>Âm vị cần lưu ý (L2-MDD & ASHA):
                   </span>
                 </div>
                 <div class="phoneme-pills-row">
                   ${badPhonemes.map(p => {
-                    const ipaStr = p.ipa || ('/' + p.phoneme + '/');
+                    const targetIpa = p.target_ipa || (p.phoneme ? ('/' + p.phoneme + '/') : '');
+                    const actualIpa = p.actual_ipa || '';
+                    const contrastStr = (actualIpa && actualIpa !== targetIpa) ? `${targetIpa} → ${actualIpa}` : targetIpa;
                     const inWord = p.word ? ` trong "${p.word}"` : '';
-                    const tipText = p.tip ? ` — ${p.tip}` : '';
-                    const title = `Điểm: ${p.score?.toFixed(1)}/10${inWord}${tipText}`;
+                    const ruleName = p.rule_name_vi ? p.rule_name_vi.split('(')[0].trim() : '';
+                    const tipText = p.articulatory_tip || p.tip || '';
+                    const title = `${contrastStr}${inWord}${ruleName ? ' [' + ruleName + ']' : ''}${tipText ? ' — ' + tipText : ''}`;
+                    const isCrit = p.severity === 'critical' || (p.score !== undefined && p.score < 5.0);
                     return `
-                      <span class="phoneme-pill-tag ${p.score < 5.0 ? '' : 'warning'}" title="${title}">
-                        <span class="tag-ipa">${ipaStr}</span>
+                      <span class="phoneme-pill-tag ${isCrit ? 'bad' : 'warning'}" title="${title}">
+                        <span class="tag-ipa fw-bold">${contrastStr}</span>
                         ${p.word ? `<span class="tag-word">"${p.word}"</span>` : ''}
-                        <span class="tag-score">${p.score?.toFixed(1)}</span>
+                        ${ruleName ? `<span class="badge bg-dark ms-1" style="font-size: 0.7rem;">${ruleName}</span>` : ''}
                       </span>`;
                   }).join('')}
                 </div>
+                ${turn.l2_mdd_feedback ? `
+                <div class="mt-2 small text-info" style="font-size: 0.78rem; line-height: 1.4;">
+                  <i class="bi bi-lightbulb me-1"></i>${turn.l2_mdd_feedback}
+                </div>` : ''}
               </div>`;
           }
 

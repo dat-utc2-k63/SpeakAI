@@ -196,36 +196,96 @@ class CTCAligner(nn.Module):
         phonemes: List[str],
     ) -> List[PhonemeAlignment]:
         """
-        Parse per-frame CTC alignment into phoneme start/end spans.
+        Parse per-frame CTC alignment into phoneme start/end spans with smooth interpolation.
 
-        forced_align output assigns each frame to a target token index or blank.
-        Consecutive frames with the same non-blank token index form one span.
+        forced_align output assigns frames to target position indices (0..N-1) or blank.
+        For phonemes that are not assigned frames by CTC (common in long audio or rapid speech),
+        their spans are smoothly interpolated between neighboring aligned anchor phonemes
+        instead of collapsing to frame 0.
         """
         spans: List[PhonemeAlignment] = []
         target_list = targets.tolist()
-        i = 0
-        while i < len(phonemes):
-            token_id = target_list[i]
-            # find frames assigned to this target position
-            mask = aligned == i  # forced_align uses target position indices
+        N = len(phonemes)
+        T = aligned.shape[0]
+
+        if N == 0:
+            return spans
+
+        # First pass: collect raw frame detections
+        raw_spans = []
+        for i in range(N):
+            mask = (aligned == i)
             if mask.any():
                 idx = mask.nonzero(as_tuple=True)[0]
-                start_f, end_f = int(idx[0]), int(idx[-1])
-                conf = float(mask.float().mean())
+                s_f, e_f = int(idx[0].item()), int(idx[-1].item())
+                conf = float(mask.float().mean().item())
+                raw_spans.append((s_f, e_f, conf))
             else:
-                # phoneme got no frames — interpolate
-                start_f = end_f = 0
-                conf = 0.0
-            spans.append(
-                PhonemeAlignment(
-                    phoneme=phonemes[i],
-                    token_id=token_id,
-                    start_frame=start_f,
-                    end_frame=end_f,
-                    confidence=conf,
-                )
-            )
-            i += 1
+                raw_spans.append(None)
+
+        # Anchors: phonemes with valid CTC frame alignment
+        anchors = [(i, raw_spans[i][0], raw_spans[i][1], raw_spans[i][2]) for i in range(N) if raw_spans[i] is not None]
+
+        if not anchors:
+            # Complete fallback: uniform split across all frames
+            step = T / max(1, N)
+            for i in range(N):
+                s_f = int(i * step)
+                e_f = min(T - 1, int((i + 1) * step))
+                spans.append(PhonemeAlignment(phonemes[i], target_list[i], s_f, e_f, 0.5))
+            return spans
+
+        final_spans = [None] * N
+        for idx, s_f, e_f, conf in anchors:
+            final_spans[idx] = (s_f, e_f, conf)
+
+        # Interpolate before first anchor
+        first_idx, first_s, first_e, _ = anchors[0]
+        if first_idx > 0:
+            step = max(1, first_s // first_idx) if first_idx > 0 else 1
+            for k in range(first_idx):
+                s = int(k * step)
+                e = min(first_s, int((k + 1) * step))
+                final_spans[k] = (max(0, s), min(T - 1, e), 0.4)
+
+        # Interpolate between consecutive anchors
+        for a_idx in range(len(anchors) - 1):
+            i_curr, s_curr, e_curr, _ = anchors[a_idx]
+            i_next, s_next, e_next, _ = anchors[a_idx + 1]
+            gap_count = i_next - i_curr - 1
+            if gap_count > 0:
+                gap_start = e_curr
+                gap_end = s_next
+                if gap_end <= gap_start:
+                    gap_end = gap_start + gap_count * 2
+                gap_len = max(gap_count, gap_end - gap_start)
+                step = gap_len / gap_count
+                for step_i in range(gap_count):
+                    target_i = i_curr + 1 + step_i
+                    s = int(gap_start + step_i * step)
+                    e = int(gap_start + (step_i + 1) * step)
+                    s = max(0, min(T - 1, s))
+                    e = max(s, min(T - 1, e))
+                    final_spans[target_i] = (s, e, 0.4)
+
+        # Interpolate after last anchor
+        last_idx, last_s, last_e, _ = anchors[-1]
+        if last_idx < N - 1:
+            rem_count = N - 1 - last_idx
+            rem_frames = max(rem_count, T - last_e)
+            step = rem_frames / rem_count
+            for step_i in range(rem_count):
+                target_i = last_idx + 1 + step_i
+                s = int(last_e + step_i * step)
+                e = int(last_e + (step_i + 1) * step)
+                s = max(0, min(T - 1, s))
+                e = max(s, min(T - 1, e))
+                final_spans[target_i] = (s, e, 0.4)
+
+        for i in range(N):
+            s_f, e_f, conf = final_spans[i]
+            spans.append(PhonemeAlignment(phonemes[i], target_list[i], s_f, e_f, conf))
+
         return spans
 
     def _pool_node_features(

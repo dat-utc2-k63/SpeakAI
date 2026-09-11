@@ -2,7 +2,8 @@
 Pronunciation score aggregation (0-10 scale).
 
 Step 6: combine multi-task head outputs into interpretable final scores.
-Supports ensemble scoring from multiple transformer models (pronunciation + L2-MDD).
+SpeechOcean762 provides utterance-level scores (Total, Accuracy, Fluency, Prosodic).
+L2-MDD provides full-phoneme error scanning with ASHA distinctive articulatory rules.
 """
 
 from __future__ import annotations
@@ -111,60 +112,25 @@ def phones_to_word_ipa(phones: List[str]) -> str:
     return f"/{''.join(parts)}/"
 
 
-# ── IPA / ARPAbet helpers for human-readable feedback ──────────────
-_PHONEME_TIPS: Dict[str, str] = {
-    "TH": "Đặt lưỡi giữa hai hàm răng, thổi nhẹ (think, three)",
-    "θ": "Đặt lưỡi giữa hai hàm răng, thổi nhẹ (think, three)",
-    "DH": "Đặt lưỡi giữa hai hàm răng, rung dây thanh (this, that)",
-    "ð": "Đặt lưỡi giữa hai hàm răng, rung dây thanh (this, that)",
-    "R": "Cuộn lưỡi nhẹ ra sau, không chạm vòm miệng (red, run)",
-    "r": "Cuộn lưỡi nhẹ ra sau, không chạm vòm miệng (red, run)",
-    "L": "Đầu lưỡi chạm nướu trên, giữ giọng (light, love)",
-    "l": "Đầu lưỡi chạm nướu trên, giữ giọng (light, love)",
-    "V": "Răng trên chạm môi dưới, rung dây thanh (very, voice)",
-    "v": "Răng trên chạm môi dưới, rung dây thanh (very, voice)",
-    "W": "Tròn môi, giống âm 'u' ngắn (water, we)",
-    "w": "Tròn môi, giống âm 'u' ngắn (water, we)",
-    "Z": "Giống âm 's' nhưng rung dây thanh (zoo, buzz)",
-    "z": "Giống âm 's' nhưng rung dây thanh (zoo, buzz)",
-    "ZH": "Giống âm 'sh' nhưng rung dây thanh (measure, vision)",
-    "ʒ": "Giống âm 'sh' nhưng rung dây thanh (measure, vision)",
-    "SH": "Đẩy môi ra trước, luồng hơi rộng (she, ship)",
-    "ʃ": "Đẩy môi ra trước, luồng hơi rộng (she, ship)",
-    "CH": "Kết hợp âm 't' + 'sh' nhanh (church, check)",
-    "tʃ": "Kết hợp âm 't' + 'sh' nhanh (church, check)",
-    "JH": "Kết hợp âm 'd' + 'zh' nhanh (judge, jump)",
-    "dʒ": "Kết hợp âm 'd' + 'zh' nhanh (judge, jump)",
-    "NG": "Phần sau lưỡi chạm vòm mềm (sing, ring)",
-    "ŋ": "Phần sau lưỡi chạm vòm mềm (sing, ring)",
-    "AE": "Mở miệng rộng, kéo dài (cat, bad)",
-    "æ": "Mở miệng rộng, kéo dài (cat, bad)",
-    "IH": "Ngắn hơn 'ee', thả lỏng (bit, sit)",
-    "ɪ": "Ngắn hơn 'ee', thả lỏng (bit, sit)",
-    "UH": "Ngắn, tròn môi nhẹ (book, put)",
-    "ʊ": "Ngắn, tròn môi nhẹ (book, put)",
-    "ER": "Âm 'r' kéo dài, cuộn lưỡi (butter, teacher)",
-    "ɜːr": "Âm 'r' kéo dài, cuộn lưỡi (butter, teacher)",
-    "ər": "Âm 'r' nhẹ, lướt nhanh (butter, teacher)",
-    "AH0": "Âm schwa - ngắn, nhẹ (about, sofa)",
-    "ə": "Âm schwa - ngắn, nhẹ (about, sofa)",
-    "IY": "Cười nhẹ, kéo dài âm 'ee' (see, seat)",
-    "iː": "Cười nhẹ, kéo dài âm 'ee' (see, seat)",
-}
+from .asha_phonology import (
+    ASHAPhonologicalAnalyzer,
+    ASHADiagnosis,
+    get_features,
+    ArticulatoryFeatures,
+)
+
 
 def _get_phoneme_tip(phoneme: str) -> str:
-    """Return a pronunciation tip for a phoneme (supports ARPAbet or IPA)."""
+    """Return clinical-grade articulatory placement tip using ASHA distinctive features."""
     if not phoneme:
         return ""
-    if phoneme in _PHONEME_TIPS:
-        return _PHONEME_TIPS[phoneme]
-    ipa = phone_to_ipa(phoneme)
-    if ipa in _PHONEME_TIPS:
-        return _PHONEME_TIPS[ipa]
-    base = phoneme.rstrip("012")
-    if base in _PHONEME_TIPS:
-        return _PHONEME_TIPS[base]
-    return ""
+    feat = get_features(phoneme)
+    if not feat:
+        return ""
+    if feat.is_vowel:
+        tense = "căng cơ má" if feat.vowel_tense else "thả lỏng cơ miệng"
+        return f"{feat.name_vi}: chú ý độ mở vòm miệng và {tense}."
+    return f"{feat.name_vi}: vị trí cấu âm tại {feat.place}, phương thức cấu âm {feat.manner} ({'rung thanh quản' if feat.voicing == 'voiced' else 'không rung thanh quản'})."
 
 
 class PronunciationScorer:
@@ -173,6 +139,8 @@ class PronunciationScorer:
 
     Training targets are normalized to 0-2 (GOPT convention); this class
     denormalizes back to SpeechOcean762's 0-10 scale for reporting.
+    Supports dynamic affine calibration, duration-aware bias correction,
+    and phoneme-level re-scaling.
     """
 
     def __init__(
@@ -180,31 +148,66 @@ class PronunciationScorer:
         score_scale: float = 5.0,
         weights: Optional[Dict[str, float]] = None,
         phoneme_low_threshold: float = 1.4,
+        calibration: Optional[Dict[str, Any]] = None,
     ):
         self.score_scale = score_scale
         self.weights = weights or {
-            "utterance_total": 0.4,
-            "word_total": 0.3,
-            "phoneme_accuracy": 0.3,
+            "utterance_total": 0.5,
+            "word_total": 0.25,
+            "phoneme_accuracy": 0.25,
         }
         self.phoneme_low_threshold = phoneme_low_threshold
+        self.calibration = calibration or {}
 
-    def to_display_scale(self, score: float) -> float:
+    def to_display_scale(
+        self,
+        score: float,
+        *,
+        is_utterance: bool = False,
+        is_phone: bool = False,
+        duration_sec: Optional[float] = None,
+    ) -> float:
         """Map 0-2 normalized score -> 0-10 display scale.
         
-        Includes a minimum floor of 0.5 to avoid returning 0 for valid predictions.
-        The model outputs 0 only for truly empty/invalid input.
+        Applies affine calibration and duration-aware adjustment when enabled
+        in config to stabilize predictions across varying clip lengths and quality levels.
         """
         raw = score * self.score_scale
+        cal_cfg = self.calibration if self.calibration.get("enabled", False) else None
+
+        if cal_cfg:
+            if is_phone:
+                phone_slope = float(cal_cfg.get("phone_slope", 7.0))
+                phone_offset = float(cal_cfg.get("phone_offset", -4.0))
+                raw = phone_slope * score + phone_offset
+            elif is_utterance:
+                slope = float(cal_cfg.get("slope", 1.39))
+                offset = float(cal_cfg.get("offset", -3.20))
+                cal = slope * raw + offset
+                short_sec = float(cal_cfg.get("short_duration_sec", 3.5))
+                factor = float(cal_cfg.get("short_duration_factor", 0.75))
+                if duration_sec is not None and duration_sec < short_sec and raw < 8.2:
+                    cal -= factor * (short_sec - duration_sec)
+
+                # Long duration adjustment (compensates for embedding dispersion on long clips > 6s):
+                long_sec = float(cal_cfg.get("long_duration_sec", 6.0))
+                long_factor = float(cal_cfg.get("long_duration_factor", 0.25))
+                if duration_sec is not None and duration_sec > long_sec:
+                    cal += min(1.2, long_factor * (duration_sec - long_sec))
+                raw = cal
+
         # Clamp to [0, 10] range
         clamped = min(10.0, max(0.0, raw))
-        # If the raw prediction is positive (model made a real prediction),
-        # apply a minimum floor to avoid misleading 0-scores
+        # Minimum floor to avoid misleading 0-scores for valid predictions
         if score > 0.01:
             clamped = max(0.5, clamped)
         return round(clamped, 2)
 
-    def aggregate_utterance(self, predictions: Dict[str, torch.Tensor]) -> Dict[str, float]:
+    def aggregate_utterance(
+        self,
+        predictions: Dict[str, torch.Tensor],
+        duration_sec: Optional[float] = None,
+    ) -> Dict[str, float]:
         """Build utterance-level score dict on 0-10 scale."""
         result = {}
         for key, val in predictions.items():
@@ -212,10 +215,16 @@ class PronunciationScorer:
                 aspect = key.replace("utterance_", "")
                 if isinstance(val, torch.Tensor):
                     val = float(val.detach().cpu().item())
-                result[aspect] = self.to_display_scale(val)
+                result[aspect] = self.to_display_scale(
+                    val, is_utterance=True, duration_sec=duration_sec
+                )
         return result
 
-    def final_score(self, predictions: Dict[str, torch.Tensor]) -> float:
+    def final_score(
+        self,
+        predictions: Dict[str, torch.Tensor],
+        duration_sec: Optional[float] = None,
+    ) -> float:
         """
         Weighted combination of total/accuracy signals -> single 0-10 score.
         """
@@ -225,21 +234,21 @@ class PronunciationScorer:
         if "utterance_total" in predictions:
             v = predictions["utterance_total"]
             v = float(v.detach().cpu().item()) if isinstance(v, torch.Tensor) else v
-            parts.append(self.weights["utterance_total"] * self.to_display_scale(v))
+            parts.append(self.weights["utterance_total"] * self.to_display_scale(v, is_utterance=True, duration_sec=duration_sec))
             w_sum += self.weights["utterance_total"]
 
         if "word_total" in predictions:
             wt = predictions["word_total"]
             if isinstance(wt, torch.Tensor) and wt.numel() > 0:
                 v = float(wt.mean().detach().cpu().item())
-                parts.append(self.weights["word_total"] * self.to_display_scale(v))
+                parts.append(self.weights["word_total"] * self.to_display_scale(v, is_utterance=True, duration_sec=duration_sec))
                 w_sum += self.weights["word_total"]
 
         if "phoneme_accuracy" in predictions:
             pa = predictions["phoneme_accuracy"]
             if isinstance(pa, torch.Tensor) and pa.numel() > 0:
                 v = float(pa.mean().detach().cpu().item())
-                parts.append(self.weights["phoneme_accuracy"] * self.to_display_scale(v))
+                parts.append(self.weights["phoneme_accuracy"] * self.to_display_scale(v, is_utterance=True, duration_sec=duration_sec))
                 w_sum += self.weights["phoneme_accuracy"]
 
         if w_sum == 0:
@@ -267,7 +276,7 @@ class PronunciationScorer:
             {"phonemes": [...], "words": [...]} with scores on 0-10 scale and severity.
         """
         thr = threshold if threshold is not None else self.phoneme_low_threshold
-        display_thr = self.to_display_scale(thr)
+        display_thr = self.to_display_scale(thr, is_phone=True)
         errors = {"phonemes": [], "words": []}
 
         # Map each phoneme index to its containing word and word IPA
@@ -295,7 +304,7 @@ class PronunciationScorer:
         pa = predictions.get("phoneme_accuracy")
         if pa is not None and isinstance(pa, torch.Tensor):
             for i, (tok, score) in enumerate(zip(phoneme_tokens, pa.tolist())):
-                display_score = self.to_display_scale(score)
+                display_score = self.to_display_scale(score, is_phone=True)
                 valid = True
 
                 if valid and display_score < display_thr:
@@ -364,11 +373,12 @@ class PronunciationScorer:
             else:
                 w_score = 8.0
 
-            # Constituent phonemes
+            # Constituent phonemes with calibrated IPA scoring
             phones_list = []
             for p_idx in range(start_idx, end_idx):
                 p_tok = phoneme_tokens[p_idx]
-                p_score = self.to_display_scale(pa[p_idx].item()) if (pa is not None and isinstance(pa, torch.Tensor) and p_idx < len(pa)) else w_score
+                p_raw = pa[p_idx].item() if (pa is not None and isinstance(pa, torch.Tensor) and p_idx < len(pa)) else None
+                p_score = self.to_display_scale(p_raw, is_phone=True) if p_raw is not None else w_score
                 p_status = "good" if p_score >= 7.5 else ("warning" if p_score >= 5.5 else "bad")
                 phones_list.append({
                     "phoneme": p_tok,
@@ -382,15 +392,15 @@ class PronunciationScorer:
             if phones_list:
                 phone_avg = sum(p["score"] for p in phones_list) / len(phones_list)
                 phone_min = min(p["score"] for p in phones_list)
-                # Blend word prediction with phoneme accuracy so word scores accurately reflect mispronounced sounds
+                # Blend word prediction with calibrated phoneme accuracy so word scores accurately reflect mispronounced sounds
                 if wt_total is not None and isinstance(wt_total, torch.Tensor) and i < len(wt_total):
-                    w_score = round(0.6 * w_score + 0.4 * phone_avg, 1)
-                elif wt_acc is not None and isinstance(wt_acc, torch.Tensor) and i < len(wt_acc):
                     w_score = round(0.5 * w_score + 0.5 * phone_avg, 1)
+                elif wt_acc is not None and isinstance(wt_acc, torch.Tensor) and i < len(wt_acc):
+                    w_score = round(0.4 * w_score + 0.6 * phone_avg, 1)
                 else:
                     w_score = round(phone_avg, 1)
-                if phone_min < 5.0 and w_score > 6.5:
-                    w_score = round(max(phone_min + 1.0, 5.0), 1)
+                if phone_min < 5.0 and w_score > 6.0:
+                    w_score = round(max(phone_min + 1.0, 4.5), 1)
 
             w_status = "good" if w_score >= 7.5 else ("warning" if w_score >= 5.5 else "bad")
 
@@ -404,82 +414,60 @@ class PronunciationScorer:
 
         return words_detail
 
-    # ── L2-MDD Per-Turn Feedback ────────────────────────────────────
+    # ── L2-MDD Per-Turn Feedback (ASHA Clinical Diagnostic Engine) ───
     @staticmethod
     def generate_l2_turn_feedback(errors: Optional[Dict[str, List[dict]]]) -> Optional[str]:
-        """Generate simple per-turn feedback from L2-MDD model using standard IPA symbols.
-        
-        SpeechOcean762 handles all scoring; L2-MDD only spots L2 learner pronunciation errors
-        and gives a concise note with IPA for the individual turn.
-        """
+        """Generate clinical-grade ASHA articulatory feedback from L2-MDD full phoneme scan."""
         if not errors:
             return None
 
-        weak_phones = [p for p in errors.get("phonemes", []) if p.get("score", 10.0) < 6.5]
-        weak_words = [w for w in errors.get("words", []) if w.get("score", 10.0) < 6.5]
-
-        if not weak_phones and not weak_words:
-            return "L2-MDD: Phát âm rõ ràng, không phát hiện lỗi phát âm đáng kể."
+        phones = errors.get("phonemes", [])
+        if not phones:
+            return "L2-MDD: Toàn bộ âm vị đều phát âm đạt chuẩn, không phát hiện âm lệch."
 
         parts = []
-        if weak_phones:
-            seen_ph = set()
-            ph_tips = []
-            for p in weak_phones:
-                ph_raw = p.get("phoneme", "")
-                ph_ipa = p.get("ipa") or format_phone_ipa(ph_raw)
-                w_text = p.get("word", "")
+        seen_items = set()
+        for p in phones:
+            w_text = p.get("word", "")
+            target_ipa = p.get("target_ipa") or format_phone_ipa(p.get("target_phone") or p.get("phoneme", ""))
+            actual_ipa = p.get("actual_ipa", "")
+            rule_name = p.get("rule_name_vi", "")
+            tip = p.get("articulatory_tip") or p.get("tip") or ""
+
+            key = f"{target_ipa}_{actual_ipa}_{w_text}"
+            if key in seen_items:
+                continue
+            seen_items.add(key)
+
+            if actual_ipa and actual_ipa != target_ipa:
+                item = f"âm {target_ipa} bị lệch thành {actual_ipa}"
+            else:
+                item = f"âm {target_ipa}"
+
+            if w_text:
                 w_ipa = p.get("word_ipa", "")
-
-                key = f"{ph_ipa}_{w_text}"
-                if key not in seen_ph:
-                    seen_ph.add(key)
-                    tip = p.get("tip") or _get_phoneme_tip(ph_raw)
-                    item = f"âm {ph_ipa}"
-                    if w_text:
-                        item += f" trong \"{w_text}\""
-                        if w_ipa:
-                            item += f" ({w_ipa})"
-                    if tip:
-                        item += f" — {tip}"
-                    ph_tips.append(item)
-
-            if ph_tips:
-                parts.append("chú ý " + "; ".join(ph_tips[:3]))
-
-        if weak_words:
-            seen_w = set()
-            w_list = []
-            for w in weak_words:
-                wd = w.get("word", "")
-                w_ipa = w.get("word_ipa", "")
-                if wd and wd not in seen_w:
-                    seen_w.add(wd)
-                    item = f'"{wd}"'
-                    if w_ipa:
-                        item += f" ({w_ipa})"
-                    w_list.append(item)
-            if w_list:
-                parts.append(f"từ cần đọc rõ: {', '.join(w_list[:3])}")
+                item += f" trong \"{w_text}\"" + (f" ({w_ipa})" if w_ipa else "")
+            if rule_name:
+                item += f" [{rule_name}]"
+            if tip:
+                item += f" — {tip}"
+            parts.append(item)
 
         if not parts:
             return None
-        return "L2-MDD lưu ý: " + ". ".join(parts) + "."
+        return "L2-MDD (ASHA) lưu ý: " + "; ".join(parts[:3]) + "."
 
     # ── SpeechOcean Feedback Generation (No L2-MDD in overall) ──────
     @staticmethod
     def generate_transformer_feedback(
         scores_pronunciation: Optional[Dict[str, float]] = None,
         errors_pronunciation: Optional[Dict[str, List[dict]]] = None,
-        scores_l2_mdd: Optional[Dict[str, float]] = None,
-        errors_l2_mdd: Optional[Dict[str, List[dict]]] = None,
-        ensemble_scores: Optional[Dict[str, float]] = None,
         transcript: str = "",
     ) -> Dict[str, Any]:
         """Generate structured feedback based purely on SpeechOcean762 scores with standard IPA."""
         feedback: Dict[str, Any] = {}
 
-        ref_scores = scores_pronunciation or ensemble_scores or {}
+        ref_scores = scores_pronunciation or {}
         ref_errors = errors_pronunciation or {}
 
         if ref_scores:

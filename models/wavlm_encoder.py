@@ -10,6 +10,7 @@ from __future__ import annotations
 from contextlib import nullcontext
 from typing import Optional
 
+import os
 import torch
 import torch.nn as nn
 from transformers import WavLMModel
@@ -34,6 +35,8 @@ class WavLMEncoder(nn.Module):
         lora_target_modules: Optional[list] = None,
     ):
         super().__init__()
+        if model_name and not os.path.exists(model_name) and (model_name.startswith("/") or "\\" in model_name):
+            model_name = "microsoft/wavlm-large"
         self.wavlm = WavLMModel.from_pretrained(model_name)
         self.output_dim = self.wavlm.config.hidden_size  # 1024 for large
 
