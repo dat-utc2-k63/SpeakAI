@@ -27,10 +27,39 @@ from .wavlm_encoder import WavLMEncoder
 from .transformer_encoder import TaskTransformerEncoder
 from .ctc_aligner import CTCAligner, PhonemeAlignment
 from .phoneme_graph import PhonemeGraphNetwork
-from .asha_phonology import ASHAPhonologicalAnalyzer, ASHADiagnosis
+from .asha_phonology import ASHAPhonologicalAnalyzer, ASHADiagnosis, get_features
 
 ERR_CORRECT, ERR_SUB, ERR_DEL, ERR_ADD = 0, 1, 2, 3
 ERR_NAMES = ("correct", "substitution", "deletion", "addition")
+
+TYPICAL_SUBSTITUTIONS: Dict[str, List[str]] = {
+    "TH": ["T", "S", "F"],
+    "DH": ["D", "Z", "V"],
+    "SH": ["S", "CH"],
+    "ZH": ["Z", "JH"],
+    "CH": ["T", "S"],
+    "JH": ["Z", "D"],
+    "V":  ["B", "F"],
+    "W":  ["V"],
+    "Z":  ["S"],
+    "NG": ["N"],
+    "R":  ["L", "W"],
+    "L":  ["R", "N"],
+    "P":  ["B"],
+    "T":  ["D"],
+    "K":  ["G"],
+    "B":  ["P"],
+    "D":  ["T"],
+    "G":  ["K"],
+    "AE": ["EH", "AA", "AH"],
+    "IY": ["IH"],
+    "IH": ["IY", "EH"],
+    "UW": ["UH"],
+    "UH": ["UW"],
+    "AO": ["AA", "OW"],
+    "AA": ["AO", "AH"],
+    "ER": ["AH"],
+}
 
 
 class PhonemeMDDHead(nn.Module):
@@ -183,31 +212,78 @@ class L2MDDModel(nn.Module):
             sp = spans[i] if i < len(spans) else None
             w_ctx = phone_to_word.get(i, {})
 
-            # L2-MDD diagnostic trigger: non-correct prediction or prominent substitution/deletion
-            is_suspicious = (pred_class_id != ERR_CORRECT) or (p_sub >= 0.40) or (p_del >= 0.35)
+            # L2-MDD diagnostic trigger:
+            # Only trigger if the MDD head predicts an error with solid probability
+            # and p_correct is low (< 0.50)
+            is_suspicious = False
+            if pred_class_id == ERR_DEL and p_del >= 0.40:
+                is_suspicious = True
+            elif pred_class_id == ERR_ADD and p_add >= 0.45:
+                is_suspicious = True
+            elif pred_class_id == ERR_SUB and p_sub >= 0.45 and p_correct < 0.50:
+                is_suspicious = True
+            elif err_prob >= 0.70 and p_correct < 0.30:
+                is_suspicious = True
+
             actual_phone = target_phone
             actual_confidence = p_correct
 
             if is_suspicious:
-                if pred_class_name == "deletion":
+                if pred_class_name == "deletion" or (pred_class_id == ERR_DEL and p_del >= 0.40):
                     actual_phone = "[DELETION]"
-                elif pred_class_name == "addition":
+                elif pred_class_name == "addition" or (pred_class_id == ERR_ADD and p_add >= 0.45):
                     actual_phone = "[ADDITION]"
-                elif sp and sp.end_frame >= sp.start_frame:
-                    sf = max(0, sp.start_frame)
-                    ef = min(ctc_logits.shape[0] - 1, sp.end_frame)
-                    if ef >= sf:
-                        # Find top non-blank acoustic peak in the span
-                        span_ctc = ctc_logits[sf : ef + 1].max(0).values.clone()
-                        span_ctc[:3] = -1e9  # mask <pad>, <unk>, |
-                        topk = torch.topk(span_ctc, k=min(4, span_ctc.shape[0]))
-                        top_id = int(topk.indices[0].item())
-                        top_cand = vocab[top_id] if top_id < len(vocab) else target_phone
-                        if top_cand != target_phone:
-                            actual_phone = top_cand
-                        elif len(topk.indices) > 1:
-                            second_id = int(topk.indices[1].item())
-                            actual_phone = vocab[second_id]
+                else:
+                    # Substitution case
+                    target_base = target_phone.rstrip("012")
+                    target_feat = get_features(target_phone)
+                    target_is_vowel = target_feat.is_vowel if target_feat else False
+
+                    best_cand = None
+                    if sp and sp.end_frame >= sp.start_frame:
+                        sf = max(0, sp.start_frame)
+                        ef = min(ctc_logits.shape[0] - 1, sp.end_frame)
+                        if ef >= sf:
+                            span_ctc = ctc_logits[sf : ef + 1].max(0).values.clone()
+                            span_ctc[:3] = -1e9  # mask <pad>, <unk>, |
+                            target_id = self.ctc_aligner.token2id.get(target_phone)
+                            target_logit = span_ctc[target_id].item() if (target_id is not None and target_id < len(span_ctc)) else -100.0
+
+                            # Evaluate top acoustic candidates
+                            top_indices = torch.topk(span_ctc, k=min(15, span_ctc.shape[0])).indices.cpu().tolist()
+                            for tid in top_indices:
+                                cand_phone = vocab[tid] if tid < len(vocab) else ""
+                                if not cand_phone or cand_phone in ("<pad>", "<unk>", "|"):
+                                    continue
+                                cand_feat = get_features(cand_phone)
+                                cand_is_vowel = cand_feat.is_vowel if cand_feat else False
+                                # Consonants must never be substituted by vowels and vice-versa
+                                if cand_is_vowel != target_is_vowel:
+                                    continue
+                                cand_base = cand_phone.rstrip("012")
+                                if cand_base == target_base:
+                                    best_cand = target_phone
+                                    break
+                                cand_logit = span_ctc[tid].item()
+                                # Only accept candidate if acoustic peak significantly exceeds target logit
+                                if cand_logit > target_logit + 3.0:
+                                    best_cand = cand_phone
+                                    break
+
+                    if best_cand and best_cand != target_phone:
+                        actual_phone = best_cand
+                    else:
+                        typs = TYPICAL_SUBSTITUTIONS.get(target_base, [])
+                        if typs and p_sub >= 0.65:
+                            actual_phone = typs[0]
+                        else:
+                            # Not enough acoustic proof of substitution -> retain target
+                            actual_phone = target_phone
+                            is_suspicious = False
+
+            # If target phone equals actual phone, it is NOT an error
+            if actual_phone.rstrip("012") == target_phone.rstrip("012") and pred_class_name not in ("deletion", "addition"):
+                is_suspicious = False
 
             # ASHA Diagnosis
             diag: ASHADiagnosis = ASHAPhonologicalAnalyzer.diagnose(

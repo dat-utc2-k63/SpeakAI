@@ -475,7 +475,7 @@ import { supabase } from './supabase.js';
           const sc = turn.scores || { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
           const errs = turn.errors || {};
           const badPhonemes = errs.phonemes ? (
-            errs.phonemes.filter(p => p.is_suspicious || p.error_probability !== undefined || (p.score !== undefined && p.score < 7.0))
+            errs.phonemes.filter(p => p.is_suspicious || (p.error_probability !== undefined && p.error_probability >= 0.5) || (p.score !== undefined && p.score < 6.5))
           ) : [];
           const audioHtml = turn.audio ? `
             <div class="mini-audio-pill mt-2">
@@ -491,27 +491,27 @@ import { supabase } from './supabase.js';
           <div class="d-flex justify-content-between align-items-center mb-1">
             <div class="small text-muted fw-semibold"><i class="bi bi-person-badge me-1 text-primary"></i>Giáo viên</div>
           </div>
-          <div class="clean-sentence-text text-white-50">${turn.transcript}</div>
+          <div class="teacher-transcript text-white-50">${turn.transcript}</div>
           ${audioHtml}
         </div>
       </div>`;
           }
 
-          // Build Clean Interactive Sentence Text (Highlight only mispronounced words)
+          // Build Word Tokens Stream with IPA
           let words = turn.words_detail;
-          let sentenceHtml = '';
-          if (words && words.length > 0) {
-            sentenceHtml = words.map(w => {
-              const isIssue = (w.status === 'bad' || w.status === 'warning');
-              if (isIssue) {
-                const ipaStr = w.word_ipa ? ` · ${w.word_ipa}` : '';
-                return `<span class="highlight-word ${w.status}" title="${w.word}${ipaStr} (Có âm vị cần lưu ý)">${w.word}</span>`;
-              }
-              return `<span class="clean-word">${w.word}</span>`;
-            }).join(' ');
-          } else {
-            sentenceHtml = turn.transcript || '';
+          if (!words || words.length === 0) {
+            words = (turn.transcript || '').split(' ').map(w => ({ word: w, status: 'good' }));
           }
+
+          const wordTokensHtml = words.map(w => {
+            const ipaDisplay = w.word_ipa ? `<span class="word-ipa">${w.word_ipa}</span>` : '';
+            const statusNote = (w.status === 'bad' || w.status === 'warning') ? ' (Có âm vị cần lưu ý)' : ' (Phát âm đạt chuẩn)';
+            const titleAttr = `${w.word}${w.word_ipa ? ' · ' + w.word_ipa : ''}${statusNote}`;
+            return `<div class="word-token ${w.status || 'good'}" title="${titleAttr}">
+              <span class="word-text">${w.word}</span>
+              ${ipaDisplay}
+            </div>`;
+          }).join('');
 
           // Build Clean Correction Box (Single unified, compact block)
           let feedbackBoxHtml = '';
@@ -538,38 +538,35 @@ import { supabase } from './supabase.js';
                 </div>`;
             }).filter(Boolean).join('');
 
-            feedbackBoxHtml = `
-              <div class="clean-feedback-box mt-2">
-                <div class="clean-feedback-title">
-                  <i class="bi bi-soundwave me-1"></i>Lưu ý phát âm (L2-MDD & ASHA):
-                </div>
-                <div class="clean-feedback-list">
-                  ${itemsHtml}
-                </div>
-              </div>`;
+            if (itemsHtml.trim()) {
+              feedbackBoxHtml = `
+                <div class="clean-feedback-box mt-2">
+                  <div class="clean-feedback-title">
+                    <i class="bi bi-soundwave me-1"></i>Lưu ý phát âm (L2-MDD & ASHA):
+                  </div>
+                  <div class="clean-feedback-list">
+                    ${itemsHtml}
+                  </div>
+                </div>`;
+            }
           }
-
-          // Score Badge (Clean, single high-level score pill)
-          const scoreVal = (sc.total || 0).toFixed(1);
-          const scoreClass = sc.total >= 8.0 ? 'score-high' : (sc.total >= 6.0 ? 'score-mid' : 'score-low');
-          const titleScore = `Accuracy: ${(sc.accuracy || 0).toFixed(1)} | Fluency: ${(sc.fluency || 0).toFixed(1)} | Prosodic: ${(sc.prosodic || 0).toFixed(1)}`;
 
           return `
     <div class="timeline-item timeline-student">
       <div class="speech-bubble-enhanced student-bubble-enhanced">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <div class="small text-muted fw-semibold">
-            <i class="bi bi-mortarboard me-1 text-teal"></i>Học viên
-          </div>
-          <div class="clean-turn-score ${scoreClass}" title="${titleScore}">
-            <span class="score-num">${scoreVal}</span>
-            <span class="score-max">/10</span>
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="small text-muted fw-semibold"><i class="bi bi-mortarboard me-1 text-teal"></i>Học viên</div>
+          <div class="score-pill-group">
+            <span class="score-pill-total">Total: ${(sc.total || 0).toFixed(1)}</span>
+            <span class="score-pill-sub">Acc: ${(sc.accuracy || 0).toFixed(1)}</span>
+            <span class="score-pill-sub">Flu: ${(sc.fluency || 0).toFixed(1)}</span>
+            <span class="score-pill-sub">Pro: ${(sc.prosodic || 0).toFixed(1)}</span>
           </div>
         </div>
 
-        <!-- Clean natural sentence text with highlight -->
-        <div class="clean-sentence-text mb-2">
-          ${sentenceHtml}
+        <!-- Word-by-word interactive stream with IPA -->
+        <div class="word-token-stream">
+          ${wordTokensHtml}
         </div>
 
         <!-- Clean, unified correction box (if any) -->

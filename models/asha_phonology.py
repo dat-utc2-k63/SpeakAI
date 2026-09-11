@@ -121,6 +121,19 @@ class ASHAPhonologicalAnalyzer:
         target_feat = get_features(target_phone)
         target_ipa = f"/{target_feat.ipa}/" if target_feat else f"/{target_phone}/"
 
+        # ── 0. Correct Pronunciation ──
+        if target_phone.rstrip("012") == actual_phone.rstrip("012") and mdd_class.lower() not in ("deletion", "addition"):
+            return ASHADiagnosis(
+                rule_id="correct",
+                rule_name_vi="Phát âm chuẩn",
+                rule_name_en="Correct Pronunciation",
+                severity="none",
+                target_ipa=target_ipa,
+                actual_ipa=target_ipa,
+                feature_contrast="Đạt chuẩn cấu âm",
+                articulatory_tip="Phát âm tốt, duy trì độ chính xác này.",
+            )
+
         # ── 1. Deletion Cases (ASHA Syllable Structure Processes) ──
         if mdd_class.lower() == "deletion" or actual_phone in ("[DELETION]", "[DEL]", "sil", ""):
             if is_word_final:

@@ -379,21 +379,27 @@ class SpeakingPipeline:
         # Enrich words_detail with L2-MDD ASHA diagnostic tips
         words_detail = pron_result.get("words_detail") or []
         if final_errors and final_errors.get("phonemes"):
-            suspicious_map = {p.get("index"): p for p in final_errors["phonemes"] if p.get("index") is not None}
+            suspicious_map = {
+                p.get("index"): p
+                for p in final_errors["phonemes"]
+                if p.get("index") is not None and p.get("is_suspicious", True)
+            }
             p_counter = 0
             for w in words_detail:
                 w_has_err = False
                 for ph in w.get("phonemes", []):
                     if p_counter in suspicious_map:
                         diag = suspicious_map[p_counter]
-                        ph["status"] = "bad" if diag.get("severity") == "critical" else "warning"
-                        ph["target_ipa"] = diag.get("target_ipa")
-                        ph["actual_ipa"] = diag.get("actual_ipa")
-                        ph["rule_name_vi"] = diag.get("rule_name_vi")
-                        ph["tip"] = diag.get("articulatory_tip") or ph.get("tip")
-                        w_has_err = True
+                        ph_score = ph.get("score", 7.0)
+                        if ph_score < 7.5 or diag.get("error_probability", 0) >= 0.65:
+                            ph["status"] = "bad" if diag.get("severity") == "critical" else "warning"
+                            ph["target_ipa"] = diag.get("target_ipa")
+                            ph["actual_ipa"] = diag.get("actual_ipa")
+                            ph["rule_name_vi"] = diag.get("rule_name_vi")
+                            ph["tip"] = diag.get("articulatory_tip") or ph.get("tip")
+                            w_has_err = True
                     p_counter += 1
-                if w_has_err and w.get("status") == "good":
+                if w_has_err and w.get("status") == "good" and w.get("score", 8.0) < 7.5:
                     w["status"] = "warning"
 
         # Generate per-turn feedback
