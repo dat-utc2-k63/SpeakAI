@@ -486,7 +486,8 @@ import { supabase } from './supabase.js';
 
           const wordTokensHtml = words.map(w => {
             const ipaDisplay = w.word_ipa ? `<span class="word-ipa">${w.word_ipa}</span>` : '';
-            const titleAttr = `Điểm: ${w.score?.toFixed(1)}/10${w.word_ipa ? ' · ' + w.word_ipa : ''}`;
+            const statusNote = (w.status === 'bad' || w.status === 'warning') ? ' (Có âm vị lệch - L2-MDD)' : ' (Phát âm đạt chuẩn)';
+            const titleAttr = `${w.word}${w.word_ipa ? ' · ' + w.word_ipa : ''}${statusNote}`;
             return `<div class="word-token ${w.status || 'good'}" title="${titleAttr}">
               <span class="word-text">${w.word}</span>
               ${ipaDisplay}
@@ -512,7 +513,7 @@ import { supabase } from './supabase.js';
                     const ruleName = p.rule_name_vi ? p.rule_name_vi.split('(')[0].trim() : '';
                     const tipText = p.articulatory_tip || p.tip || '';
                     const title = `${contrastStr}${inWord}${ruleName ? ' [' + ruleName + ']' : ''}${tipText ? ' — ' + tipText : ''}`;
-                    const isCrit = p.severity === 'critical' || (p.score !== undefined && p.score < 5.0);
+                    const isCrit = p.severity === 'critical';
                     return `
                       <span class="phoneme-pill-tag ${isCrit ? 'bad' : 'warning'}" title="${title}">
                         <span class="tag-ipa fw-bold">${contrastStr}</span>
