@@ -70,6 +70,7 @@ class WhisperTranscriber:
         if model_name and not os.path.exists(model_name) and (model_name.startswith("/") or "\\" in model_name):
             model_name = "openai/whisper-small.en"
         self.model_name = model_name
+        self.max_new_tokens = max_new_tokens
         dtype = _parse_dtype(torch_dtype, self.device)
 
         if load_progress is not None:
@@ -92,7 +93,7 @@ class WhisperTranscriber:
 
     def _generate(self, input_features: torch.Tensor) -> torch.Tensor:
         name = self.model_name.lower()
-        max_tokens = self.max_new_tokens
+        max_tokens = getattr(self, "max_new_tokens", 448)
 
         if name.endswith(".en"):
             # English-only checkpoints: no language/task prefix tokens

@@ -558,4 +558,102 @@ body {
   color: var(--color-text-muted);
 }
 
+/* ── Clean Turn Sentence & Feedback Layout ───────────────── */
+.clean-sentence-text {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: 0.01em;
+}
+.clean-sentence-text .clean-word {
+  color: rgba(255, 255, 255, 0.92);
+}
+.clean-sentence-text .highlight-word {
+  display: inline-block;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: help;
+  transition: background 0.2s;
+}
+.clean-sentence-text .highlight-word.warning {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+  border-bottom: 2px dashed rgba(245, 158, 11, 0.6);
+}
+.clean-sentence-text .highlight-word.bad {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+  border-bottom: 2px dashed rgba(239, 68, 68, 0.7);
+}
+
+/* Score badge on turn header */
+.clean-turn-score {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+.clean-turn-score.score-high {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+.clean-turn-score.score-mid {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.clean-turn-score.score-low {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.clean-turn-score .score-max {
+  font-size: 0.68rem;
+  opacity: 0.75;
+  margin-left: 2px;
+}
+
+/* Clean feedback box */
+.clean-feedback-box {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid #f59e0b;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.clean-feedback-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #fbbf24;
+  margin-bottom: 6px;
+}
+.clean-feedback-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.feedback-issue-item {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.45;
+}
+.feedback-issue-item .rule-tag {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+.feedback-issue-item .tip-text {
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
+}
+
 

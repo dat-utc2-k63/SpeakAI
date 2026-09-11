@@ -14,11 +14,26 @@ import { supabase } from './supabase.js';
         let currentUser = null;
         let currentProfile = null;
 
+        function hasVoiceEnrolled(u) {
+          if (!u) return false;
+          if (u.voice_enrolled === true) return true;
+          if (u.voice_embeddings) {
+            if (Array.isArray(u.voice_embeddings) && u.voice_embeddings.length > 0) return true;
+            if (typeof u.voice_embeddings === 'string' && u.voice_embeddings.trim().length > 10) return true;
+          }
+          if (u.voice_sample_url && typeof u.voice_sample_url === 'string' && u.voice_sample_url.trim() !== '') return true;
+          return false;
+        }
+
         (async () => {
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) { window.location.href = 'index.html'; return; }
           currentUser = session.user;
           currentProfile = await getProfile(currentUser.id);
+          if (currentProfile && !currentProfile.voice_enrolled && hasVoiceEnrolled(currentProfile)) {
+            currentProfile.voice_enrolled = true;
+            updateProfile(currentUser.id, { voice_enrolled: true }).catch(console.error);
+          }
 
           try {
             const m = await import('./auth.js');
@@ -76,9 +91,10 @@ import { supabase } from './supabase.js';
           document.getElementById('editPhone').value = currentProfile.phone || '';
           document.getElementById('profileAvatar').src = avatarSrc;
 
+          const isEnrolled = hasVoiceEnrolled(currentProfile);
           document.getElementById('voiceStatusText').textContent =
-            currentProfile.voice_enrolled ? 'Đã đăng ký mẫu giọng' : 'Chưa đăng ký mẫu giọng';
-          document.getElementById('voiceBadge').innerHTML = currentProfile.voice_enrolled
+            isEnrolled ? 'Đã đăng ký mẫu giọng' : 'Chưa đăng ký mẫu giọng';
+          document.getElementById('voiceBadge').innerHTML = isEnrolled
             ? '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Đã đăng ký</span>'
             : '<span class="badge bg-secondary">Chưa có</span>';
 
@@ -149,6 +165,13 @@ import { supabase } from './supabase.js';
 
           // Recent students
           const students = await fetchMyStudents(currentUser.id);
+          // Normalize students voice_enrolled flag and auto-heal DB
+          students.forEach(s => {
+            if (!s.voice_enrolled && hasVoiceEnrolled(s)) {
+              s.voice_enrolled = true;
+              supabase.from('profiles').update({ voice_enrolled: true }).eq('id', s.id).then(() => {}).catch(console.error);
+            }
+          });
           window.allStudents = students;
           renderRecentStudents(students.slice(0, 5));
           renderStudentsGrid(students);
@@ -165,7 +188,9 @@ import { supabase } from './supabase.js';
             el.innerHTML = '<div class="text-muted small p-3 text-center">Chưa có học viên nào</div>';
             return;
           }
-          el.innerHTML = students.map(s => `
+          el.innerHTML = students.map(s => {
+            const hasVoice = hasVoiceEnrolled(s);
+            return `
     <div class="list-group-item list-group-item-action d-flex align-items-center gap-3 bg-transparent border-0 border-bottom border-secondary py-3">
       <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=4F46E5&color=fff&size=80"
            class="rounded-circle" width="40" height="40" alt="avatar" />
@@ -173,11 +198,12 @@ import { supabase } from './supabase.js';
         <div class="fw-semibold">${s.full_name}</div>
         <div class="text-muted small">${s.email}</div>
       </div>
-      <span class="badge ${s.voice_enrolled ? 'bg-success' : 'bg-secondary'}">
-        ${s.voice_enrolled ? '🎙 Đã đăng ký' : 'Chưa có giọng'}
+      <span class="badge ${hasVoice ? 'bg-success' : 'bg-secondary'}">
+        ${hasVoice ? '🎙 Đã có giọng' : 'Chưa có giọng'}
       </span>
     </div>
-  `).join('');
+  `;
+          }).join('');
         }
 
         function renderStudentsGrid(students) {
@@ -186,7 +212,9 @@ import { supabase } from './supabase.js';
             el.innerHTML = '<div class="col-12"><div class="text-muted text-center p-5">Chưa có học viên</div></div>';
             return;
           }
-          el.innerHTML = students.map(s => `
+          el.innerHTML = students.map(s => {
+            const hasVoice = hasVoiceEnrolled(s);
+            return `
     <div class="col-md-6 col-lg-4 student-card-wrap" data-name="${s.full_name.toLowerCase()}">
       <div class="section-card h-100">
         <div class="d-flex align-items-center gap-3 mb-3">
@@ -198,15 +226,16 @@ import { supabase } from './supabase.js';
           </div>
         </div>
         <div class="d-flex gap-2 flex-wrap">
-          <span class="badge ${s.voice_enrolled ? 'bg-success' : 'bg-secondary'}">
-            <i class="bi bi-mic${s.voice_enrolled ? '-fill' : ''} me-1"></i>${s.voice_enrolled ? 'Giọng OK' : 'Chưa có giọng'}
+          <span class="badge ${hasVoice ? 'bg-success' : 'bg-secondary'}">
+            <i class="bi bi-mic${hasVoice ? '-fill' : ''} me-1"></i>${hasVoice ? 'Giọng OK' : 'Chưa có giọng'}
           </span>
           ${s.phone ? `<span class="badge bg-outline-secondary">${s.phone}</span>` : ''}
         </div>
         <div class="text-muted smaller mt-2">Tham gia: ${new Date(s.created_at).toLocaleDateString('vi-VN')}</div>
       </div>
     </div>
-  `).join('');
+  `;
+          }).join('');
 
           // Search
           document.getElementById('studentSearch').addEventListener('input', (e) => {
@@ -220,7 +249,11 @@ import { supabase } from './supabase.js';
         function populateStudentSelect(students) {
           const sel = document.getElementById('assessStudentSelect');
           sel.innerHTML = '<option value="">-- Chọn học viên --</option>' +
-            students.map(s => `<option value="${s.id}">${s.full_name}</option>`).join('');
+            students.map(s => {
+              const hasVoice = hasVoiceEnrolled(s);
+              const tag = hasVoice ? ' (Đã có giọng 🎙)' : ' (Chưa có giọng ⚠️)';
+              return `<option value="${s.id}">${s.full_name}${tag}</option>`;
+            }).join('');
           checkRunReady();
           sel.addEventListener('change', checkRunReady);
         }
@@ -274,11 +307,11 @@ import { supabase } from './supabase.js';
 
           const studentId = document.getElementById('assessStudentSelect').value;
           const student = (window.allStudents || []).find(s => s.id === studentId);
-          if (!student || !student.voice_embeddings) {
+          if (!student || !hasVoiceEnrolled(student)) {
             alert("Học viên này chưa đăng ký giọng nói!");
             return;
           }
-          if (!currentProfile || !currentProfile.voice_embeddings) {
+          if (!currentProfile || !hasVoiceEnrolled(currentProfile)) {
             alert("Bạn (Giáo viên) chưa đăng ký mẫu giọng nói!");
             return;
           }
@@ -291,13 +324,22 @@ import { supabase } from './supabase.js';
             const stepEl = document.getElementById('assessLoadingStep');
             stepEl.textContent = 'Đang gửi yêu cầu...';
 
+            let tEmb = currentProfile.voice_embeddings;
+            if (typeof tEmb === 'string') {
+              try { tEmb = JSON.parse(tEmb); } catch (e) {}
+            }
+            let sEmb = student.voice_embeddings;
+            if (typeof sEmb === 'string') {
+              try { sEmb = JSON.parse(sEmb); } catch (e) {}
+            }
+
             // Gọi API FastAPI trên Colab (Khởi tạo Task)
             const formData = new FormData();
             const scoreTeacher = document.getElementById('scoreTeacherCheck').checked;
             const skipFeedback = document.getElementById('skipFeedbackCheck').checked;
             formData.append("audio", convFile);
-            formData.append("teacher_embeddings_json", JSON.stringify(currentProfile.voice_embeddings));
-            formData.append("student_embeddings_json", JSON.stringify(student.voice_embeddings));
+            formData.append("teacher_embeddings_json", JSON.stringify(tEmb || []));
+            formData.append("student_embeddings_json", JSON.stringify(sEmb || []));
             formData.append("score_teacher", scoreTeacher);
             formData.append("skip_feedback", skipFeedback);
 
@@ -432,7 +474,6 @@ import { supabase } from './supabase.js';
           const isTeacher = turn.role === 'teacher';
           const sc = turn.scores || { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
           const errs = turn.errors || {};
-          const badWords = errs.words ? errs.words.filter(w => (w.score !== undefined ? w.score < 7.0 : true)) : [];
           const badPhonemes = errs.phonemes ? (
             errs.phonemes.filter(p => p.is_suspicious || p.error_probability !== undefined || (p.score !== undefined && p.score < 7.0))
           ) : [];
@@ -443,112 +484,96 @@ import { supabase } from './supabase.js';
             </div>` : '';
 
           if (isTeacher) {
-            const scT = turn.scores;
             return `
       <div class="timeline-item timeline-teacher">
         <div class="timeline-dot teacher-dot"><i class="bi bi-person-video3"></i></div>
         <div class="speech-bubble-enhanced teacher-bubble-enhanced">
-          <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="d-flex justify-content-between align-items-center mb-1">
             <div class="small text-muted fw-semibold"><i class="bi bi-person-badge me-1 text-primary"></i>Giáo viên</div>
-            ${scT ? `
-            <div class="score-pill-group">
-              <span class="score-pill-total" style="background: var(--color-indigo);">Total: ${scT.total?.toFixed(1)}</span>
-              <span class="score-pill-sub">Acc: ${scT.accuracy?.toFixed(1)}</span>
-              <span class="score-pill-sub">Flu: ${scT.fluency?.toFixed(1)}</span>
-            </div>` : ''}
           </div>
-          <div class="fs-6 fw-normal text-white-50">${turn.transcript}</div>
+          <div class="clean-sentence-text text-white-50">${turn.transcript}</div>
           ${audioHtml}
         </div>
       </div>`;
           }
 
-          // Build Word Token Stream with IPA
+          // Build Clean Interactive Sentence Text (Highlight only mispronounced words)
           let words = turn.words_detail;
-          if (!words || words.length === 0) {
-            const textWords = (turn.transcript || '').split(/\s+/).filter(Boolean);
-            const errWordsMap = {};
-            badWords.forEach(w => { errWordsMap[w.word.toLowerCase()] = w; });
-            const defaultWordScore = (sc.accuracy > 0 ? sc.accuracy : (sc.total > 0 ? sc.total : 7.5));
-            words = textWords.map(tw => {
-              const clean = tw.replace(/[^a-zA-Z']/g, '').toLowerCase();
-              const ew = errWordsMap[clean];
-              const score = ew ? (ew.score || defaultWordScore) : defaultWordScore;
-              const status = score >= 7.5 ? 'good' : (score >= 5.5 ? 'warning' : 'bad');
-              return {
-                word: tw,
-                word_ipa: ew?.word_ipa || '',
-                score: score,
-                status: status
-              };
-            });
+          let sentenceHtml = '';
+          if (words && words.length > 0) {
+            sentenceHtml = words.map(w => {
+              const isIssue = (w.status === 'bad' || w.status === 'warning');
+              if (isIssue) {
+                const ipaStr = w.word_ipa ? ` · ${w.word_ipa}` : '';
+                return `<span class="highlight-word ${w.status}" title="${w.word}${ipaStr} (Có âm vị cần lưu ý)">${w.word}</span>`;
+              }
+              return `<span class="clean-word">${w.word}</span>`;
+            }).join(' ');
+          } else {
+            sentenceHtml = turn.transcript || '';
           }
 
-          const wordTokensHtml = words.map(w => {
-            const ipaDisplay = w.word_ipa ? `<span class="word-ipa">${w.word_ipa}</span>` : '';
-            const statusNote = (w.status === 'bad' || w.status === 'warning') ? ' (Có âm vị lệch - L2-MDD)' : ' (Phát âm đạt chuẩn)';
-            const titleAttr = `${w.word}${w.word_ipa ? ' · ' + w.word_ipa : ''}${statusNote}`;
-            return `<div class="word-token ${w.status || 'good'}" title="${titleAttr}">
-              <span class="word-text">${w.word}</span>
-              ${ipaDisplay}
-            </div>`;
-          }).join('');
-
-          // Phoneme pills (L2-MDD & ASHA Phonology)
-          let phonemePillsHtml = '';
+          // Build Clean Correction Box (Single unified, compact block)
+          let feedbackBoxHtml = '';
           if (badPhonemes.length > 0) {
-            phonemePillsHtml = `
-              <div class="mt-2 pt-2" style="border-top: 1px solid rgba(255,255,255,0.06);">
-                <div class="d-flex align-items-center justify-content-between mb-1">
-                  <span class="small fw-semibold text-warning" style="font-size: 0.78rem;">
-                    <i class="bi bi-soundwave me-1"></i>Âm vị cần lưu ý (L2-MDD & ASHA):
-                  </span>
+            const seen = new Set();
+            const itemsHtml = badPhonemes.map(p => {
+              const targetIpa = p.target_ipa || (p.phoneme ? ('/' + p.phoneme + '/') : '');
+              const actualIpa = p.actual_ipa || '';
+              const contrastStr = (actualIpa && actualIpa !== targetIpa) ? `${targetIpa} → ${actualIpa}` : targetIpa;
+              const inWord = p.word ? ` trong "<strong>${p.word}</strong>"` : '';
+              const ruleName = p.rule_name_vi ? p.rule_name_vi.split('(')[0].trim() : '';
+              const tipText = p.articulatory_tip || p.tip || '';
+
+              const key = `${contrastStr}_${p.word}`;
+              if (seen.has(key)) return '';
+              seen.add(key);
+
+              return `
+                <div class="feedback-issue-item">
+                  <i class="bi bi-exclamation-circle text-warning me-1"></i>
+                  <span class="fw-bold text-light">${contrastStr}</span>${inWord}
+                  ${ruleName ? `<span class="rule-tag">${ruleName}</span>` : ''}
+                  ${tipText ? `<span class="tip-text">— ${tipText}</span>` : ''}
+                </div>`;
+            }).filter(Boolean).join('');
+
+            feedbackBoxHtml = `
+              <div class="clean-feedback-box mt-2">
+                <div class="clean-feedback-title">
+                  <i class="bi bi-soundwave me-1"></i>Lưu ý phát âm (L2-MDD & ASHA):
                 </div>
-                <div class="phoneme-pills-row">
-                  ${badPhonemes.map(p => {
-                    const targetIpa = p.target_ipa || (p.phoneme ? ('/' + p.phoneme + '/') : '');
-                    const actualIpa = p.actual_ipa || '';
-                    const contrastStr = (actualIpa && actualIpa !== targetIpa) ? `${targetIpa} → ${actualIpa}` : targetIpa;
-                    const inWord = p.word ? ` trong "${p.word}"` : '';
-                    const ruleName = p.rule_name_vi ? p.rule_name_vi.split('(')[0].trim() : '';
-                    const tipText = p.articulatory_tip || p.tip || '';
-                    const title = `${contrastStr}${inWord}${ruleName ? ' [' + ruleName + ']' : ''}${tipText ? ' — ' + tipText : ''}`;
-                    const isCrit = p.severity === 'critical';
-                    return `
-                      <span class="phoneme-pill-tag ${isCrit ? 'bad' : 'warning'}" title="${title}">
-                        <span class="tag-ipa fw-bold">${contrastStr}</span>
-                        ${p.word ? `<span class="tag-word">"${p.word}"</span>` : ''}
-                        ${ruleName ? `<span class="badge bg-dark ms-1" style="font-size: 0.7rem;">${ruleName}</span>` : ''}
-                      </span>`;
-                  }).join('')}
+                <div class="clean-feedback-list">
+                  ${itemsHtml}
                 </div>
-                ${turn.l2_mdd_feedback ? `
-                <div class="mt-2 small text-info" style="font-size: 0.78rem; line-height: 1.4;">
-                  <i class="bi bi-lightbulb me-1"></i>${turn.l2_mdd_feedback}
-                </div>` : ''}
               </div>`;
           }
+
+          // Score Badge (Clean, single high-level score pill)
+          const scoreVal = (sc.total || 0).toFixed(1);
+          const scoreClass = sc.total >= 8.0 ? 'score-high' : (sc.total >= 6.0 ? 'score-mid' : 'score-low');
+          const titleScore = `Accuracy: ${(sc.accuracy || 0).toFixed(1)} | Fluency: ${(sc.fluency || 0).toFixed(1)} | Prosodic: ${(sc.prosodic || 0).toFixed(1)}`;
 
           return `
     <div class="timeline-item timeline-student">
       <div class="speech-bubble-enhanced student-bubble-enhanced">
-        <div class="d-flex justify-content-between align-items-center mb-1">
-          <div class="small text-muted fw-semibold"><i class="bi bi-mortarboard me-1 text-teal"></i>Học viên</div>
-          <div class="score-pill-group">
-            <span class="score-pill-total">Total: ${(sc.total || 0).toFixed(1)}</span>
-            <span class="score-pill-sub">Acc: ${(sc.accuracy || 0).toFixed(1)}</span>
-            <span class="score-pill-sub">Flu: ${(sc.fluency || 0).toFixed(1)}</span>
-            <span class="score-pill-sub">Pro: ${(sc.prosodic || 0).toFixed(1)}</span>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="small text-muted fw-semibold">
+            <i class="bi bi-mortarboard me-1 text-teal"></i>Học viên
+          </div>
+          <div class="clean-turn-score ${scoreClass}" title="${titleScore}">
+            <span class="score-num">${scoreVal}</span>
+            <span class="score-max">/10</span>
           </div>
         </div>
 
-        <!-- Word-by-word interactive stream with IPA -->
-        <div class="word-token-stream">
-          ${wordTokensHtml}
+        <!-- Clean natural sentence text with highlight -->
+        <div class="clean-sentence-text mb-2">
+          ${sentenceHtml}
         </div>
 
-        <!-- Phoneme correction tags -->
-        ${phonemePillsHtml}
+        <!-- Clean, unified correction box (if any) -->
+        ${feedbackBoxHtml}
 
         <!-- Audio Player -->
         ${audioHtml}
@@ -637,7 +662,7 @@ import { supabase } from './supabase.js';
                 </td>
                 <td>${u.email}</td>
                 <td><span class="badge ${u.role === 'admin' ? 'bg-danger' : u.role === 'teacher' ? 'bg-primary' : 'bg-success'}">${u.role.toUpperCase()}</span></td>
-                <td>${u.voice_enrolled ? '<i class="bi bi-check-circle text-success"></i>' : '-'}</td>
+                <td>${hasVoiceEnrolled(u) ? '<i class="bi bi-check-circle text-success"></i>' : '-'}</td>
                 <td>${new Date(u.created_at).toLocaleDateString('vi-VN')}</td>
                 <td>
                   <button class="btn btn-sm btn-outline-primary btn-edit-user" data-id="${u.id}" data-role="${u.role}" data-name="${u.full_name}" title="Đổi vai trò"><i class="bi bi-pencil"></i></button>

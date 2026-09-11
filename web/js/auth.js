@@ -44,7 +44,7 @@ export async function signUp({ email, password, fullName, phone, role, teacherId
         email: email,
         phone: phone || null,
         teacher_id: teacherId || null,
-        voice_enrolled: !!voiceUrl,
+        voice_enrolled: !!(voiceUrl || (voiceEmbeddings && (Array.isArray(voiceEmbeddings) ? voiceEmbeddings.length > 0 : true))),
         voice_sample_url: voiceUrl || null,
         voice_embeddings: voiceEmbeddings || null
       });
