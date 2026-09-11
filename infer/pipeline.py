@@ -354,8 +354,11 @@ class SpeakingPipeline:
         pron_errors = pron_result["errors"]
 
         # ── Run L2-MDD model for full-phoneme scanning & ASHA error diagnosis ──
+        # L2-MDD is the EXCLUSIVE authority for phoneme error detection and word error marking.
+        # SpeechOcean762 is strictly used for utterance scores (Total, Acc, Flu, Pro).
         l2_turn_feedback = None
-        final_errors = pron_errors
+        final_errors = {"phonemes": [], "words": []}
+        words_detail = []
         l2_scan = None
         if self.l2_mdd is not None:
             try:
@@ -367,40 +370,20 @@ class SpeakingPipeline:
                 l2_errors = l2_result.get("errors", {})
                 l2_scan = l2_result.get("scan_result")
                 l2_turn_feedback = PronunciationScorer.generate_l2_turn_feedback(l2_errors)
-                # L2-MDD is the primary source for phoneme error detection (ASHA Target -> Actual)
                 if l2_errors and l2_errors.get("phonemes") is not None:
                     final_errors = l2_errors
+                words_detail = l2_result.get("words_detail") or []
             except Exception as e:
                 print(f"  [WARN] L2-MDD phoneme scan failed: {e}")
+                words_detail = pron_result.get("words_detail") or []
+                final_errors = pron_errors or {"phonemes": [], "words": []}
+        else:
+            # Fallback only if L2-MDD model checkpoint is unavailable
+            final_errors = pron_errors or {"phonemes": [], "words": []}
+            words_detail = pron_result.get("words_detail") or []
 
         # SpeechOcean762 is the SOLE scoring model for utterance metrics (Total, Acc, Flu, Pro)
         final_scores = pron_scores
-
-        # Enrich words_detail with L2-MDD ASHA diagnostic tips
-        words_detail = pron_result.get("words_detail") or []
-        if final_errors and final_errors.get("phonemes"):
-            suspicious_map = {
-                p.get("index"): p
-                for p in final_errors["phonemes"]
-                if p.get("index") is not None and p.get("is_suspicious", True)
-            }
-            p_counter = 0
-            for w in words_detail:
-                w_has_err = False
-                for ph in w.get("phonemes", []):
-                    if p_counter in suspicious_map:
-                        diag = suspicious_map[p_counter]
-                        ph_score = ph.get("score", 7.0)
-                        if ph_score < 7.5 or diag.get("error_probability", 0) >= 0.65:
-                            ph["status"] = "bad" if diag.get("severity") == "critical" else "warning"
-                            ph["target_ipa"] = diag.get("target_ipa")
-                            ph["actual_ipa"] = diag.get("actual_ipa")
-                            ph["rule_name_vi"] = diag.get("rule_name_vi")
-                            ph["tip"] = diag.get("articulatory_tip") or ph.get("tip")
-                            w_has_err = True
-                    p_counter += 1
-                if w_has_err and w.get("status") == "good" and w.get("score", 8.0) < 7.5:
-                    w["status"] = "warning"
 
         # Generate per-turn feedback
         transformer_feedback = PronunciationScorer.generate_transformer_feedback(
@@ -419,7 +402,7 @@ class SpeakingPipeline:
             "feedback_source": pron_result.get("feedback_source"),
             "transformer_feedback": transformer_feedback,
             "l2_mdd_feedback": l2_turn_feedback,
-            "words_detail": pron_result.get("words_detail"),
+            "words_detail": words_detail,
         }
 
     def _assess_speaker_sentences(

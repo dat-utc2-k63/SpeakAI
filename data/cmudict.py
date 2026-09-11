@@ -85,11 +85,11 @@ class CMUDict:
         Each item: {"word": str, "phones": List[str]}
         """
         groups = []
-        for word in text.upper().split():
-            word_clean = re.sub(r"[^A-Z']", "", word)
-            if not word_clean:
+        for raw_word in text.split():
+            clean = re.sub(r"[^A-Za-z']", "", raw_word)
+            if not clean:
                 continue
-            pron = self.lookup(word_clean)
+            pron = self.lookup(clean.upper())
             if pron:
-                groups.append({"word": word_clean, "phones": pron})
+                groups.append({"word": clean, "phones": pron})
         return groups

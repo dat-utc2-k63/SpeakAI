@@ -229,12 +229,19 @@ class L2MDDPredictor:
         wav = load_waveform(audio, self.preprocess, apply_preprocess=apply_preprocess)
         tokens, words, ranges = self._phones_from_text(transcript)
         if not tokens:
-            return {"suspicious_phonemes": [], "all_phonemes": [], "num_suspicious": 0}
+            return {
+                "suspicious_phonemes": [],
+                "all_phonemes": [],
+                "num_suspicious": 0,
+                "words": [],
+                "word_ipas": [],
+                "word_phone_ranges": [],
+            }
 
         from models.pronunciation_scorer import phones_to_word_ipa
         word_ipas = [phones_to_word_ipa(tokens[s:e]) for s, e in ranges]
 
-        return self.model.scan_phonemes(
+        res = self.model.scan_phonemes(
             waveform=wav.to(self.device),
             wav_length=torch.tensor([wav.shape[0]], device=self.device),
             phoneme_tokens=tokens,
@@ -243,6 +250,10 @@ class L2MDDPredictor:
             word_ipas=word_ipas,
             sensitivity_threshold=sensitivity,
         )
+        res["words"] = words
+        res["word_ipas"] = word_ipas
+        res["word_phone_ranges"] = ranges
+        return res
 
     @torch.no_grad()
     def predict(
@@ -259,6 +270,45 @@ class L2MDDPredictor:
         """Scan phonemes and package into standard evaluation result."""
         scan_res = self.scan_phonemes(audio, transcript, apply_preprocess=apply_preprocess)
         suspicious = scan_res.get("suspicious_phonemes", [])
+        all_phones = scan_res.get("all_phonemes", [])
+        words = scan_res.get("words", [])
+        word_ipas = scan_res.get("word_ipas", [])
+        ranges = scan_res.get("word_phone_ranges", [])
+
+        # Build words_detail directly and exclusively from L2-MDD phoneme scan (SpeechOcean never sets word status)
+        words_detail = []
+        for w_idx, (ws, we) in enumerate(ranges):
+            w_text = words[w_idx] if w_idx < len(words) else ""
+            w_ipa = word_ipas[w_idx] if w_idx < len(word_ipas) else ""
+            w_phones = all_phones[ws:we] if ws < we and we <= len(all_phones) else []
+
+            phones_list = []
+            w_has_err = False
+            w_has_crit = False
+            for ph in w_phones:
+                is_susp = ph.get("is_suspicious", False)
+                is_crit = is_susp and ph.get("severity") in ("critical", "bad")
+                p_status = "bad" if is_crit else ("warning" if is_susp else "good")
+                if is_susp:
+                    w_has_err = True
+                if is_crit:
+                    w_has_crit = True
+                phones_list.append({
+                    "phoneme": ph.get("target_phone", ""),
+                    "ipa": ph.get("target_ipa", ""),
+                    "actual_ipa": ph.get("actual_ipa", ""),
+                    "status": p_status,
+                    "tip": ph.get("articulatory_tip", ""),
+                    "rule_name_vi": ph.get("rule_name_vi", ""),
+                })
+
+            w_status = "bad" if w_has_crit else ("warning" if w_has_err else "good")
+            words_detail.append({
+                "word": w_text,
+                "word_ipa": w_ipa,
+                "status": w_status,
+                "phonemes": phones_list,
+            })
 
         # Build errors dict formatted for downstream use
         errors = {
@@ -283,6 +333,7 @@ class L2MDDPredictor:
         return {
             "transcript": transcript,
             "errors": errors,
+            "words_detail": words_detail,
             "scan_result": scan_res,
             "num_suspicious": scan_res.get("num_suspicious", 0),
             "feedback": None,

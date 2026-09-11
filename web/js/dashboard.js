@@ -475,7 +475,7 @@ import { supabase } from './supabase.js';
           const sc = turn.scores || { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
           const errs = turn.errors || {};
           const badPhonemes = errs.phonemes ? (
-            errs.phonemes.filter(p => p.is_suspicious || (p.error_probability !== undefined && p.error_probability >= 0.5) || (p.score !== undefined && p.score < 6.5))
+            errs.phonemes.filter(p => p.is_suspicious || (p.error_probability !== undefined && p.error_probability >= 0.5))
           ) : [];
           const audioHtml = turn.audio ? `
             <div class="mini-audio-pill mt-2">
@@ -497,27 +497,13 @@ import { supabase } from './supabase.js';
       </div>`;
           }
 
-          // Build Word Tokens Stream with IPA
-          let words = turn.words_detail;
-          if (!words || words.length === 0) {
-            words = (turn.transcript || '').split(' ').map(w => ({ word: w, status: 'good' }));
-          }
+          // 1. Build Clean Correction Box & Collect words that actually have feedback
+          const wordsWithFeedback = new Map(); // word_clean -> severity ('bad' or 'warning')
+          const feedbackItems = [];
+          const seen = new Set();
 
-          const wordTokensHtml = words.map(w => {
-            const ipaDisplay = w.word_ipa ? `<span class="word-ipa">${w.word_ipa}</span>` : '';
-            const statusNote = (w.status === 'bad' || w.status === 'warning') ? ' (Có âm vị cần lưu ý)' : ' (Phát âm đạt chuẩn)';
-            const titleAttr = `${w.word}${w.word_ipa ? ' · ' + w.word_ipa : ''}${statusNote}`;
-            return `<div class="word-token ${w.status || 'good'}" title="${titleAttr}">
-              <span class="word-text">${w.word}</span>
-              ${ipaDisplay}
-            </div>`;
-          }).join('');
-
-          // Build Clean Correction Box (Single unified, compact block)
-          let feedbackBoxHtml = '';
           if (badPhonemes.length > 0) {
-            const seen = new Set();
-            const itemsHtml = badPhonemes.map(p => {
+            badPhonemes.forEach(p => {
               const targetIpa = p.target_ipa || (p.phoneme ? ('/' + p.phoneme + '/') : '');
               const actualIpa = p.actual_ipa || '';
               const contrastStr = (actualIpa && actualIpa !== targetIpa) ? `${targetIpa} → ${actualIpa}` : targetIpa;
@@ -526,30 +512,60 @@ import { supabase } from './supabase.js';
               const tipText = p.articulatory_tip || p.tip || '';
 
               const key = `${contrastStr}_${p.word}`;
-              if (seen.has(key)) return '';
+              if (seen.has(key)) return;
               seen.add(key);
 
-              return `
+              if (p.word) {
+                const wKey = p.word.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const sev = (p.severity === 'critical' || p.severity === 'bad') ? 'bad' : 'warning';
+                if (!wordsWithFeedback.has(wKey) || sev === 'bad') {
+                  wordsWithFeedback.set(wKey, sev);
+                }
+              }
+
+              feedbackItems.push(`
                 <div class="feedback-issue-item">
                   <i class="bi bi-exclamation-circle text-warning me-1"></i>
                   <span class="fw-bold text-light">${contrastStr}</span>${inWord}
                   ${ruleName ? `<span class="rule-tag">${ruleName}</span>` : ''}
                   ${tipText ? `<span class="tip-text">— ${tipText}</span>` : ''}
-                </div>`;
-            }).filter(Boolean).join('');
-
-            if (itemsHtml.trim()) {
-              feedbackBoxHtml = `
-                <div class="clean-feedback-box mt-2">
-                  <div class="clean-feedback-title">
-                    <i class="bi bi-soundwave me-1"></i>Lưu ý phát âm (L2-MDD & ASHA):
-                  </div>
-                  <div class="clean-feedback-list">
-                    ${itemsHtml}
-                  </div>
-                </div>`;
-            }
+                </div>`);
+            });
           }
+
+          let feedbackBoxHtml = '';
+          if (feedbackItems.length > 0) {
+            feedbackBoxHtml = `
+              <div class="clean-feedback-box mt-2">
+                <div class="clean-feedback-title">
+                  <i class="bi bi-soundwave me-1"></i>Lưu ý phát âm (L2-MDD & ASHA):
+                </div>
+                <div class="clean-feedback-list">
+                  ${feedbackItems.join('')}
+                </div>
+              </div>`;
+          }
+
+          // 2. Build Word Tokens Stream with IPA — 100% synchronized with feedback
+          let words = turn.words_detail;
+          if (!words || words.length === 0) {
+            words = (turn.transcript || '').split(' ').map(w => ({ word: w, status: 'good' }));
+          }
+
+          const wordTokensHtml = words.map(w => {
+            const wKey = (w.word || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            // Word is highlighted as warning/bad IF AND ONLY IF it has an active feedback item below!
+            const hasFb = wordsWithFeedback.has(wKey);
+            const status = hasFb ? wordsWithFeedback.get(wKey) : 'good';
+
+            const ipaDisplay = w.word_ipa ? `<span class="word-ipa">${w.word_ipa}</span>` : '';
+            const statusNote = hasFb ? ' (Có âm vị cần lưu ý)' : ' (Phát âm đạt chuẩn)';
+            const titleAttr = `${w.word}${w.word_ipa ? ' · ' + w.word_ipa : ''}${statusNote}`;
+            return `<div class="word-token ${status}" title="${titleAttr}">
+              <span class="word-text">${w.word}</span>
+              ${ipaDisplay}
+            </div>`;
+          }).join('');
 
           return `
     <div class="timeline-item timeline-student">

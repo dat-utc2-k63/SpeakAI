@@ -46,6 +46,7 @@ class TwoSpeakerSplitter:
         device: str = "cpu",
         embedder: ERes2NetEmbedder | None = None,
         vad: RmsVad | None = None,
+        vad_threshold_db: float = -42.0,
         cluster_window_sec: float = 1.5,
         boundary_window_sec: float = 0.5,
         min_speech_sec: float = 0.25,
@@ -56,7 +57,7 @@ class TwoSpeakerSplitter:
         boundary_step_sec: float = 0.1,
     ) -> None:
         self.embedder = embedder or ERes2NetEmbedder(device=device)
-        self.vad = vad or RmsVad()
+        self.vad = vad or RmsVad(threshold_db=vad_threshold_db)
         self.min_segment_sec = min_segment_sec
         self.merge_gap_sec = merge_gap_sec
         self.consecutive_merge_gap_sec = consecutive_merge_gap_sec

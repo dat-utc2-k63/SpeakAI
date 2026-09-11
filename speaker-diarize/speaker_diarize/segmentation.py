@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-NOISE_FLOOR_DB = -65.0
+NOISE_FLOOR_DB = -42.0
 
 SAMPLE_RATE = 16000
 
