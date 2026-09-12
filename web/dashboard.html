@@ -97,6 +97,9 @@
     </nav>
 
     <div class="sidebar-footer">
+      <button class="btn btn-sm btn-outline-info w-100 mb-2 btn-open-api-config" title="Cài đặt Gemini API & Backend URL">
+        <i class="bi bi-gear-fill me-2"></i>Cấu hình AI API
+      </button>
       <button class="btn btn-sm btn-outline-danger w-100" id="logoutBtn">
         <i class="bi bi-box-arrow-right me-2"></i>Đăng xuất
       </button>
@@ -123,8 +126,11 @@
 
     <!-- ===== ADMIN PAGES ===== -->
     <div id="page-admin-overview" class="page-section d-none">
-      <div class="page-header">
+      <div class="page-header d-flex justify-content-between align-items-center">
         <h1 class="page-title">Bảng Điều Khiển Quản Trị</h1>
+        <button class="btn btn-primary btn-glow btn-open-api-config">
+          <i class="bi bi-gear-fill me-2"></i>Cấu hình Gemini & GPU API
+        </button>
       </div>
       <div class="row g-4">
 
@@ -908,8 +914,16 @@
         <div class="mb-2"><i class="bi bi-trophy fs-1 text-warning"></i></div>
         <h4 class="fw-bold">Hoàn thành bài!</h4>
         <div class="summary-score" id="summaryTotalScore">0.0</div>
-        <div class="summary-label">Điểm trung bình / 10</div>
-        <div class="d-flex justify-content-center gap-3 mt-3">
+        <div class="summary-label">Điểm tổng thể khảo thí / 10</div>
+        <div class="d-flex justify-content-center gap-3 mt-3 flex-wrap">
+          <div class="text-center">
+            <div class="fw-bold text-primary" id="summaryGramScore">--</div>
+            <div class="text-muted small">Grammar</div>
+          </div>
+          <div class="text-center">
+            <div class="fw-bold text-info" id="summaryCtxScore">--</div>
+            <div class="text-muted small">Context</div>
+          </div>
           <div class="text-center">
             <div class="fw-bold" id="summaryAccScore">--</div>
             <div class="text-muted small">Accuracy</div>
@@ -1165,6 +1179,89 @@
           </div>
         </div>
       </div>
+
+  <!-- ── MODAL: CẤU HÌNH AI API & HỆ THỐNG ────────────────────── -->
+  <div class="modal fade" id="apiConfigModal" tabindex="-1" aria-labelledby="apiConfigModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border border-secondary border-opacity-25 shadow-lg" style="background: #111827;">
+        <div class="modal-header border-bottom border-secondary border-opacity-25">
+          <div>
+            <h5 class="modal-title fw-bold text-light" id="apiConfigModalLabel">
+              <i class="bi bi-cpu-fill text-info me-2"></i>Cấu Hình AI Evaluator & Hệ Thống
+            </h5>
+            <p class="text-muted smaller mb-0">Cấu hình kết nối Gemini 3.7 Flash và Backend GPU âm học</p>
+          </div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Đóng"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <!-- GEMINI API CONFIG -->
+          <div class="mb-4">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="fw-bold small text-warning"><i class="bi bi-stars me-1"></i>Gemini 3.7 Flash API (RevidAPI)</span>
+              <span class="badge bg-warning-subtle text-warning border border-warning-subtle smaller">Chấm Ngữ pháp & Ngữ cảnh</span>
+            </div>
+            
+            <div class="mb-3">
+              <label class="form-label smaller text-muted mb-1">API Key (x-api-key) <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text bg-dark border-secondary border-opacity-50 text-muted"><i class="bi bi-key-fill"></i></span>
+                <input type="password" class="form-control bg-dark text-light border-secondary border-opacity-50" id="modalGeminiKey" placeholder="YOUR_API_KEY" />
+                <button class="btn btn-outline-secondary border-opacity-50" type="button" onclick="const f=document.getElementById('modalGeminiKey'); f.type=f.type==='password'?'text':'password';">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+              <div class="text-muted smaller mt-1">Key được bảo mật và lưu vào tài khoản hệ thống của bạn.</div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label smaller text-muted mb-1">API Endpoint URL</label>
+              <input type="text" class="form-control bg-dark text-light border-secondary border-opacity-50 font-monospace smaller" id="modalGeminiUrl" value="https://revidapi.com/v1/chat/completions" />
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label smaller text-muted mb-1">AI Model</label>
+              <input type="text" class="form-control bg-dark text-light border-secondary border-opacity-50 font-monospace smaller" id="modalGeminiModel" value="gemini-3.7-flash" />
+            </div>
+
+            <!-- Test Connection Button & Status -->
+            <div class="d-flex align-items-center justify-content-between pt-1">
+              <button type="button" class="btn btn-sm btn-outline-warning" id="modalTestGeminiBtn">
+                <i class="bi bi-plug-fill me-1"></i>Kiểm Tra Kết Nối
+              </button>
+              <div id="modalGeminiTestStatus" class="ms-2 text-end flex-grow-1"></div>
+            </div>
+          </div>
+
+          <hr class="border-secondary border-opacity-25 my-4" />
+
+          <!-- GPU BACKEND API CONFIG -->
+          <div class="mb-2">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="fw-bold small text-info"><i class="bi bi-gpu-card me-1"></i>Backend GPU URL (Phát âm âm học)</span>
+              <span class="badge bg-info-subtle text-info border border-info-subtle smaller">Whisper & SpeechOcean</span>
+            </div>
+            <div>
+              <label class="form-label smaller text-muted mb-1">Cloudflare Tunnel Public URL</label>
+              <div class="input-group">
+                <span class="input-group-text bg-dark border-secondary border-opacity-50 text-muted"><i class="bi bi-link-45deg"></i></span>
+                <input type="url" class="form-control bg-dark text-light border-secondary border-opacity-50 font-monospace smaller" id="modalGpuApiUrl" placeholder="https://xxx.trycloudflare.com" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer border-top border-secondary border-opacity-25 d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary flex-fill" data-bs-dismiss="modal">
+            Đóng
+          </button>
+          <button type="button" class="btn btn-primary flex-fill btn-glow" id="modalSaveApiConfigBtn">
+            <i class="bi bi-check2-circle me-1"></i>Lưu Cấu Hình
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>

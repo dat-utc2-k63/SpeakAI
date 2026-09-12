@@ -124,10 +124,11 @@ export async function getGlobalSettings() {
 /**
  * Cập nhật Global Settings (Chỉ Admin)
  */
-export async function updateGlobalSettings(apiUrl) {
+export async function updateGlobalSettings(settings) {
+  const payload = typeof settings === 'string' ? { api_url: settings } : settings;
   const { data, error } = await supabase
     .from('global_settings')
-    .upsert({ id: 1, api_url: apiUrl })
+    .upsert({ id: 1, ...payload, updated_at: new Date().toISOString() })
     .select()
     .single();
   if (error) throw error;

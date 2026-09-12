@@ -53,11 +53,14 @@ create table if not exists public.assessments (
 create table if not exists public.global_settings (
   id integer primary key default 1,
   api_url text,
+  gemini_api_key text,
+  gemini_api_url text default 'https://revidapi.com/v1/chat/completions',
+  gemini_model text default 'gemini-3.7-flash',
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );
 
-insert into public.global_settings (id, api_url)
-values (1, '')
+insert into public.global_settings (id, api_url, gemini_api_url, gemini_model)
+values (1, '', 'https://revidapi.com/v1/chat/completions', 'gemini-3.7-flash')
 on conflict (id) do nothing;
 
 -- 2.4. TABLE: question_sets
@@ -118,6 +121,8 @@ create table if not exists public.practice_answers (
   score_accuracy double precision,
   score_fluency double precision,
   score_prosodic double precision,
+  score_grammar double precision,
+  score_context double precision,
   result_json jsonb,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -134,6 +139,15 @@ alter table public.questions add column if not exists response_time integer defa
 
 alter table public.practice_sessions add column if not exists mode text check (mode in ('practice', 'exam')) default 'practice';
 alter table public.practice_sessions add column if not exists exam_band text;
+alter table public.practice_sessions add column if not exists score_grammar double precision;
+alter table public.practice_sessions add column if not exists score_context double precision;
+
+alter table public.practice_answers add column if not exists score_grammar double precision;
+alter table public.practice_answers add column if not exists score_context double precision;
+
+alter table public.global_settings add column if not exists gemini_api_key text;
+alter table public.global_settings add column if not exists gemini_api_url text default 'https://revidapi.com/v1/chat/completions';
+alter table public.global_settings add column if not exists gemini_model text default 'gemini-3.7-flash';
 
 -- ==============================================================================
 -- 4. STORAGE BUCKET: speakai-audio

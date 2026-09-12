@@ -89,7 +89,7 @@ export async function fetchActiveSession(studentId, setId, mode = 'practice') {
       .select(`
         id, mode, status, started_at,
         practice_answers (
-          id, question_id, audio_url, transcript, score_total, score_accuracy, score_fluency, score_prosodic, result_json, created_at
+          id, question_id, audio_url, transcript, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, result_json, created_at
         )
       `)
       .eq('student_id', studentId)
@@ -128,7 +128,17 @@ export async function cancelSession(sessionId) {
 /**
  * Lưu câu trả lời + điểm cho 1 câu hỏi (tự động cập nhật nếu đã từng làm câu này)
  */
-export async function saveAnswer(sessionId, questionId, { audio_url, transcript, score_total, score_accuracy, score_fluency, score_prosodic, result_json }) {
+export async function saveAnswer(sessionId, questionId, {
+  audio_url,
+  transcript,
+  score_total,
+  score_accuracy,
+  score_fluency,
+  score_prosodic,
+  score_grammar,
+  score_context,
+  result_json
+}) {
   // Kiểm tra xem câu hỏi này đã có câu trả lời trong session chưa
   const { data: existing } = await supabase
     .from('practice_answers')
@@ -137,17 +147,23 @@ export async function saveAnswer(sessionId, questionId, { audio_url, transcript,
     .eq('question_id', questionId)
     .maybeSingle();
 
+  const payload = {
+    audio_url,
+    transcript,
+    score_total,
+    score_accuracy,
+    score_fluency,
+    score_prosodic,
+    score_grammar: score_grammar != null ? score_grammar : null,
+    score_context: score_context != null ? score_context : null,
+    result_json,
+  };
+
   if (existing && existing.id) {
     const { data, error } = await supabase
       .from('practice_answers')
       .update({
-        audio_url,
-        transcript,
-        score_total,
-        score_accuracy,
-        score_fluency,
-        score_prosodic,
-        result_json,
+        ...payload,
         created_at: new Date().toISOString(),
       })
       .eq('id', existing.id)
@@ -162,13 +178,7 @@ export async function saveAnswer(sessionId, questionId, { audio_url, transcript,
     .insert({
       session_id: sessionId,
       question_id: questionId,
-      audio_url,
-      transcript,
-      score_total,
-      score_accuracy,
-      score_fluency,
-      score_prosodic,
-      result_json,
+      ...payload,
     })
     .select()
     .single();
@@ -290,23 +300,35 @@ export async function completeSession(sessionId, examBand = null) {
   // Lấy tất cả answers
   const { data: answers, error: aErr } = await supabase
     .from('practice_answers')
-    .select('score_total, score_accuracy, score_fluency, score_prosodic')
+    .select('score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context')
     .eq('session_id', sessionId);
   if (aErr) throw aErr;
 
   const count = (answers || []).filter(a => a.score_total != null).length;
-  let avgTotal = 0, avgAcc = 0, avgFlu = 0, avgPro = 0;
+  let avgTotal = 0, avgAcc = 0, avgFlu = 0, avgPro = 0, avgGrammar = 0, avgContext = 0;
+  let countGrammar = 0, countContext = 0;
+
   if (count > 0) {
     for (const a of answers) {
       avgTotal += a.score_total || 0;
       avgAcc += a.score_accuracy || 0;
       avgFlu += a.score_fluency || 0;
       avgPro += a.score_prosodic || 0;
+      if (a.score_grammar != null) {
+        avgGrammar += a.score_grammar;
+        countGrammar++;
+      }
+      if (a.score_context != null) {
+        avgContext += a.score_context;
+        countContext++;
+      }
     }
     avgTotal /= count;
     avgAcc /= count;
     avgFlu /= count;
     avgPro /= count;
+    avgGrammar = countGrammar > 0 ? (avgGrammar / countGrammar) : 0;
+    avgContext = countContext > 0 ? (avgContext / countContext) : 0;
   }
 
   const updates = {
@@ -315,6 +337,8 @@ export async function completeSession(sessionId, examBand = null) {
     score_accuracy: avgAcc,
     score_fluency: avgFlu,
     score_prosodic: avgPro,
+    score_grammar: avgGrammar > 0 ? avgGrammar : null,
+    score_context: avgContext > 0 ? avgContext : null,
     completed_at: new Date().toISOString(),
   };
 
@@ -333,6 +357,8 @@ export async function completeSession(sessionId, examBand = null) {
     score_accuracy: avgAcc,
     score_fluency: avgFlu,
     score_prosodic: avgPro,
+    score_grammar: avgGrammar,
+    score_context: avgContext,
     exam_band: examBand,
   };
 }
@@ -344,7 +370,7 @@ export async function fetchSessionHistory(studentId) {
   const { data, error } = await supabase
     .from('practice_sessions')
     .select(`
-      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, exam_band,
+      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, exam_band,
       started_at, completed_at,
       question_set:question_sets(id, title, level, exam_type)
     `)
@@ -362,7 +388,7 @@ export async function fetchSessionDetail(sessionId) {
   const { data: session, error: sErr } = await supabase
     .from('practice_sessions')
     .select(`
-      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, exam_band,
+      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, exam_band,
       started_at, completed_at,
       question_set:question_sets(id, title, level, exam_type, description)
     `)
@@ -373,8 +399,8 @@ export async function fetchSessionDetail(sessionId) {
   const { data: answers, error: aErr } = await supabase
     .from('practice_answers')
     .select(`
-      id, audio_url, transcript, score_total, score_accuracy, score_fluency, score_prosodic, result_json, created_at,
-      question:questions(id, order_num, part_title, question_text, reference_text, hint, prep_time, response_time)
+      id, audio_url, transcript, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, result_json, created_at,
+      question:questions(id, order_num, part_title, question_text, prep_time, response_time)
     `)
     .eq('session_id', sessionId)
     .order('created_at', { ascending: true });
