@@ -84,58 +84,27 @@ export async function testGeminiConnection(apiKey, apiUrl = DEFAULT_GEMINI_ENDPO
  * System Prompt chuyên gia Khảo thí Ngôn ngữ Anh quốc tế
  */
 function buildExaminerSystemPrompt() {
-  return `Bạn là Giám khảo Khảo thí Tiếng Anh Chuyên nghiệp (English Speaking Examiner) theo chuẩn quốc tế (CEFR / VSTEP / IELTS / TOEIC).
-Nhiệm vụ của bạn là đánh giá toàn diện câu trả lời nói của học viên dựa trên:
-1. Đề bài câu hỏi (Question text)
-2. Lời nói của học viên đã được nhận diện (Transcript)
-3. Điểm phát âm âm học từ mô hình AI (Acoustic Pronunciation Scores: Accuracy, Fluency, Prosodic)
+  return `Bạn là Giám khảo Speaking (CEFR/IELTS/VSTEP). Đánh giá bài nói của học viên và trả về DUY NHẤT 1 JSON.
 
-QUY TẮC CHẤM ĐIỂM BẮT BUỘC - TUYỆT ĐỐI KHÔNG DÙNG CÔNG THỨC PHẦN TRĂM CỐ ĐỊNH:
-Không bao giờ dùng công thức tuyến tính như (50% phát âm + 25% ngữ pháp + 25% ngữ cảnh) hoặc chia trung bình đơn giản, vì trong thực tế có rất nhiều trường hợp sai lệch:
+QUY TẮC CHẤM ĐIỂM (NON-LINEAR):
+1. Ngữ cảnh là điều kiện tiên quyết (Gatekeeper):
+   - Lạc đề (irrelevant) hoặc cộc lốc (1-3 từ): score_context <= 2.5, score_total BẮT BUỘC <= 3.5. Điểm ngữ pháp TUYỆT ĐỐI KHÔNG được kéo điểm tổng lên dù câu nói đúng ngữ pháp.
+   - Đạt một phần (score_context 3.0-4.5): score_total BẮT BUỘC <= 4.5.
+   - Đúng trọng tâm (score_context >= 5.0): Ngữ pháp và phát âm phát huy trọn vẹn để nâng điểm tổng (6.0-10.0).
+2. Nói vấp / từ đệm / ngập ngừng ban đầu ("um, uh, well, wait..."):
+   - Phản xạ tự nhiên, TUYỆT ĐỐI KHÔNG trừ điểm Grammar hay Context nếu câu chính phía sau đúng.
+3. Ngữ pháp (score_grammar 0-10): Đánh giá cấu trúc, thì, trật tự từ của câu trả lời chính.
+4. Điểm tổng thể (score_total 0-10): Kết hợp Phát âm + Ngữ pháp + Ngữ cảnh theo các mức trần trên.
 
-1. TRƯỜNG HỢP NÓI QUÁ NGẮN / CỘC LỐC (Too Short):
-   - Nếu học viên chỉ nói 1 đến 3 từ cộc lốc (ví dụ: "Yes", "No", "I think", "Hello", "Good", "I like it"), dù mô hình âm học chấm phát âm các từ đơn đó 9.0 hay 10.0:
-   - ĐIỂM TỔNG THỂ (score_total) BẮT BUỘC KHÔNG VƯỢT QUÁ 2.0 - 3.0 / 10. Điểm Context tối đa 2.0 - 3.0.
-
-2. TRƯỜNG HỢP LẠC ĐỀ HOÀN TOÀN (Off-Topic / Irrelevant):
-   - Học viên nói trôi chảy, phát âm chuẩn (Accuracy 8-10) nhưng nội dung lạc đề hoàn toàn, nói nhảm nhí, hoặc đọc một đoạn văn ngẫu nhiên không liên quan đến đề bài:
-   - ĐIỂM TỔNG THỂ (score_total) BẮT BUỘC KHÔNG VƯỢT QUÁ 2.5 - 3.5 / 10. Điểm Context tối đa 1.0 - 2.5.
-
-3. TRƯỜNG HỢP CHỈ LẶP LẠI CÂU HỎI (Parrot Response):
-   - Học viên chỉ đọc lại đề bài mà không trả lời:
-   - ĐIỂM TỔNG THỂ (score_total) BẮT BUỘC KHÔNG VƯỢT QUÁ 2.5 - 3.0 / 10.
-
-4. TRƯỜNG HỢP TRẢ LỜI ĐÚNG TRỌNG TÂM NHƯNG NGỮ PHÁP SAI NẶNG:
-   - Học viên trả lời đúng ý nhưng cấu trúc câu lộn xộn, sai thì cơ bản, chia động từ sai, gây khó hiểu:
-   - Điểm ngữ pháp (score_grammar) bị hạ thấp (3.0 - 5.0). Điểm tổng thể (score_total) bị kéo giảm theo mức độ cản trở giao tiếp.
-
-5. TRƯỜNG HỢP TRẢ LỜI ĐẦY ĐỦ, Ý TỐT, NGỮ PHÁP TỐT:
-   - Nếu nội dung đúng trọng tâm, ngữ pháp phong phú, phát âm rõ ràng:
-   - Cho điểm xứng đáng (7.0 - 10.0) dựa trên khả năng truyền đạt tự nhiên.
-
-6. TRƯỜNG HỢP NÓI VẤP / TỪ ĐỆM / KHỞI ĐẦU NGẬP NGỪNG (False Starts, Filler Words & Self-Correction):
-   - Trong Speaking, việc thí sinh nói vấp 1-2 từ ban đầu, dùng từ đệm (ví dụ: "um, uh, well, wait, no, okay, yes, ...") hoặc nói nhỡ miệng/lặp lại 1-2 từ không liên quan trước khi vào câu chính hoàn chỉnh là hiện tượng tâm lý tự nhiên hoàn toàn bình thường (false start / hesitation).
-   - QUY TẮC ĐÁNH GIÁ:
-     + ĐIỂM NGỮ CẢNH (Context): TUYỆT ĐỐI KHÔNG BỊ TRỪ. Chỉ cần câu chính phía sau trả lời đúng trọng tâm câu hỏi là được tính trọn vẹn điểm ngữ cảnh.
-     + ĐIỂM NGỮ PHÁP (Grammar): TUYỆT ĐỐI KHÔNG BỊ TRỪ. Chỉ đánh giá ngữ pháp trên cấu trúc của câu trả lời chính hoàn chỉnh; TUYỆT ĐỐI KHÔNG bắt lỗi từ vấp/từ đệm rời rạc ở đầu vào danh sách grammar_errors hay coi đó là lỗi run-on sentence.
-     + Điểm ngập ngừng nếu có đã được mô hình âm học ghi nhận ở tiêu chí Fluency (Độ trôi chảy), không phạt kép vào Grammar hay Context.
-
-HƯỚNG DẪN TRẢ VỀ:
-Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm văn bản thừa ngoài JSON, không dùng markdown fences nếu có thể) theo đúng cấu trúc sau:
+OUTPUT JSON FORMAT:
 {
-  "score_total": <số thực 0.0 - 10.0, điểm tổng thể cuối cùng đã hiệu chuẩn thông minh>,
-  "score_grammar": <số thực 0.0 - 10.0, điểm ngữ pháp>,
-  "score_context": <số thực 0.0 - 10.0, điểm ngữ cảnh và độ hoàn thiện ý>,
-  "relevance_level": <"too_short" | "irrelevant" | "partially_relevant" | "relevant" | "excellent">,
-  "grammar_errors": [
-    {
-      "error_text": "<đoạn học viên nói bị sai>",
-      "fix": "<cách sửa chuẩn xác>",
-      "explanation": "<giải thích ngắn gọn lỗi ngữ pháp bằng tiếng Việt>"
-    }
-  ],
-  "feedback_summary": "<Nhận xét sư phạm ngắn gọn 1-2 câu bằng tiếng Việt về câu trả lời>",
-  "better_expression": "<1 câu nói mẫu tự nhiên, nâng cao dựa trên đúng ý tưởng của học viên để họ học hỏi>"
+  "score_total": <float 0-10>,
+  "score_grammar": <float 0-10>,
+  "score_context": <float 0-10>,
+  "relevance_level": "too_short" | "irrelevant" | "partially_relevant" | "relevant" | "excellent",
+  "grammar_errors": [{"error_text": "...", "fix": "...", "explanation": "..."}],
+  "feedback_summary": "<Nhận xét sư phạm 1-2 câu tiếng Việt>",
+  "better_expression": "<1 câu nói mẫu tự nhiên, nâng cao>"
 }`;
 }
 
@@ -193,20 +162,10 @@ export async function evaluateAnswerWithGemini({
     });
   }
 
-  const userContent = `ĐỀ BÀI CÂU HỎI:
-"${questionText || 'Không có đề bài'}"
-${partTitle ? `Phần thi: ${partTitle} (${examType.toUpperCase()})` : ''}
-
-TRANSCRIPT BÀI NÓI CỦA HỌC VIÊN (Nhận diện ASR):
-"${cleanTranscript}"
-
-ĐIỂM PHÁT ÂM ÂM HỌC (Thang điểm 10):
-- Accuracy (Độ chuẩn xác ngữ âm): ${acc.toFixed(1)}/10
-- Fluency (Độ lưu loát, ngắt nghỉ): ${flu.toFixed(1)}/10
-- Prosodic (Ngữ điệu, cao độ): ${pro.toFixed(1)}/10
-- Điểm phát âm trung bình: ${rawPronTotal.toFixed(1)}/10
-
-Hãy tiến hành đánh giá ngữ pháp, ngữ cảnh và chốt số điểm tổng thể (score_total) theo đúng quy tắc non-linear trong system prompt. Trả về đúng định dạng JSON.`;
+  const userContent = `Đề: "${questionText || 'N/A'}"${partTitle ? ` [${partTitle} - ${examType.toUpperCase()}]` : ''}
+Bài nói: "${cleanTranscript}"
+Phát âm âm học: Acc=${acc.toFixed(1)}, Flu=${flu.toFixed(1)}, Pro=${pro.toFixed(1)}, Avg=${rawPronTotal.toFixed(1)}
+Đánh giá ngữ pháp, ngữ cảnh và chốt score_total. Trả về đúng JSON.`;
 
   try {
     const response = await fetch(endpoint, {
@@ -248,12 +207,19 @@ Hãy tiến hành đánh giá ngữ pháp, ngữ cảnh và chốt số điểm 
       }
     }
 
-    // Chuẩn hóa và làm sạch dữ liệu trả về
+    // Chuẩn hóa điểm ngữ pháp & ngữ cảnh
+    const scoreGrammar = clampScore(parsed.score_grammar, 0, 10);
+    const scoreContext = clampScore(parsed.score_context, 0, 10);
+    const relevanceLevel = parsed.relevance_level || (scoreContext < 3.0 ? 'irrelevant' : 'relevant');
+
+    // Hiệu chuẩn điểm tổng thể: Nếu ngữ cảnh đã không phù hợp, điểm ngữ pháp không được can thiệp nhiều vào điểm tổng
+    const scoreTotal = calibrateTotalScoreWithContext(parsed.score_total, scoreContext, scoreGrammar, relevanceLevel);
+
     return {
-      score_total: clampScore(parsed.score_total, 0, 10),
-      score_grammar: clampScore(parsed.score_grammar, 0, 10),
-      score_context: clampScore(parsed.score_context, 0, 10),
-      relevance_level: parsed.relevance_level || 'relevant',
+      score_total: scoreTotal,
+      score_grammar: scoreGrammar,
+      score_context: scoreContext,
+      relevance_level: relevanceLevel,
       grammar_errors: Array.isArray(parsed.grammar_errors) ? parsed.grammar_errors : [],
       feedback_summary: parsed.feedback_summary || 'Đã hoàn thành phân tích câu trả lời.',
       better_expression: parsed.better_expression || '',
@@ -276,6 +242,38 @@ Hãy tiến hành đánh giá ngữ pháp, ngữ cảnh và chốt số điểm 
 }
 
 /**
+ * Hiệu chuẩn điểm tổng thể theo nguyên tắc Gatekeeper của Ngữ Cảnh:
+ * Nếu ngữ cảnh đã không phù hợp (lạc đề, quá cộc lốc), điểm ngữ pháp
+ * tuyệt đối không được can thiệp nhiều để kéo điểm tổng lên.
+ */
+function calibrateTotalScoreWithContext(rawTotal, contextScore, grammarScore, relevanceLevel) {
+  let total = Number(rawTotal);
+  if (isNaN(total)) total = 5.0;
+  const ctx = Number(contextScore) || 0;
+  const gram = Number(grammarScore) || 0;
+
+  // Trường hợp 1: Ngữ cảnh lạc đề hoàn toàn hoặc cộc lốc vô nghĩa
+  // (relevance là 'irrelevant' / 'too_short' hoặc context < 3.0)
+  if (relevanceLevel === 'irrelevant' || relevanceLevel === 'too_short' || ctx < 3.0) {
+    // Ngữ pháp chỉ can thiệp tối đa tượng trưng (dưới 10%), không được kéo điểm tổng vượt quá trần
+    const ceiling = Math.min(3.5, Math.max(1.0, ctx + 0.8));
+    if (total > ceiling) {
+      total = ceiling;
+    }
+  }
+  // Trường hợp 2: Ngữ cảnh chưa phù hợp / lạc đề một phần (context >= 3.0 && context < 4.5)
+  else if (ctx < 4.5 || relevanceLevel === 'partially_relevant') {
+    // Điểm tổng bị chặn trần không quá 4.5 để điểm ngữ pháp không kéo lên cao
+    const ceiling = Math.min(4.5, Math.max(2.5, ctx + 0.6));
+    if (total > ceiling) {
+      total = ceiling;
+    }
+  }
+
+  return clampScore(total, 0, 10);
+}
+
+/**
  * Đánh giá heuristic dự phòng khi không có mạng hoặc chưa nhập API Key
  * Đảm bảo vẫn ngăn chặn trường hợp nói cộc lốc / lạc đề
  */
@@ -284,7 +282,6 @@ function fallbackHeuristicEval({ questionText, transcript, pronunciationScores }
   const wordCount = words.length;
   const rawPron = pronunciationScores.total || 5.0;
 
-  let scoreTotal = rawPron;
   let scoreGrammar = 6.0;
   let scoreContext = 6.0;
   let relevance = 'relevant';
@@ -292,7 +289,6 @@ function fallbackHeuristicEval({ questionText, transcript, pronunciationScores }
 
   // Trường hợp 1: Quá ngắn (dưới 4 từ)
   if (wordCount <= 3) {
-    scoreTotal = Math.min(rawPron, 2.8);
     scoreGrammar = 3.0;
     scoreContext = 2.0;
     relevance = 'too_short';
@@ -300,9 +296,8 @@ function fallbackHeuristicEval({ questionText, transcript, pronunciationScores }
   } 
   // Trường hợp 2: Khá ngắn (4-7 từ)
   else if (wordCount <= 7) {
-    scoreTotal = Math.min(rawPron, 5.5);
     scoreGrammar = 5.5;
-    scoreContext = 5.0;
+    scoreContext = 4.5;
     relevance = 'partially_relevant';
     summary = 'Bạn trả lời được một phần nhưng câu còn ngắn, nên mở rộng thêm chi tiết.';
   } 
@@ -310,13 +305,16 @@ function fallbackHeuristicEval({ questionText, transcript, pronunciationScores }
   else {
     scoreGrammar = Math.min(9.0, Math.max(5.0, rawPron * 0.9));
     scoreContext = Math.min(9.0, Math.max(5.5, rawPron * 0.95));
-    scoreTotal = (rawPron * 0.4) + (scoreGrammar * 0.3) + (scoreContext * 0.3);
     relevance = 'relevant';
     summary = 'Câu trả lời đầy đủ ý, cấu trúc ngữ pháp tương đối rõ ràng.';
   }
 
+  // Nếu ngữ cảnh không phù hợp, điểm ngữ pháp không can thiệp nhiều vào điểm tổng
+  let rawCalculatedTotal = (rawPron * 0.4) + (scoreGrammar * 0.3) + (scoreContext * 0.3);
+  const scoreTotal = calibrateTotalScoreWithContext(rawCalculatedTotal, scoreContext, scoreGrammar, relevance);
+
   return {
-    score_total: clampScore(scoreTotal, 0, 10),
+    score_total: scoreTotal,
     score_grammar: clampScore(scoreGrammar, 0, 10),
     score_context: clampScore(scoreContext, 0, 10),
     relevance_level: relevance,
@@ -337,46 +335,24 @@ function clampScore(val, min = 0, max = 10) {
  * System Prompt Giám khảo Khảo thí Đánh giá Hội thoại (Spoken Dialogue)
  */
 function buildDialogueExaminerSystemPrompt() {
-  return `Bạn là Giám khảo Khảo thí Tiếng Anh Chuyên nghiệp (English Speaking Dialogue Examiner) theo chuẩn quốc tế (CEFR / IELTS Speaking).
-Nhiệm vụ của bạn là đánh giá toàn diện năng lực giao tiếp và hội thoại phản xạ của Học viên (Student) trong một đoạn hội thoại thực tế với Giáo viên (Teacher).
+  return `Bạn là Giám khảo Khảo thí Hội thoại Speaking (CEFR/IELTS). Phân tích đoạn hội thoại giữa Giáo viên và Học viên, trả về DUY NHẤT 1 JSON.
 
-QUY TẮC ĐÁNH GIÁ HỘI THOẠI TOÀN DIỆN (NON-LINEAR):
-1. ĐIỂM NGỮ CẢNH & PHẢN XẠ (score_context: 0.0 - 10.0):
-   - Đánh giá khả năng hiểu câu hỏi/gợi ý của giáo viên và phản hồi đúng trọng tâm (Pragmatic Competence & Contextual Relevance).
-   - Nếu học viên trả lời cộc lốc (1-2 từ như "Yes", "No", "Good") mà không mở rộng ý: score_context tối đa 2.0 - 3.5.
-   - Nếu học viên nói lạc đề, trả lời không ăn khớp với câu hỏi của giáo viên: score_context tối đa 2.5 - 4.0.
-   - Nếu học viên hiểu đúng, trả lời tự nhiên, có mở rộng chi tiết hoặc biết đặt câu hỏi ngược lại: score_context từ 7.5 - 10.0.
+QUY TẮC CHẤM ĐIỂM:
+1. Ngữ cảnh & Phản xạ (score_context 0-10 - Gatekeeper):
+   - Đánh giá khả năng hiểu và phản hồi ăn khớp với câu hỏi của giáo viên.
+   - Cộc lốc (1-2 từ) hoặc lạc đề (score_context < 4.5): score_total BẮT BUỘC <= 3.5 - 4.5. Điểm ngữ pháp KHÔNG ĐƯỢC can thiệp kéo điểm tổng lên.
+2. Ngữ pháp & Từ vựng (score_grammar 0-10): Đánh giá cấu trúc, chia thì. Nói vấp/từ đệm đầu lượt không bị trừ điểm.
+3. Điểm tổng thể (score_total 0-10): Kết hợp Phát âm + Ngữ pháp + Ngữ cảnh theo trần trên.
 
-2. ĐIỂM NGỮ PHÁP & TỪ VỰNG (score_grammar: 0.0 - 10.0):
-   - Đánh giá độ chính xác của các thì, chia động từ, trật tự từ, mạo từ và sự phong phú của từ vựng trong các lượt nói của học viên.
-   - Nếu học viên nói vấp 1-2 từ đệm ở đầu lượt nói ("um, uh, well, wait, no...") rồi mới nói câu chính: TUYỆT ĐỐI KHÔNG trừ điểm ngữ pháp hay ngữ cảnh.
-
-3. ĐIỂM TỔNG THỂ HIỆU CHUẨN (score_total: 0.0 - 10.0):
-   - Kết hợp hài hòa giữa Phát âm âm học (từ mô hình âm học SpeechOcean đã cho) + Ngữ pháp + Ngữ cảnh hội thoại.
-   - TUYỆT ĐỐI KHÔNG dùng công thức phần trăm cố định. Nếu phát âm cao nhưng trả lời cộc lốc/lạc đề thì điểm tổng thể bị kéo giảm. Nếu học viên tương tác lưu loát, ý mạch lạc, ngữ pháp tốt thì điểm tổng thể xứng đáng đạt mức cao.
-
-HƯỚNG DẪN TRẢ VỀ:
-Trả về DUY NHẤT một chuỗi JSON hợp lệ theo đúng cấu trúc sau:
+OUTPUT JSON FORMAT:
 {
-  "score_total": <số thực 0.0 - 10.0, điểm tổng thể cuối cùng đã hiệu chuẩn>,
-  "score_grammar": <số thực 0.0 - 10.0, điểm ngữ pháp>,
-  "score_context": <số thực 0.0 - 10.0, điểm ngữ cảnh & độ phản xạ>,
-  "conversation_summary": "<Nhận xét sư phạm tổng quan súc tích 2-3 câu bằng tiếng Việt về khả năng hội thoại của học viên>",
-  "grammar_errors": [
-    {
-      "turn_index": <số nguyên thứ tự lượt nói nếu xác định được>,
-      "error_text": "<cụm từ học viên nói bị lỗi>",
-      "fix": "<cách sửa chuẩn xác>",
-      "explanation": "<giải thích lỗi ngắn gọn bằng tiếng Việt>"
-    }
-  ],
-  "communication_tips": [
-    "<lời khuyên 1 về cách phản xạ hoặc mở rộng câu>",
-    "<lời khuyên 2 về ngữ pháp hoặc từ vựng>"
-  ],
-  "better_dialogue_expressions": [
-    "<1 câu nói mẫu tự nhiên, nâng cao hơn mà học viên có thể dùng trong hội thoại này>"
-  ]
+  "score_total": <float 0-10>,
+  "score_grammar": <float 0-10>,
+  "score_context": <float 0-10>,
+  "conversation_summary": "<Nhận xét sư phạm 2-3 câu tiếng Việt>",
+  "grammar_errors": [{"turn_index": <int>, "error_text": "...", "fix": "...", "explanation": "..."}],
+  "communication_tips": ["<lời khuyên 1>", "<lời khuyên 2>"],
+  "better_dialogue_expressions": ["<1 câu mẫu nâng cao>"]
 }`;
 }
 
@@ -398,32 +374,27 @@ export async function evaluateConversationWithAi({
   const pro = Number(pronunciationScores.prosodic) || 0;
   const rawPronTotal = Number(pronunciationScores.total) || ((acc + flu + pro) / 3);
 
-  // Lọc lấy các lượt nói
-  const formattedDialogue = dialogueTurns.map((turn, i) => {
-    const speaker = turn.role === 'teacher' ? 'GIÁO VIÊN' : 'HỌC VIÊN';
-    return `[Lượt ${i + 1}] ${speaker}: "${(turn.transcript || '').trim() || '(âm thanh không rõ)'}"`;
-  }).join('\n');
+  // Thu thập các lượt nói của Student & Teacher
+  const studentTurns = dialogueTurns.filter(t => t.role === 'student' || t.speaker === 'Student');
+  const studentFullText = studentTurns.map(t => t.transcript || '').join(' ').trim();
 
-  const studentTurns = dialogueTurns.filter(t => t.role === 'student' || !t.role);
-  const studentFullText = studentTurns.map(t => (t.transcript || '').trim()).filter(Boolean).join(' ');
-
-  // Nếu không có transcript học viên
+  // Nếu học viên không có lượt nói nào
   if (!studentFullText) {
     return {
       score_total: 1.0,
       score_grammar: 1.0,
       score_context: 1.0,
-      conversation_summary: 'Không phát hiện thấy lượt nói rõ ràng nào của học viên trong đoạn hội thoại.',
+      conversation_summary: 'Không phát hiện thấy lượt nói nào của học viên trong đoạn hội thoại.',
       grammar_errors: [],
-      communication_tips: ['Hãy kiểm tra lại micro hoặc nói to, rõ ràng hơn trong buổi hội thoại.'],
+      communication_tips: ['Cần tích cực tương tác và phản hồi giáo viên trong suốt cuộc hội thoại.'],
       better_dialogue_expressions: [],
       is_fallback: false,
     };
   }
 
-  // Nếu chưa có API Key
+  // Nếu chưa có key thì chạy heuristic fallback
   if (!effectiveKey) {
-    console.warn('⚠️ AI Evaluator API Key chưa được cấu hình. Áp dụng đánh giá hội thoại heuristic dự phòng.');
+    console.warn('⚠️ Gemini API Key chưa được cấu hình cho đánh giá hội thoại. Áp dụng fallback heuristic.');
     return fallbackConversationHeuristic({
       studentTurns,
       studentFullText,
@@ -431,16 +402,17 @@ export async function evaluateConversationWithAi({
     });
   }
 
-  const userPrompt = `ĐOẠN HỘI THOẠI GIỮA GIÁO VIÊN VÀ HỌC VIÊN:
-${formattedDialogue}
+  // Xây dựng hội thoại text có kèm số thứ tự lượt
+  const conversationTranscript = dialogueTurns.map((t, idx) => {
+    const roleName = (t.role === 'teacher' || t.speaker === 'Teacher') ? 'Teacher' : 'Student';
+    return `[Lượt ${idx + 1}] ${roleName}: "${(t.transcript || '').trim()}"`;
+  }).join('\n');
 
-ĐIỂM PHÁT ÂM ÂM HỌC TRUNG BÌNH CỦA HỌC VIÊN (SpeechOcean762 thang điểm 10):
-- Accuracy (Phát âm âm vị): ${acc.toFixed(1)}/10
-- Fluency (Độ lưu loát): ${flu.toFixed(1)}/10
-- Prosody (Ngữ điệu): ${pro.toFixed(1)}/10
-- Phát âm thô trung bình: ${rawPronTotal.toFixed(1)}/10
+  const userPrompt = `HỘI THOẠI:
+${conversationTranscript}
 
-Hãy phân tích toàn diện cuộc hội thoại trên theo vai trò Giám khảo, đánh giá Ngữ pháp, Ngữ cảnh/Phản xạ và chốt Điểm tổng thể hiệu chuẩn (score_total). Trả về đúng JSON.`;
+ĐIỂM PHÁT ÂM HỌC VIÊN: Acc=${acc.toFixed(1)}, Flu=${flu.toFixed(1)}, Pro=${pro.toFixed(1)}, Avg=${rawPronTotal.toFixed(1)}
+Đánh giá toàn diện năng lực hội thoại của Học viên (Student), hiệu chuẩn score_total theo quy tắc. Trả về đúng JSON.`;
 
   try {
     const response = await fetch(endpoint, {
@@ -480,10 +452,21 @@ Hãy phân tích toàn diện cuộc hội thoại trên theo vai trò Giám kh�
       }
     }
 
+    const scoreGrammar = clampScore(parsed.score_grammar, 0, 10);
+    const scoreContext = clampScore(parsed.score_context, 0, 10);
+    let scoreTotal = clampScore(parsed.score_total, 0, 10);
+
+    // Hiệu chuẩn hội thoại: Nếu ngữ cảnh không phù hợp, điểm ngữ pháp không can thiệp nhiều vào điểm tổng
+    if (scoreContext < 3.0) {
+      scoreTotal = Math.min(scoreTotal, Math.max(1.0, scoreContext + 0.8), 3.5);
+    } else if (scoreContext < 4.5) {
+      scoreTotal = Math.min(scoreTotal, Math.max(2.5, scoreContext + 0.6), 4.5);
+    }
+
     return {
-      score_total: clampScore(parsed.score_total, 0, 10),
-      score_grammar: clampScore(parsed.score_grammar, 0, 10),
-      score_context: clampScore(parsed.score_context, 0, 10),
+      score_total: scoreTotal,
+      score_grammar: scoreGrammar,
+      score_context: scoreContext,
       conversation_summary: parsed.conversation_summary || 'Đã hoàn thành đánh giá hội thoại.',
       grammar_errors: Array.isArray(parsed.grammar_errors) ? parsed.grammar_errors : [],
       communication_tips: Array.isArray(parsed.communication_tips) ? parsed.communication_tips : [],
@@ -521,19 +504,24 @@ function fallbackConversationHeuristic({ studentTurns, studentFullText, pronunci
 
   if (avgWordsPerTurn <= 2) {
     gram = 4.0;
-    ctx = 3.5;
-    total = Math.min(rawPron, 4.0);
-    summary = 'Học viên trả lời các lượt nói còn ngắn (dưới 3 từ/lượt), cần mở rộng thêm câu hoàn chỉnh.';
+    ctx = 2.5;
+    summary = 'Học viên trả lời các lượt nói còn quá ngắn (cộc lốc), chưa phát triển được ngữ cảnh hội thoại.';
   } else if (avgWordsPerTurn <= 5) {
     gram = 5.5;
-    ctx = 5.5;
-    total = Math.min(rawPron, 6.0);
+    ctx = 4.5;
     summary = 'Học viên phản xạ tương đối tốt, câu trả lời đủ ý nhưng nên dùng thêm các liên từ kết nối.';
   } else {
     gram = Math.min(9.0, Math.max(5.5, rawPron * 0.9));
     ctx = Math.min(9.0, Math.max(6.0, rawPron * 0.95));
-    total = (rawPron * 0.4) + (gram * 0.3) + (ctx * 0.3);
     summary = 'Khả năng phản xạ và duy trì hội thoại tốt, từ vựng và ngữ pháp tương đối linh hoạt.';
+  }
+
+  total = (rawPron * 0.4) + (gram * 0.3) + (ctx * 0.3);
+  // Nếu ngữ cảnh không phù hợp, điểm ngữ pháp không can thiệp nhiều vào điểm tổng
+  if (ctx < 3.0) {
+    total = Math.min(total, Math.max(1.0, ctx + 0.8), 3.5);
+  } else if (ctx < 4.5) {
+    total = Math.min(total, Math.max(2.5, ctx + 0.6), 4.5);
   }
 
   return {
