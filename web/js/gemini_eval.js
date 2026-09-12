@@ -93,8 +93,16 @@ QUY TẮC CHẤM ĐIỂM (NON-LINEAR):
    - Đúng trọng tâm (score_context >= 5.0): Ngữ pháp và phát âm phát huy trọn vẹn để nâng điểm tổng (6.0-10.0).
 2. Nói vấp / từ đệm / ngập ngừng ban đầu ("um, uh, well, wait..."):
    - Phản xạ tự nhiên, TUYỆT ĐỐI KHÔNG trừ điểm Grammar hay Context nếu câu chính phía sau đúng.
-3. Ngữ pháp (score_grammar 0-10): Đánh giá cấu trúc, thì, trật tự từ của câu trả lời chính.
-4. Điểm tổng thể (score_total 0-10): Kết hợp Phát âm + Ngữ pháp + Ngữ cảnh theo các mức trần trên.
+3. Tiêu chí theo Dạng đề (Task Type):
+   - read_aloud: Đọc to chính xác đoạn văn cho sẵn. Chấm độ khớp văn bản gốc và phát âm, KHÔNG đòi hỏi nêu ý kiến riêng.
+   - picture_description: Miêu tả chi tiết hình ảnh (không gian, hành động, đồ vật, trang phục).
+   - short_qa: Trả lời trực diện vào câu hỏi cá nhân, sở thích, thói quen.
+   - information_qa: Cung cấp thông tin chính xác dựa theo dữ liệu cho sẵn.
+   - description / experience_future: Miêu tả chi tiết, dùng đúng thì (quá khứ, tương lai/dự đoán).
+   - opinion / problem_solution: Bày tỏ quan điểm rõ ràng, đưa ra giải pháp/lập luận kèm lý lẽ thuyết phục.
+   - long_turn / discussion: Phát triển ý mạch lạc, cấu trúc bài nói hoàn chỉnh (mở-thân-kết), thảo luận sâu sắc.
+4. Ngữ pháp (score_grammar 0-10): Đánh giá cấu trúc, thì, trật tự từ của câu trả lời chính.
+5. Điểm tổng thể (score_total 0-10): Kết hợp Phát âm + Ngữ pháp + Ngữ cảnh theo các mức trần trên.
 
 OUTPUT JSON FORMAT:
 {
@@ -115,6 +123,7 @@ OUTPUT JSON FORMAT:
  * @param {string} params.questionText - Đề bài / câu hỏi
  * @param {string} params.partTitle - Tên phần thi (ví dụ Part 1, Part 2)
  * @param {string} params.examType - Loại kỳ thi (vstep, ielts, toeic, general)
+ * @param {string} params.taskType - Dạng đề (read_aloud, picture_description, short_qa, ...)
  * @param {string} params.transcript - Lời học viên nói (từ Whisper)
  * @param {Object} params.pronunciationScores - { accuracy, fluency, prosodic, total }
  * @param {string} [params.apiKey] - API key tùy chọn (nếu không truyền sẽ lấy từ getGeminiConfig)
@@ -123,6 +132,7 @@ export async function evaluateAnswerWithGemini({
   questionText,
   partTitle = '',
   examType = 'general',
+  taskType = '',
   transcript = '',
   pronunciationScores = {},
   apiKey = null,
@@ -159,13 +169,15 @@ export async function evaluateAnswerWithGemini({
       questionText,
       transcript: cleanTranscript,
       pronunciationScores: { accuracy: acc, fluency: flu, prosodic: pro, total: rawPronTotal },
+      taskType,
     });
   }
 
-  const userContent = `Đề: "${questionText || 'N/A'}"${partTitle ? ` [${partTitle} - ${examType.toUpperCase()}]` : ''}
+  const taskTag = taskType ? ` [Dạng bài: ${taskType}]` : '';
+  const userContent = `Đề: "${questionText || 'N/A'}"${partTitle ? ` [${partTitle}]` : ''}${taskTag} [${examType.toUpperCase()}]
 Bài nói: "${cleanTranscript}"
 Phát âm âm học: Acc=${acc.toFixed(1)}, Flu=${flu.toFixed(1)}, Pro=${pro.toFixed(1)}, Avg=${rawPronTotal.toFixed(1)}
-Đánh giá ngữ pháp, ngữ cảnh và chốt score_total. Trả về đúng JSON.`;
+Đánh giá ngữ pháp, ngữ cảnh (theo dạng bài) và chốt score_total. Trả về đúng JSON.`;
 
   try {
     const response = await fetch(endpoint, {
@@ -277,7 +289,7 @@ function calibrateTotalScoreWithContext(rawTotal, contextScore, grammarScore, re
  * Đánh giá heuristic dự phòng khi không có mạng hoặc chưa nhập API Key
  * Đảm bảo vẫn ngăn chặn trường hợp nói cộc lốc / lạc đề
  */
-function fallbackHeuristicEval({ questionText, transcript, pronunciationScores }) {
+function fallbackHeuristicEval({ questionText, transcript, pronunciationScores, taskType = '' }) {
   const words = transcript.trim().split(/\s+/).filter(Boolean);
   const wordCount = words.length;
   const rawPron = pronunciationScores.total || 5.0;
@@ -285,10 +297,28 @@ function fallbackHeuristicEval({ questionText, transcript, pronunciationScores }
   let scoreGrammar = 6.0;
   let scoreContext = 6.0;
   let relevance = 'relevant';
-  let summary = 'Đã đánh giá cơ bản.';
+  let summary = 'Đã đánh giá cơ bản theo tiêu chuẩn khảo thí.';
 
+  // Trường hợp đặc thù dạng Read Aloud: đối chiếu trực tiếp văn bản đề bài
+  if (taskType === 'read_aloud' && questionText) {
+    const qWords = questionText.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+    const tWords = transcript.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+    if (tWords.length <= 2) {
+      scoreGrammar = 3.0;
+      scoreContext = 2.0;
+      relevance = 'too_short';
+      summary = 'Chưa đọc trọn vẹn đoạn văn yêu cầu.';
+    } else {
+      const matchCount = tWords.filter(w => qWords.includes(w)).length;
+      const matchRatio = qWords.length > 0 ? (matchCount / Math.min(qWords.length, tWords.length)) : 0.8;
+      scoreContext = clampScore(matchRatio * 10, 1.0, 9.5);
+      scoreGrammar = clampScore(rawPron, 1.0, 9.5);
+      relevance = matchRatio >= 0.7 ? 'relevant' : (matchRatio >= 0.4 ? 'partially_relevant' : 'irrelevant');
+      summary = matchRatio >= 0.7 ? 'Đã đọc bám sát và chính xác văn bản cho sẵn.' : 'Đoạn đọc còn thiếu hoặc sai lệch so với văn bản gốc.';
+    }
+  }
   // Trường hợp 1: Quá ngắn (dưới 4 từ)
-  if (wordCount <= 3) {
+  else if (wordCount <= 3) {
     scoreGrammar = 3.0;
     scoreContext = 2.0;
     relevance = 'too_short';

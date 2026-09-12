@@ -274,12 +274,6 @@
                 Chấm điểm cả Giáo viên trong audio
               </label>
             </div>
-            <div class="form-check form-switch mt-2">
-              <input class="form-check-input" type="checkbox" id="skipFeedbackCheck" />
-              <label class="form-check-label" for="skipFeedbackCheck">
-                Bỏ qua LLM Feedback (Nhận kết quả nhanh hơn)
-              </label>
-            </div>
           </div>
         </div>
       </div>
@@ -543,6 +537,29 @@
           </div>
           <div class="modal-body">
             <input type="hidden" id="editQuestionId" />
+            
+            <!-- Dạng đề bài (Task Type) -->
+            <div class="mb-3">
+              <label class="form-label text-muted small fw-semibold">
+                <i class="bi bi-tag-fill me-1 text-warning"></i>Dạng đề bài (Task Type) *
+              </label>
+              <select class="form-select" id="qTaskTypeSelect">
+                <option value="short_qa" selected>Personal Q&A (Hỏi đáp cá nhân, sở thích, thói quen)</option>
+                <option value="read_aloud">Read Aloud (Đọc to đoạn văn cho sẵn)</option>
+                <option value="picture_description">Picture Description (Miêu tả hình ảnh / tranh)</option>
+                <option value="information_qa">Information-based Q&A (Hỏi đáp theo dữ liệu / thông tin)</option>
+                <option value="description">Description (Miêu tả người, địa điểm, sự kiện, đồ vật)</option>
+                <option value="experience_future">Experience & Future (Trải nghiệm, kế hoạch, dự đoán)</option>
+                <option value="opinion">Opinion & Argument (Bày tỏ quan điểm, đồng ý/phản đối, ưu/nhược điểm)</option>
+                <option value="problem_solution">Problem & Solution (Tình huống, giải pháp, đề xuất, lựa chọn)</option>
+                <option value="long_turn">Long Turn / Cue Card (Trình bày chủ đề dài 1-2 phút, phát triển ý)</option>
+                <option value="discussion">Discussion (Thảo luận chuyên sâu, trừu tượng, nguyên nhân/kết quả)</option>
+              </select>
+              <div class="form-text smaller text-info mt-1" id="qTaskTypeHint">
+                <i class="bi bi-info-circle me-1"></i>Bao gồm: Personal Q&A, preference, frequency, routine
+              </div>
+            </div>
+
             <div class="row g-3 mb-3">
               <div class="col-md-6">
                 <label class="form-label text-muted small">Phần thi / Tiêu đề câu (Tùy chọn)</label>
@@ -554,12 +571,12 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label text-muted small">Nói tối đa (giây)</label>
-                <input type="number" class="form-control" id="qResponseTimeInput" value="45" min="10" max="600" />
+                <input type="number" class="form-control" id="qResponseTimeInput" value="30" min="10" max="600" />
               </div>
             </div>
             <div class="mb-3">
-              <label class="form-label text-muted small">Nội dung câu hỏi *</label>
-              <textarea class="form-control" id="qTextInput" rows="3" placeholder="VD: What do you usually do in your free time?"></textarea>
+              <label class="form-label text-muted small">Nội dung câu hỏi / Văn bản đề bài *</label>
+              <textarea class="form-control" id="qTextInput" rows="3" placeholder="VD: What do you usually do in your free time? (Hoặc đoạn văn bản cần đọc cho dạng Read Aloud)"></textarea>
             </div>
           </div>
           <div class="modal-footer border-0">
@@ -1291,7 +1308,7 @@
 
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script type="module" src="js/dashboard.js?v=9"></script>
+  <script type="module" src="js/dashboard.js?v=11"></script>
 </body>
 
 </html>

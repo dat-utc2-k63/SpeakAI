@@ -10,7 +10,8 @@ import { supabase } from './supabase.js';
         import { fetchEmbeddingFromBackend, cosineSimilarity } from './voice.js';
         import {
           fetchQuestionSets, createQuestionSet, updateQuestionSet, deleteQuestionSet,
-          togglePublishSet, fetchQuestions, addQuestion, updateQuestion, deleteQuestion
+          togglePublishSet, fetchQuestions, addQuestion, updateQuestion, deleteQuestion,
+          TASK_TYPES
         } from './question_sets.js';
         import {
           fetchPublishedSets, fetchSetWithQuestions, startSession, saveAnswer,
@@ -396,12 +397,11 @@ import { supabase } from './supabase.js';
             // Gọi API FastAPI trên Colab (Khởi tạo Task)
             const formData = new FormData();
             const scoreTeacher = document.getElementById('scoreTeacherCheck').checked;
-            const skipFeedback = document.getElementById('skipFeedbackCheck').checked;
             formData.append("audio", convFile);
             formData.append("teacher_embeddings_json", JSON.stringify(tEmb || []));
             formData.append("student_embeddings_json", JSON.stringify(sEmb || []));
             formData.append("score_teacher", scoreTeacher);
-            formData.append("skip_feedback", skipFeedback);
+            formData.append("skip_feedback", "true"); // Bỏ qua LLM cũ trên Colab vì đã tích hợp AI Evaluator bằng API Key trực tiếp trên client
 
             const startResponse = await fetch(`${apiUrl.replace(/\/$/, '')}/assess_start`, {
               method: "POST",
@@ -1643,11 +1643,31 @@ import { supabase } from './supabase.js';
             }
           });
 
+          // Sự kiện đổi dạng đề bài trong modal tạo/sửa câu hỏi
+          const qTaskSelect = document.getElementById('qTaskTypeSelect');
+          if (qTaskSelect) {
+            qTaskSelect.addEventListener('change', (e) => {
+              const t = TASK_TYPES[e.target.value] || TASK_TYPES['short_qa'];
+              if (t) {
+                const hintEl = document.getElementById('qTaskTypeHint');
+                if (hintEl) hintEl.innerHTML = `<i class="bi bi-info-circle me-1"></i>Bao gồm: <b>${t.includes}</b>`;
+                document.getElementById('qPrepTimeInput').value = t.defaultPrep;
+                document.getElementById('qResponseTimeInput').value = t.defaultResponse;
+              }
+            });
+          }
+
           document.getElementById('addQuestionBtn').addEventListener('click', () => {
             document.getElementById('editQuestionId').value = '';
             document.getElementById('qPartTitleInput').value = '';
+            const taskSel = document.getElementById('qTaskTypeSelect');
+            if (taskSel) {
+              taskSel.value = 'short_qa';
+              const hintEl = document.getElementById('qTaskTypeHint');
+              if (hintEl) hintEl.innerHTML = `<i class="bi bi-info-circle me-1"></i>Bao gồm: <b>${TASK_TYPES['short_qa'].includes}</b>`;
+            }
             document.getElementById('qPrepTimeInput').value = '15';
-            document.getElementById('qResponseTimeInput').value = '45';
+            document.getElementById('qResponseTimeInput').value = '30';
             document.getElementById('qTextInput').value = '';
             document.getElementById('questionModalTitle').innerHTML =
               '<i class="bi bi-chat-square-text me-2 text-primary"></i>Thêm câu hỏi';
@@ -1658,9 +1678,10 @@ import { supabase } from './supabase.js';
             const qText = document.getElementById('qTextInput').value.trim();
             if (!qText) { alert('Vui lòng nhập câu hỏi!'); return; }
             const editId = document.getElementById('editQuestionId').value;
+            const taskType = document.getElementById('qTaskTypeSelect')?.value || 'short_qa';
             const partTitle = document.getElementById('qPartTitleInput').value.trim() || null;
             const prepTime = parseInt(document.getElementById('qPrepTimeInput').value) || 15;
-            const responseTime = parseInt(document.getElementById('qResponseTimeInput').value) || 45;
+            const responseTime = parseInt(document.getElementById('qResponseTimeInput').value) || 30;
 
             try {
               if (editId) {
@@ -1669,6 +1690,7 @@ import { supabase } from './supabase.js';
                   reference_text: null,
                   hint: null,
                   part_title: partTitle,
+                  task_type: taskType,
                   prep_time: prepTime,
                   response_time: responseTime,
                 });
@@ -1680,6 +1702,7 @@ import { supabase } from './supabase.js';
                   hint: null,
                   order_num: existingQs.length + 1,
                   part_title: partTitle,
+                  task_type: taskType,
                   prep_time: prepTime,
                   response_time: responseTime,
                 });
@@ -1833,14 +1856,23 @@ import { supabase } from './supabase.js';
               return;
             }
 
-            list.innerHTML = currentEditingQuestions.map((q, idx) => `
+            list.innerHTML = currentEditingQuestions.map((q, idx) => {
+              const taskInfo = TASK_TYPES[q.task_type] || TASK_TYPES['short_qa'];
+              return `
               <div class="question-editor-item" data-id="${q.id}">
                 <div class="d-flex align-items-start gap-3">
                   <div class="q-number">${idx + 1}</div>
                   <div class="flex-grow-1">
-                    ${q.part_title ? `<div class="text-primary small fw-semibold mb-1"><i class="bi bi-bookmark me-1"></i>${q.part_title}</div>` : ''}
-                    <div class="fw-semibold mb-1">${q.question_text || ''}</div>
-                    <div class="d-flex gap-2 mt-2">
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                      ${q.part_title ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle small fw-semibold"><i class="bi bi-bookmark me-1"></i>${q.part_title}</span>` : ''}
+                      ${taskInfo ? `
+                        <span class="badge-task-type ${taskInfo.badgeClass}">
+                          <i class="bi ${taskInfo.icon}"></i> ${taskInfo.label}
+                        </span>
+                      ` : ''}
+                    </div>
+                    <div class="fw-semibold mb-2">${q.question_text || ''}</div>
+                    <div class="d-flex gap-2 mt-1">
                       <span class="badge bg-secondary-subtle text-secondary small"><i class="bi bi-hourglass-split me-1"></i>Chuẩn bị: ${q.prep_time || 15}s</span>
                       <span class="badge bg-secondary-subtle text-secondary small"><i class="bi bi-mic me-1"></i>Trả lời: ${q.response_time || 45}s</span>
                     </div>
@@ -1855,7 +1887,7 @@ import { supabase } from './supabase.js';
                   </div>
                 </div>
               </div>
-            `).join('');
+            `;}).join('');
           } catch (e) {
             list.innerHTML = `<div class="text-danger">Lỗi: ${e.message}</div>`;
           }
@@ -1867,9 +1899,17 @@ import { supabase } from './supabase.js';
           const qPart = (partTitle !== undefined && typeof partTitle === 'string' && partTitle !== '') ? partTitle : (found?.part_title || '');
           const qPrep = (prepTime !== undefined && !isNaN(Number(prepTime)) && Number(prepTime) !== 15) ? Number(prepTime) : (found?.prep_time || 15);
           const qResp = (responseTime !== undefined && !isNaN(Number(responseTime)) && Number(responseTime) !== 45) ? Number(responseTime) : (found?.response_time || 45);
+          const qTask = found?.task_type || 'short_qa';
 
           document.getElementById('editQuestionId').value = id || '';
           document.getElementById('qPartTitleInput').value = qPart;
+          const taskSelect = document.getElementById('qTaskTypeSelect');
+          if (taskSelect) {
+            taskSelect.value = qTask;
+            const t = TASK_TYPES[qTask] || TASK_TYPES['short_qa'];
+            const hintEl = document.getElementById('qTaskTypeHint');
+            if (hintEl && t) hintEl.innerHTML = `<i class="bi bi-info-circle me-1"></i>Bao gồm: <b>${t.includes}</b>`;
+          }
           document.getElementById('qPrepTimeInput').value = qPrep;
           document.getElementById('qResponseTimeInput').value = qResp;
           document.getElementById('qTextInput').value = qText;
@@ -2331,10 +2371,19 @@ import { supabase } from './supabase.js';
           }
 
           // Render Question Card
+          const taskInfo = TASK_TYPES[q.task_type] || TASK_TYPES['short_qa'];
+          const taskBadgeHtml = taskInfo ? `
+            <div class="mb-2">
+              <span class="badge-task-type ${taskInfo.badgeClass}">
+                <i class="bi ${taskInfo.icon}"></i> ${taskInfo.label} • ${taskInfo.title}
+              </span>
+            </div>` : '';
+
           if (currentSessionMode === 'exam') {
             // EXAM MODE: No hints, no reference text!
             area.innerHTML = `
               <div class="practice-question-card">
+                ${taskBadgeHtml}
                 ${q.part_title ? `<div class="text-primary small fw-semibold mb-1"><i class="bi bi-bookmark me-1"></i>${q.part_title}</div>` : ''}
                 <div class="question-number">Câu hỏi ${num} / ${total}</div>
                 <div class="question-text">${q.question_text}</div>
@@ -2355,6 +2404,7 @@ import { supabase } from './supabase.js';
             // PRACTICE MODE: Focused question card, interactive recording
             area.innerHTML = `
               <div class="practice-question-card">
+                ${taskBadgeHtml}
                 ${q.part_title ? `<div class="text-primary small fw-semibold mb-1"><i class="bi bi-bookmark me-1"></i>${q.part_title}</div>` : ''}
                 <div class="question-number">Câu hỏi ${num} / ${total}</div>
                 <div class="question-text">${q.question_text}</div>
@@ -2583,6 +2633,7 @@ import { supabase } from './supabase.js';
                   questionText: q.question_text || q.title || '',
                   partTitle: q.part_title || '',
                   examType: currentSetData?.exam_type || 'general',
+                  taskType: q.task_type || 'short_qa',
                   transcript: transcript,
                   pronunciationScores: scores
                 });
@@ -2743,6 +2794,7 @@ import { supabase } from './supabase.js';
                 questionText: q.question_text || q.title || '',
                 partTitle: q.part_title || '',
                 examType: currentSetData?.exam_type || 'general',
+                taskType: q.task_type || 'short_qa',
                 transcript: transcript,
                 pronunciationScores: scores
               });
