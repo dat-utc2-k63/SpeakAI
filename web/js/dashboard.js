@@ -2061,14 +2061,12 @@ import { supabase } from './supabase.js';
             startExamPrepPhase();
 
           } else {
-            // PRACTICE MODE: Full hints, reference text, interactive recording
+            // PRACTICE MODE: Focused question card, interactive recording
             area.innerHTML = `
               <div class="practice-question-card">
                 ${q.part_title ? `<div class="text-primary small fw-semibold mb-1"><i class="bi bi-bookmark me-1"></i>${q.part_title}</div>` : ''}
                 <div class="question-number">Câu hỏi ${num} / ${total}</div>
                 <div class="question-text">${q.question_text}</div>
-                ${q.hint ? `<div class="question-hint"><i class="bi bi-lightbulb me-1"></i>${q.hint}</div>` : ''}
-                ${q.reference_text ? `<div class="reference-text"><i class="bi bi-chat-quote me-1"></i>Gợi ý trả lời: ${q.reference_text}</div>` : ''}
               </div>`;
 
             document.getElementById('examPrepArea').classList.add('d-none');
