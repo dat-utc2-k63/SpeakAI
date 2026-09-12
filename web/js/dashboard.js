@@ -1482,26 +1482,26 @@ import { supabase } from './supabase.js';
                 : `<span class="badge bg-secondary-subtle text-light border border-secondary" style="font-size:0.7rem;"><i class="bi bi-people me-1"></i>Đồng nghiệp</span>`;
 
               return `
-                <div class="col-md-6 col-lg-4">
-                  <div class="qset-card" onclick="openQuestionSetEditor('${s.id}')">
+                <div class="col-md-6 col-lg-4 d-flex">
+                  <div class="qset-card w-100" onclick="openQuestionSetEditor('${s.id}')">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                       <span class="exam-type-badge ${examType}">${examTypeLabels[examType] || examType.toUpperCase()}</span>
                       <span class="status-pill ${s.is_published ? 'published' : 'draft'}">${s.is_published ? '● Đã publish' : '○ Bản nháp'}</span>
                     </div>
-                    <div class="qset-title">${s.title}</div>
-                    ${s.description ? `<div class="qset-desc">${s.description}</div>` : ''}
-                    <div class="qset-meta mt-2">
+                    <div class="qset-title" title="${s.title}">${s.title}</div>
+                    <div class="qset-desc ${!s.description ? 'text-muted fst-italic' : ''}">${s.description || 'Chưa có mô tả cho bộ đề này'}</div>
+                    <div class="qset-meta">
                       <span class="level-badge ${s.level}">${levelLabels[s.level] || s.level}</span>
                       <span class="badge bg-secondary"><i class="bi bi-chat-square-text me-1"></i>${s.question_count} câu</span>
                     </div>
-                    <div class="d-flex align-items-center justify-content-between gap-1 text-info small mt-2 mb-1">
-                      <span class="text-truncate" title="Người tạo: ${s.creator_name || 'Giáo viên'}">
-                        <i class="bi bi-person-fill me-1"></i>Tạo bởi: <b>${s.creator_name || 'Giáo viên'}</b>
-                      </span>
-                      ${creatorBadge}
-                    </div>
-                    <div class="text-muted smaller mb-2">${new Date(s.created_at).toLocaleDateString('vi-VN')}</div>
-                    <div class="pt-2 border-top border-secondary border-opacity-25">
+                    <div class="qset-footer">
+                      <div class="d-flex align-items-center justify-content-between gap-1 text-info small mb-1">
+                        <span class="text-truncate" title="Người tạo: ${s.creator_name || 'Giáo viên'}">
+                          <i class="bi bi-person-fill me-1"></i>Tạo bởi: <b>${s.creator_name || 'Giáo viên'}</b>
+                        </span>
+                        ${creatorBadge}
+                      </div>
+                      <div class="text-muted smaller mb-2">${new Date(s.created_at).toLocaleDateString('vi-VN')}</div>
                       <button class="btn btn-sm btn-outline-info w-100 fw-semibold" onclick="event.stopPropagation(); openTeacherSetSubmissions('${s.id}', '${encodeURIComponent(s.title)}')">
                         <i class="bi bi-people me-1"></i>Xem bài nộp học viên
                       </button>
@@ -1846,17 +1846,19 @@ import { supabase } from './supabase.js';
             grid.innerHTML = sets.map(s => {
               const examType = s.exam_type || 'general';
               return `
-                <div class="col-md-6 col-lg-4">
-                  <div class="qset-card" onclick="openModeSelectModal('${s.id}')">
+                <div class="col-md-6 col-lg-4 d-flex">
+                  <div class="qset-card w-100" onclick="openModeSelectModal('${s.id}')">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                       <span class="exam-type-badge ${examType}">${examTypeLabels[examType] || examType.toUpperCase()}</span>
                       <span class="level-badge ${s.level}">${levelLabels[s.level] || s.level}</span>
                     </div>
-                    <div class="qset-title">${s.title}</div>
-                    ${s.description ? `<div class="qset-desc">${s.description}</div>` : ''}
-                    <div class="qset-meta mt-3">
-                      <span class="badge bg-secondary"><i class="bi bi-chat-square-text me-1"></i>${s.question_count} câu</span>
-                      <span class="badge bg-outline-secondary"><i class="bi bi-person me-1"></i>${s.teacher_name}</span>
+                    <div class="qset-title" title="${s.title}">${s.title}</div>
+                    <div class="qset-desc ${!s.description ? 'text-muted fst-italic' : ''}">${s.description || 'Luyện tập phát âm và phản xạ nói tiếng Anh'}</div>
+                    <div class="qset-footer">
+                      <div class="qset-meta mb-0">
+                        <span class="badge bg-secondary"><i class="bi bi-chat-square-text me-1"></i>${s.question_count} câu</span>
+                        <span class="badge bg-outline-secondary"><i class="bi bi-person me-1"></i>${s.teacher_name || 'Giáo viên'}</span>
+                      </div>
                     </div>
                   </div>
                 </div>`;
