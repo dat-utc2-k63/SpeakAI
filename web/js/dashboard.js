@@ -1580,6 +1580,7 @@ import { supabase } from './supabase.js';
         // ══════════════════════════════════════════════════════════
         let currentEditSetId = null;
         let currentEditSetPublished = false;
+        let currentEditingQuestions = [];
 
         function initQuestionSetsUI() {
           document.getElementById('createQSetBtn').addEventListener('click', async () => {
@@ -1650,7 +1651,7 @@ import { supabase } from './supabase.js';
             document.getElementById('qTextInput').value = '';
             document.getElementById('questionModalTitle').innerHTML =
               '<i class="bi bi-chat-square-text me-2 text-primary"></i>Thêm câu hỏi';
-            new bootstrap.Modal(document.getElementById('questionModal')).show();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('questionModal')).show();
           });
 
           document.getElementById('saveQuestionBtn').addEventListener('click', async () => {
@@ -1683,7 +1684,7 @@ import { supabase } from './supabase.js';
                   response_time: responseTime,
                 });
               }
-              bootstrap.Modal.getInstance(document.getElementById('questionModal')).hide();
+              bootstrap.Modal.getOrCreateInstance(document.getElementById('questionModal')).hide();
               showToast(editId ? 'Đã cập nhật câu hỏi!' : 'Đã thêm câu hỏi!', 'success');
               renderQuestionEditor();
             } catch (e) {
@@ -1819,9 +1820,10 @@ import { supabase } from './supabase.js';
           const list = document.getElementById('questionsList');
           try {
             const questions = await fetchQuestions(currentEditSetId);
-            document.getElementById('questionCount').textContent = questions.length;
+            currentEditingQuestions = questions || [];
+            document.getElementById('questionCount').textContent = currentEditingQuestions.length;
 
-            if (!questions.length) {
+            if (!currentEditingQuestions.length) {
               list.innerHTML = `
                 <div class="empty-state py-4">
                   <i class="bi bi-chat-square-text" style="font-size:2rem;"></i>
@@ -1831,23 +1833,23 @@ import { supabase } from './supabase.js';
               return;
             }
 
-            list.innerHTML = questions.map((q, idx) => `
+            list.innerHTML = currentEditingQuestions.map((q, idx) => `
               <div class="question-editor-item" data-id="${q.id}">
                 <div class="d-flex align-items-start gap-3">
                   <div class="q-number">${idx + 1}</div>
                   <div class="flex-grow-1">
                     ${q.part_title ? `<div class="text-primary small fw-semibold mb-1"><i class="bi bi-bookmark me-1"></i>${q.part_title}</div>` : ''}
-                    <div class="fw-semibold mb-1">${q.question_text}</div>
+                    <div class="fw-semibold mb-1">${q.question_text || ''}</div>
                     <div class="d-flex gap-2 mt-2">
                       <span class="badge bg-secondary-subtle text-secondary small"><i class="bi bi-hourglass-split me-1"></i>Chuẩn bị: ${q.prep_time || 15}s</span>
                       <span class="badge bg-secondary-subtle text-secondary small"><i class="bi bi-mic me-1"></i>Trả lời: ${q.response_time || 45}s</span>
                     </div>
                   </div>
                   <div class="d-flex gap-1 flex-shrink-0">
-                    <button class="btn btn-sm btn-outline-primary" onclick="editQuestionItem('${q.id}', ${JSON.stringify(q.question_text).replace(/'/g, "&#39;")}, ${JSON.stringify(q.part_title || '').replace(/'/g, "&#39;")}, ${q.prep_time || 15}, ${q.response_time || 45})">
+                    <button class="btn btn-sm btn-outline-primary" onclick="editQuestionItem('${q.id}')" title="Sửa câu hỏi">
                       <i class="bi bi-pencil"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteQuestionItem('${q.id}')">
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteQuestionItem('${q.id}')" title="Xóa câu hỏi">
                       <i class="bi bi-trash"></i>
                     </button>
                   </div>
@@ -1860,14 +1862,21 @@ import { supabase } from './supabase.js';
         }
 
         window.editQuestionItem = function (id, text, partTitle = '', prepTime = 15, responseTime = 45) {
-          document.getElementById('editQuestionId').value = id;
-          document.getElementById('qPartTitleInput').value = partTitle || '';
-          document.getElementById('qPrepTimeInput').value = prepTime || 15;
-          document.getElementById('qResponseTimeInput').value = responseTime || 45;
-          document.getElementById('qTextInput').value = text;
+          const found = currentEditingQuestions.find(item => item.id === id);
+          const qText = (text !== undefined && typeof text === 'string') ? text : (found?.question_text || '');
+          const qPart = (partTitle !== undefined && typeof partTitle === 'string' && partTitle !== '') ? partTitle : (found?.part_title || '');
+          const qPrep = (prepTime !== undefined && !isNaN(Number(prepTime)) && Number(prepTime) !== 15) ? Number(prepTime) : (found?.prep_time || 15);
+          const qResp = (responseTime !== undefined && !isNaN(Number(responseTime)) && Number(responseTime) !== 45) ? Number(responseTime) : (found?.response_time || 45);
+
+          document.getElementById('editQuestionId').value = id || '';
+          document.getElementById('qPartTitleInput').value = qPart;
+          document.getElementById('qPrepTimeInput').value = qPrep;
+          document.getElementById('qResponseTimeInput').value = qResp;
+          document.getElementById('qTextInput').value = qText;
           document.getElementById('questionModalTitle').innerHTML =
             '<i class="bi bi-pencil me-2 text-primary"></i>Sửa câu hỏi';
-          new bootstrap.Modal(document.getElementById('questionModal')).show();
+          const modalEl = document.getElementById('questionModal');
+          bootstrap.Modal.getOrCreateInstance(modalEl).show();
         };
 
         window.deleteQuestionItem = async function (id) {
