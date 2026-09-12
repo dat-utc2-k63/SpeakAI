@@ -3127,29 +3127,36 @@ import { supabase } from './supabase.js';
           if (geminiModelInput) geminiModelInput.value = cfg.model || DEFAULT_GEMINI_MODEL;
         }
 
-        // Modal API Config Handlers (dành cho mọi người dùng khi click nút Cấu hình trên sidebar)
+        // Modal API Config Handlers (dành cho mọi người dùng khi click nút Cấu hình trên sidebar hoặc Admin)
         function setupApiConfigModal() {
           const modalEl = document.getElementById('apiConfigModal');
           if (!modalEl) return;
 
+          function populateConfigInputs() {
+            const cfg = getGeminiConfig();
+            const keyInput = document.getElementById('modalGeminiKey');
+            const urlInput = document.getElementById('modalGeminiUrl');
+            const modelInput = document.getElementById('modalGeminiModel');
+            const gpuInput = document.getElementById('modalGpuApiUrl');
+
+            if (keyInput) keyInput.value = cfg.apiKey || '';
+            if (urlInput) urlInput.value = cfg.apiUrl || DEFAULT_GEMINI_ENDPOINT;
+            if (modelInput) modelInput.value = cfg.model || DEFAULT_GEMINI_MODEL;
+            if (gpuInput) gpuInput.value = window.globalApiUrl || '';
+
+            const statusEl = document.getElementById('modalGeminiTestStatus');
+            if (statusEl) statusEl.innerHTML = '';
+          }
+
+          // Tự động load dữ liệu mới nhất mỗi khi modal được mở
+          modalEl.addEventListener('show.bs.modal', populateConfigInputs);
+
           const openBtns = document.querySelectorAll('.btn-open-api-config');
           openBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-              const cfg = getGeminiConfig();
-              const keyInput = document.getElementById('modalGeminiKey');
-              const urlInput = document.getElementById('modalGeminiUrl');
-              const modelInput = document.getElementById('modalGeminiModel');
-              const gpuInput = document.getElementById('modalGpuApiUrl');
-
-              if (keyInput) keyInput.value = cfg.apiKey || '';
-              if (urlInput) urlInput.value = cfg.apiUrl || DEFAULT_GEMINI_ENDPOINT;
-              if (modelInput) modelInput.value = cfg.model || DEFAULT_GEMINI_MODEL;
-              if (gpuInput) gpuInput.value = window.globalApiUrl || '';
-
-              const statusEl = document.getElementById('modalGeminiTestStatus');
-              if (statusEl) statusEl.innerHTML = '';
-
-              new bootstrap.Modal(modalEl).show();
+            btn.addEventListener('click', (e) => {
+              e.preventDefault();
+              populateConfigInputs();
+              bootstrap.Modal.getOrCreateInstance(modalEl).show();
             });
           });
 
@@ -3210,7 +3217,7 @@ import { supabase } from './supabase.js';
             }
 
             setTimeout(() => {
-              const inst = bootstrap.Modal.getInstance(modalEl);
+              const inst = bootstrap.Modal.getOrCreateInstance(modalEl);
               if (inst) inst.hide();
             }, 1200);
           });
