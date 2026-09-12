@@ -642,7 +642,7 @@ class SpeakingPipeline:
         sent_dir = base_dir / "sentences"
         sent_dir.mkdir(parents=True, exist_ok=True)
 
-        split_cfg = SilenceSplitConfig.from_dict(self.config.get("sentence_split"))
+        split_cfg = self.config.get("sentence_split") or self.config.get("silence_split")
         segments = split_audio_file(
             audio,
             sent_dir,

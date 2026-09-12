@@ -26,8 +26,14 @@ class SilenceSplitConfig:
     trim_min_sec: float = 0.05
 
     @classmethod
-    def from_dict(cls, cfg: Optional[dict]) -> "SilenceSplitConfig":
+    def from_dict(cls, cfg: Optional[Any]) -> "SilenceSplitConfig":
         if not cfg:
+            return cls()
+        if isinstance(cfg, cls):
+            return cfg
+        if hasattr(cfg, "__dict__") and not isinstance(cfg, dict):
+            cfg = vars(cfg)
+        if not isinstance(cfg, dict):
             return cls()
         fields = cls.__dataclass_fields__
         return cls(**{k: v for k, v in cfg.items() if k in fields})

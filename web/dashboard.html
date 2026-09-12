@@ -758,6 +758,45 @@
       </div>
     </div>
 
+    <!-- Exit Practice Confirm Modal (Tạm dừng bài luyện tập & hỏi có lưu phiên dở không) -->
+    <div class="modal fade" id="exitPracticeConfirmModal" tabindex="-1" data-bs-backdrop="static">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-modal border-0 shadow-lg">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title fw-bold text-white d-flex align-items-center gap-2">
+              <i class="bi bi-pause-circle text-warning fs-4"></i> Tạm dừng bài luyện tập?
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body py-3">
+            <p class="text-secondary mb-2">
+              Bạn đã hoàn thành <b class="text-success fw-bold fs-5" id="exitPracticeAnsweredCount">0/0</b> câu hỏi. Bạn có muốn lưu lại phiên làm bài này để lần sau tiếp tục không?
+            </p>
+            <div class="p-3 rounded bg-dark border border-secondary border-opacity-25 mb-2 small text-muted">
+              <div class="d-flex align-items-center gap-2 text-info mb-1">
+                <i class="bi bi-info-circle-fill"></i>
+                <span class="fw-semibold">Cơ chế lưu phiên dở dang:</span>
+              </div>
+              <span>Phiên làm bài sẽ được lưu lại (trạng thái đang làm dở). Phiên <b>sẽ không hiển thị trong mục Lịch sử</b> cho đến khi bạn hoàn thành toàn bộ bài.</span>
+            </div>
+          </div>
+          <div class="modal-footer border-0 pt-0 d-flex justify-content-between flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-danger btn-sm" id="btnDiscardAndExit">
+              <i class="bi bi-trash me-1"></i> Không lưu & Hủy bài
+            </button>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+                Ở lại làm tiếp
+              </button>
+              <button type="button" class="btn btn-primary btn-sm btn-glow fw-bold" id="btnSaveSessionAndExit">
+                <i class="bi bi-bookmark-check me-1"></i> Lưu phiên & Thoát
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- STUDENT PRACTICE SESSION - Làm bài -->
     <div id="page-student-practice-session" class="page-section d-none">
       <!-- Exam Banner (only visible in exam mode) -->

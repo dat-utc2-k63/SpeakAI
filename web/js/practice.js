@@ -118,7 +118,7 @@ export async function cancelSession(sessionId) {
   try {
     await supabase
       .from('practice_sessions')
-      .update({ status: 'completed', completed_at: new Date().toISOString() })
+      .delete()
       .eq('id', sessionId);
   } catch (e) {
     console.warn('Lỗi cancelSession:', e);
@@ -349,7 +349,8 @@ export async function fetchSessionHistory(studentId) {
       question_set:question_sets(id, title, level, exam_type)
     `)
     .eq('student_id', studentId)
-    .order('started_at', { ascending: false });
+    .eq('status', 'completed')
+    .order('completed_at', { ascending: false });
   if (error) throw error;
   return data || [];
 }

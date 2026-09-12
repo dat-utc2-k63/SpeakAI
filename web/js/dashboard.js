@@ -128,8 +128,10 @@ import { supabase } from './supabase.js';
           document.querySelectorAll('.nav-item[data-page]').forEach(el => {
             el.addEventListener('click', (e) => {
               e.preventDefault();
-              navigateTo(el.dataset.page);
-              closeSidebar();
+              checkExitPracticeBeforeNavigate(() => {
+                navigateTo(el.dataset.page);
+                closeSidebar();
+              });
             });
           });
 
@@ -1622,6 +1624,50 @@ import { supabase } from './supabase.js';
         let examRemainingSeconds = 0;
         let examCurrentPhase = 'idle';     // 'idle' | 'prep' | 'speaking'
 
+        let pendingPracticeExitCallback = null;
+
+        function checkExitPracticeBeforeNavigate(onConfirm) {
+          const sessionPage = document.getElementById('page-student-practice-session');
+          const isSessionActive = sessionPage && !sessionPage.classList.contains('d-none') && practiceSession;
+
+          if (!isSessionActive) {
+            onConfirm();
+            return;
+          }
+
+          if (currentSessionMode === 'exam') {
+            const confirmExit = confirm('⚠️ Bạn đang trong bài thi thử!\nNếu thoát ra giữa chừng, toàn bộ kết quả bài thi này sẽ bị hủy và KHÔNG được lưu lên hệ thống.\n\nBạn có chắc chắn muốn thoát?');
+            if (confirmExit) {
+              cleanupPracticeTimers();
+              if (practiceSession?.id) {
+                cancelSession(practiceSession.id).catch(console.warn);
+              }
+              practiceSession = null;
+              practiceAnswers = {};
+              examAssessPromises = [];
+              onConfirm();
+            }
+            return;
+          }
+
+          // Chế độ Luyện tập
+          const answeredCount = Object.keys(practiceAnswers).filter(k => practiceAnswers[k]?.scores).length;
+          const totalCount = practiceQuestions ? practiceQuestions.length : 0;
+
+          if (answeredCount >= 1) {
+            document.getElementById('exitPracticeAnsweredCount').textContent = `${answeredCount}/${totalCount}`;
+            pendingPracticeExitCallback = onConfirm;
+            new bootstrap.Modal(document.getElementById('exitPracticeConfirmModal')).show();
+          } else {
+            cleanupPracticeTimers();
+            if (practiceSession?.id) {
+              cancelSession(practiceSession.id).catch(console.warn);
+              practiceSession = null;
+            }
+            onConfirm();
+          }
+        }
+
         function initPracticeUI() {
           // Practice interactive mic
           document.getElementById('practiceRecordBtn').addEventListener('click', togglePracticeRecord);
@@ -1630,14 +1676,36 @@ import { supabase } from './supabase.js';
 
           // Exit & Retry buttons
           document.getElementById('exitPracticeBtn').addEventListener('click', () => {
-            const promptText = currentSessionMode === 'exam'
-              ? 'Bạn đang trong bài thi thử! Thoát ra sẽ hủy kết quả bài thi. Bạn có chắc chắn muốn thoát?'
-              : 'Bạn có muốn tạm dừng phiên luyện tập? Các câu đã hoàn thành sẽ được lưu lại để bạn có thể làm tiếp sau.';
-            if (confirm(promptText)) {
-              cleanupPracticeTimers();
-              navigateTo('practice');
-            }
+            checkExitPracticeBeforeNavigate(() => navigateTo('practice'));
           });
+
+          document.getElementById('btnSaveSessionAndExit')?.addEventListener('click', () => {
+            const modalEl = document.getElementById('exitPracticeConfirmModal');
+            const inst = bootstrap.Modal.getInstance(modalEl);
+            if (inst) inst.hide();
+            cleanupPracticeTimers();
+            practiceSession = null;
+            const cb = pendingPracticeExitCallback || (() => navigateTo('practice'));
+            pendingPracticeExitCallback = null;
+            cb();
+            showToast('Đã lưu phiên làm dở! Bài này chưa hoàn thành nên sẽ không xuất hiện trong Lịch sử.', 'info');
+          });
+
+          document.getElementById('btnDiscardAndExit')?.addEventListener('click', async () => {
+            const modalEl = document.getElementById('exitPracticeConfirmModal');
+            const inst = bootstrap.Modal.getInstance(modalEl);
+            if (inst) inst.hide();
+            cleanupPracticeTimers();
+            if (practiceSession?.id) {
+              await cancelSession(practiceSession.id);
+              practiceSession = null;
+            }
+            const cb = pendingPracticeExitCallback || (() => navigateTo('practice'));
+            pendingPracticeExitCallback = null;
+            cb();
+            showToast('Đã hủy phiên làm bài.', 'secondary');
+          });
+
           document.getElementById('summaryBackToListBtn').addEventListener('click', () => {
             cleanupPracticeTimers();
             navigateTo('practice');
@@ -1647,6 +1715,17 @@ import { supabase } from './supabase.js';
               startSessionWithMode(practiceSession.set_id, currentSessionMode, true);
             }
           });
+
+          // Cảnh báo khi người dùng vô tình đóng tab / reload trong khi đang làm bài
+          window.addEventListener('beforeunload', (e) => {
+            const sessionPage = document.getElementById('page-student-practice-session');
+            const isSessionActive = sessionPage && !sessionPage.classList.contains('d-none') && practiceSession;
+            if (isSessionActive) {
+              e.preventDefault();
+              e.returnValue = '';
+            }
+          });
+
 
           // Filter listeners
           document.getElementById('practiceFilterLevel').addEventListener('change', renderPracticeSets);
@@ -1818,8 +1897,13 @@ import { supabase } from './supabase.js';
               }
             }
 
-            const session = await startSession(currentUser.id, setId, mode);
-            practiceSession = { id: session.id, set_id: setId };
+            if (mode === 'exam') {
+              // Chế độ Thi thử: Không tạo session trên Supabase trước, chỉ lưu khi học viên nộp bài thi
+              practiceSession = { id: null, set_id: setId };
+            } else {
+              const session = await startSession(currentUser.id, setId, mode);
+              practiceSession = { id: session.id, set_id: setId };
+            }
             currentSessionMode = mode;
             currentSetData = setData;
             practiceQuestions = setData.questions;
@@ -2055,6 +2139,18 @@ import { supabase } from './supabase.js';
           document.getElementById('examSpeakArea').classList.remove('d-none');
 
           const q = practiceQuestions[practiceCurrentIdx];
+          const isLastQ = (practiceCurrentIdx === practiceQuestions.length - 1);
+          const finishBtn = document.getElementById('finishExamSpeakBtn');
+          if (finishBtn) {
+            if (isLastQ) {
+              finishBtn.className = 'btn btn-success btn-sm px-3 fw-bold';
+              finishBtn.innerHTML = '<i class="bi bi-send-check me-1"></i>Hoàn thành & Nộp bài thi';
+            } else {
+              finishBtn.className = 'btn btn-outline-danger btn-sm px-3';
+              finishBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Nộp câu này sớm';
+            }
+          }
+
           const speakSeconds = (q.response_time !== undefined && q.response_time !== null) ? q.response_time : 45;
           examRemainingSeconds = speakSeconds;
 
@@ -2118,7 +2214,7 @@ import { supabase } from './supabase.js';
           const q = practiceQuestions[practiceCurrentIdx];
           const isLast = (practiceCurrentIdx === practiceQuestions.length - 1);
 
-          // Tạo promise xử lý upload & chấm câu này
+          // Tạo promise xử lý chấm câu này (không upload lên Supabase khi chưa nộp bài)
           const assessPromise = (async () => {
             try {
               const apiUrl = window.globalApiUrl;
@@ -2127,10 +2223,7 @@ import { supabase } from './supabase.js';
                 try { sEmb = JSON.parse(sEmb); } catch (e) {}
               }
 
-              // Upload audio
-              const audioUrl = await uploadPracticeAudio(currentUser.id, audioBlob, `q${practiceCurrentIdx + 1}_exam.webm`);
-
-              // Assess
+              // Assess trực tiếp qua backend API (không động tới Supabase)
               let scores = { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
               let transcript = '';
               let result = null;
@@ -2160,21 +2253,11 @@ import { supabase } from './supabase.js';
                 }
               }
 
-              // Lưu DB
-              await saveAnswer(practiceSession.id, q.id, {
-                audio_url: audioUrl,
-                transcript,
-                score_total: scores.total,
-                score_accuracy: scores.accuracy,
-                score_fluency: scores.fluency,
-                score_prosodic: scores.prosodic,
-                result_json: result,
-              });
-
-              practiceAnswers[q.id] = { blob: audioBlob, result, scores, transcript, audioUrl };
+              // Lưu kết quả tạm thời trong bộ nhớ trình duyệt, audioUrl sẽ có khi nộp bài
+              practiceAnswers[q.id] = { blob: audioBlob, result, scores, transcript, audioUrl: null };
             } catch (e) {
-              console.error(`Lỗi xử lý câu ${q.id}:`, e);
-              practiceAnswers[q.id] = { blob: audioBlob, scores: { total: 5, accuracy: 5, fluency: 5, prosodic: 5 }, transcript: '' };
+              console.error(`Lỗi chấm câu ${q.id}:`, e);
+              practiceAnswers[q.id] = { blob: audioBlob, scores: { total: 5, accuracy: 5, fluency: 5, prosodic: 5 }, transcript: '', audioUrl: null };
             }
           })();
 
@@ -2185,10 +2268,10 @@ import { supabase } from './supabase.js';
             practiceCurrentIdx++;
             renderCurrentQuestion();
           } else {
-            // Câu cuối cùng -> Đợi chấm toàn bài và hiển thị kết quả
+            // Câu cuối cùng -> Đợi chấm toàn bài và thực hiện nộp bài lên Supabase
             document.getElementById('examSpeakArea').classList.add('d-none');
             document.getElementById('practiceScoringOverlay').classList.remove('d-none');
-            document.getElementById('practiceScoringStep').textContent = 'Đang thu bài và chấm điểm toàn bộ bài thi...';
+            document.getElementById('practiceScoringStep').textContent = 'Đang thu bài và xử lý âm thanh...';
 
             await Promise.all(examAssessPromises);
             await finishPracticeSession();
@@ -2385,9 +2468,49 @@ import { supabase } from './supabase.js';
               }
               const avgScore = count > 0 ? (sum / count) : 0;
               bandInfo = calculateBandScore(avgScore, examType);
+
+              // CHẾ ĐỘ THI THỬ: Chỉ lưu lên Supabase khi học viên nộp bài thi
+              document.getElementById('practiceScoringOverlay')?.classList.remove('d-none');
+              const stepEl = document.getElementById('practiceScoringStep');
+              if (stepEl) stepEl.textContent = 'Đang nộp bài và tạo phiên thi trên hệ thống...';
+
+              // 1. Tạo phiên thi trên Supabase
+              const session = await startSession(currentUser.id, currentSetData.id, 'exam');
+              practiceSession = { id: session.id, set_id: currentSetData.id };
+
+              // 2. Upload các file ghi âm và lưu câu trả lời vào Supabase
+              for (let idx = 0; idx < practiceQuestions.length; idx++) {
+                const q = practiceQuestions[idx];
+                const a = practiceAnswers[q.id];
+                if (a) {
+                  let audioUrl = a.audioUrl || null;
+                  if (!audioUrl && a.blob) {
+                    if (stepEl) stepEl.textContent = `Đang tải lên bài ghi âm câu ${idx + 1}/${practiceQuestions.length}...`;
+                    try {
+                      audioUrl = await uploadPracticeAudio(currentUser.id, a.blob, `q${idx + 1}_exam_${Date.now()}.webm`);
+                      a.audioUrl = audioUrl;
+                    } catch (err) {
+                      console.warn('Lỗi upload audio câu', idx + 1, err);
+                    }
+                  }
+
+                  await saveAnswer(practiceSession.id, q.id, {
+                    audio_url: audioUrl,
+                    transcript: a.transcript || '',
+                    score_total: a.scores?.total || 0,
+                    score_accuracy: a.scores?.accuracy || 0,
+                    score_fluency: a.scores?.fluency || 0,
+                    score_prosodic: a.scores?.prosodic || 0,
+                    result_json: a.result || null,
+                  });
+                }
+              }
+
+              if (stepEl) stepEl.textContent = 'Đang hoàn tất và tổng hợp kết quả thi...';
             }
 
             const finalScores = await completeSession(practiceSession.id, bandInfo ? bandInfo.band : null);
+            document.getElementById('practiceScoringOverlay')?.classList.add('d-none');
 
             // Show summary page
             document.querySelectorAll('.page-section').forEach(p => p.classList.add('d-none'));
@@ -2444,6 +2567,7 @@ import { supabase } from './supabase.js';
             }).join('');
 
           } catch (e) {
+            document.getElementById('practiceScoringOverlay')?.classList.add('d-none');
             alert('Lỗi hoàn thành phiên: ' + e.message);
           }
         }
@@ -2563,8 +2687,21 @@ import { supabase } from './supabase.js';
                       <div class="score-val ${valClass(a.score_prosodic || 0)}">${(a.score_prosodic || 0).toFixed(1)}</div>
                     </div>
                   </div>
-                  ${a.transcript ? `<div class="text-muted small mt-1"><i class="bi bi-chat-dots me-1"></i>"${a.transcript}"</div>` : ''}
-                  ${a.audio_url ? `<audio controls class="w-100 mt-2" src="${a.audio_url}"></audio>` : ''}
+                  ${a.transcript ? `
+                    <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25 mt-2">
+                      <div class="text-muted smaller fw-semibold mb-1"><i class="bi bi-chat-left-quote me-1 text-primary"></i>Transcript nhận diện:</div>
+                      <div class="small text-light">"${a.transcript}"</div>
+                    </div>
+                  ` : ''}
+                  ${a.audio_url ? `
+                    <div class="mt-2 p-2 rounded bg-dark border border-secondary border-opacity-25">
+                      <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="smaller text-info fw-semibold"><i class="bi bi-soundwave me-1"></i>Bản ghi âm câu trả lời:</span>
+                        <a href="${a.audio_url}" target="_blank" class="smaller text-muted text-decoration-none" title="Mở file ghi âm"><i class="bi bi-box-arrow-up-right me-1"></i>Mở audio</a>
+                      </div>
+                      <audio controls class="w-100" style="height: 36px;" src="${a.audio_url}"></audio>
+                    </div>
+                  ` : '<div class="text-muted smaller mt-2 fst-italic"><i class="bi bi-mic-mute me-1"></i>Không có bản ghi âm</div>'}
                 </div>
               `).join('')}
             `;
@@ -2598,7 +2735,8 @@ import { supabase } from './supabase.js';
                 question_set:question_sets(id, title, level, exam_type)
               `)
               .eq('student_id', studentId)
-              .order('started_at', { ascending: false });
+              .eq('status', 'completed')
+              .order('completed_at', { ascending: false });
 
             if (error) throw error;
 
@@ -2618,7 +2756,7 @@ import { supabase } from './supabase.js';
           const modalEl = document.getElementById('teacherSessionsModal');
           document.getElementById('teacherSessionsModalTitle').innerHTML =
             `<i class="bi bi-journal-check text-info me-2"></i>Bài nộp: ${setTitle}`;
-          document.getElementById('teacherSessionsModalSubtitle').textContent = 'Danh sách tất cả học viên đã làm bài thi / luyện tập bộ đề này';
+          document.getElementById('teacherSessionsModalSubtitle').textContent = 'Danh sách tất cả học viên đã hoàn thành bài thi / luyện tập bộ đề này';
           const listEl = document.getElementById('teacherSessionsList');
           listEl.innerHTML = '<div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Đang tải dữ liệu...</div>';
 
@@ -2634,7 +2772,8 @@ import { supabase } from './supabase.js';
                 student:profiles!student_id(id, full_name, email)
               `)
               .eq('set_id', setId)
-              .order('started_at', { ascending: false });
+              .eq('status', 'completed')
+              .order('completed_at', { ascending: false });
 
             if (error) throw error;
 
