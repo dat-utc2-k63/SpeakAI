@@ -111,7 +111,15 @@ def extract_embedding_api(audio: UploadFile = File(...)):
         return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
 
 @app.post('/assess_start')
-def assess_start_api(background_tasks: BackgroundTasks, audio: UploadFile = File(...), teacher_embeddings_json: str = Form(...), student_embeddings_json: str = Form(...), score_teacher: bool = Form(False), skip_feedback: bool = Form(False)):
+def assess_start_api(
+    background_tasks: BackgroundTasks,
+    audio: UploadFile = File(...),
+    teacher_embeddings_json: str = Form("[]"),
+    student_embeddings_json: str = Form("[]"),
+    score_teacher: bool = Form(False),
+    skip_feedback: bool = Form(False),
+    diarize: str = Form("true"),
+):
     try:
         task_id = str(uuid.uuid4())
         tasks[task_id] = {'status': 'processing', 'step': 'Đang tải file âm thanh lên server...', 'result': None, 'llm_feedback': None}
@@ -123,37 +131,88 @@ def assess_start_api(background_tasks: BackgroundTasks, audio: UploadFile = File
         conv_path = f'/tmp/SpeakAI_Audio/{task_id}_converted.wav'
         os.system(f'ffmpeg -y -i \"{raw_conv_path}\" -ar 16000 -ac 1 \"{conv_path}\" -loglevel quiet')
         
-        background_tasks.add_task(process_assessment, task_id, conv_path, teacher_embeddings_json, student_embeddings_json, score_teacher, skip_feedback)
+        is_diarize = str(diarize).strip().lower() not in ('false', '0', 'no', 'none', 'f')
+        background_tasks.add_task(
+            process_assessment,
+            task_id,
+            conv_path,
+            teacher_embeddings_json,
+            student_embeddings_json,
+            score_teacher,
+            skip_feedback,
+            is_diarize,
+        )
         return JSONResponse({'success': True, 'task_id': task_id})
     except Exception as e:
         return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
 
-def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embeddings_json, score_teacher, skip_feedback):
+@app.post('/assess_practice')
+def assess_practice_api(
+    background_tasks: BackgroundTasks,
+    audio: UploadFile = File(...),
+    skip_feedback: bool = Form(True),
+):
     try:
-        tasks[task_id]['step'] = 'Đang phân tích embeddings...'
+        task_id = str(uuid.uuid4())
+        tasks[task_id] = {'status': 'processing', 'step': 'Đang tải file âm thanh lên server...', 'result': None, 'llm_feedback': None}
         
-        # Parse Embeddings của Giáo viên
-        t_emb_list = json.loads(teacher_embeddings_json)
-        teacher_emb = np.array(t_emb_list, dtype=np.float32)
-        if len(teacher_emb.shape) == 2:
-            teacher_emb = np.mean(teacher_emb, axis=0)
-        teacher_emb /= np.linalg.norm(teacher_emb)
-
-        # Parse Embeddings của Học viên
-        s_emb_list = json.loads(student_embeddings_json)
-        student_emb = np.array(s_emb_list, dtype=np.float32)
-        if len(student_emb.shape) == 2:
-            student_emb = np.mean(student_emb, axis=0)
-        student_emb /= np.linalg.norm(student_emb)
+        raw_conv_path = f'/tmp/SpeakAI_Audio/{task_id}_raw_{audio.filename}'
+        with open(raw_conv_path, 'wb') as f:
+            shutil.copyfileobj(audio.file, f)
         
-        # Gọi Pipeline (chạy cả 2 model: pronunciation + L2-MDD)
-        tasks[task_id]['step'] = 'Đang tách lời (Diarization) & Phân tích phát âm (2 models)...'
-        raw_result = pipeline.assess_conversation(
+        conv_path = f'/tmp/SpeakAI_Audio/{task_id}_converted.wav'
+        os.system(f'ffmpeg -y -i \"{raw_conv_path}\" -ar 16000 -ac 1 \"{conv_path}\" -loglevel quiet')
+        
+        background_tasks.add_task(
+            process_assessment,
+            task_id,
             conv_path,
-            teacher_embedding=teacher_emb,
-            student_embedding=student_emb,
-            score_teacher=score_teacher
+            "[]",
+            "[]",
+            False,
+            skip_feedback,
+            False,
         )
+        return JSONResponse({'success': True, 'task_id': task_id})
+    except Exception as e:
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embeddings_json, score_teacher, skip_feedback, diarize=True):
+    try:
+        if not diarize:
+            tasks[task_id]['step'] = 'Đang phân tích phát âm trực tiếp (Single Speaker, không Diarization)...'
+            raw_result = pipeline.assess_single_speaker(conv_path)
+        else:
+            tasks[task_id]['step'] = 'Đang phân tích embeddings...'
+            
+            # Parse Embeddings của Giáo viên
+            t_emb_list = json.loads(teacher_embeddings_json or "[]")
+            if t_emb_list:
+                teacher_emb = np.array(t_emb_list, dtype=np.float32)
+                if len(teacher_emb.shape) == 2:
+                    teacher_emb = np.mean(teacher_emb, axis=0)
+                teacher_emb /= (np.linalg.norm(teacher_emb) + 1e-8)
+            else:
+                teacher_emb = None
+
+            # Parse Embeddings của Học viên
+            s_emb_list = json.loads(student_embeddings_json or "[]")
+            if s_emb_list:
+                student_emb = np.array(s_emb_list, dtype=np.float32)
+                if len(student_emb.shape) == 2:
+                    student_emb = np.mean(student_emb, axis=0)
+                student_emb /= (np.linalg.norm(student_emb) + 1e-8)
+            else:
+                student_emb = None
+            
+            # Gọi Pipeline (chạy cả 2 model: pronunciation + L2-MDD)
+            tasks[task_id]['step'] = 'Đang tách lời (Diarization) & Phân tích phát âm (2 models)...'
+            raw_result = pipeline.assess_conversation(
+                conv_path,
+                teacher_embedding=teacher_emb,
+                student_embedding=student_emb,
+                score_teacher=score_teacher
+            )
         
         # NOTE: Không áp dụng apply_penalty nữa.
         # Điểm từ model đã được train và calibrate rồi, 
@@ -225,8 +284,8 @@ def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embe
                     
         convert_paths_to_urls(raw_result)
         
-        # Xóa file audio tạm
-        if os.path.exists(conv_path):
+        # Xóa file audio tạm (chỉ xóa khi diarize=True vì khi đó đã có file teacher/student riêng)
+        if diarize and os.path.exists(conv_path):
             os.remove(conv_path)
             
         tasks[task_id]['result'] = raw_result

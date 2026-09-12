@@ -8,6 +8,17 @@ import { supabase } from './supabase.js';
         import { fetchStudentProfile, fetchStudentAssessments, fetchStudentStats } from './student.js';
         import { ENROLLMENT_SENTENCES, uploadVoiceSample, markVoiceEnrolled } from './voice.js';
         import { fetchEmbeddingFromBackend, cosineSimilarity } from './voice.js';
+        import {
+          fetchQuestionSets, createQuestionSet, updateQuestionSet, deleteQuestionSet,
+          togglePublishSet, fetchQuestions, addQuestion, updateQuestion, deleteQuestion
+        } from './question_sets.js';
+        import {
+          fetchPublishedSets, fetchSetWithQuestions, startSession, saveAnswer,
+          completeSession, fetchSessionHistory, fetchSessionDetail,
+          uploadPracticeAudio, assessSingleAnswer,
+          playBeep, playStartTone, playEndTone, calculateBandScore,
+          fetchActiveSession, cancelSession
+        } from './practice.js';
 
 
         // ── AUTH GUARD ────────────────────────────────────────────
@@ -146,9 +157,22 @@ import { supabase } from './supabase.js';
             el.classList.toggle('active', el.dataset.page === page);
           });
           const role = currentProfile.role;
-          const sectionId = page === 'profile' ? 'page-profile' : `page-${role}-${page}`;
+          // Special pages that don't follow standard role-page pattern
+          const specialPages = ['practice-session', 'practice-summary', 'questionset-edit'];
+          let sectionId;
+          if (page === 'profile') {
+            sectionId = 'page-profile';
+          } else if (specialPages.includes(page)) {
+            sectionId = `page-${role}-${page}`;
+          } else {
+            sectionId = `page-${role}-${page}`;
+          }
           const section = document.getElementById(sectionId);
           if (section) section.classList.remove('d-none');
+          // Trigger page-specific init
+          if (page === 'questionsets' && role === 'teacher') renderQuestionSets();
+          if (page === 'practice' && role === 'student') renderPracticeSets();
+          if (page === 'practice-history' && role === 'student') renderPracticeHistory();
         };
 
         // ── TEACHER ───────────────────────────────────────────────
@@ -180,6 +204,9 @@ import { supabase } from './supabase.js';
 
           // Assess flow
           initAssessFlow();
+
+          // Question Sets
+          initQuestionSetsUI();
         }
 
         function renderRecentStudents(students) {
@@ -216,7 +243,7 @@ import { supabase } from './supabase.js';
             const hasVoice = hasVoiceEnrolled(s);
             return `
     <div class="col-md-6 col-lg-4 student-card-wrap" data-name="${s.full_name.toLowerCase()}">
-      <div class="section-card h-100">
+      <div class="section-card h-100 d-flex flex-column">
         <div class="d-flex align-items-center gap-3 mb-3">
           <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=4F46E5&color=fff&size=80"
                class="rounded-circle" width="52" height="52" alt="avatar" />
@@ -231,7 +258,12 @@ import { supabase } from './supabase.js';
           </span>
           ${s.phone ? `<span class="badge bg-outline-secondary">${s.phone}</span>` : ''}
         </div>
-        <div class="text-muted smaller mt-2">Tham gia: ${new Date(s.created_at).toLocaleDateString('vi-VN')}</div>
+        <div class="text-muted smaller mt-2 mb-3">Tham gia: ${new Date(s.created_at).toLocaleDateString('vi-VN')}</div>
+        <div class="mt-auto pt-2 border-top border-secondary border-opacity-25">
+          <button class="btn btn-sm btn-outline-primary w-100 fw-semibold" onclick="openTeacherStudentSessions('${s.id}', '${encodeURIComponent(s.full_name)}')">
+            <i class="bi bi-award me-1"></i>Xem bài Luyện & Thi thử
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -801,6 +833,9 @@ import { supabase } from './supabase.js';
           document.getElementById('stuResultsList').innerHTML =
             assessments.length ? assessments.map(a => renderAssessmentCard(a, false)).join('') :
               '<div class="text-muted text-center p-5">Chưa có bài đánh giá nào</div>';
+
+          // Practice flow
+          initPracticeUI();
         }
 
         // ── SHARED RENDERERS ──────────────────────────────────────
@@ -1274,3 +1309,1404 @@ import { supabase } from './supabase.js';
             setLoading(btn, false);
           }
         });
+
+        // ══════════════════════════════════════════════════════════
+        // TEACHER: QUESTION SETS MANAGEMENT
+        // ══════════════════════════════════════════════════════════
+        let currentEditSetId = null;
+        let currentEditSetPublished = false;
+
+        function initQuestionSetsUI() {
+          document.getElementById('createQSetBtn').addEventListener('click', async () => {
+            try {
+              const newSet = await createQuestionSet(currentUser.id, {
+                title: 'Bộ đề mới',
+                description: '',
+                level: 'intermediate',
+              });
+              openQuestionSetEditor(newSet.id);
+            } catch (e) {
+              alert('Lỗi tạo bộ đề: ' + e.message);
+            }
+          });
+
+          document.getElementById('backToQSetsBtn').addEventListener('click', () => {
+            navigateTo('questionsets');
+          });
+
+          document.getElementById('saveQSetInfoBtn').addEventListener('click', async () => {
+            if (!currentEditSetId) return;
+            const title = document.getElementById('qsetTitleInput').value.trim();
+            if (!title) { alert('Vui lòng nhập tiêu đề!'); return; }
+            try {
+              await updateQuestionSet(currentEditSetId, {
+                title,
+                description: document.getElementById('qsetDescInput').value.trim(),
+                level: document.getElementById('qsetLevelSelect').value,
+                exam_type: document.getElementById('qsetExamTypeSelect').value || 'general',
+              });
+              document.getElementById('qsetEditorTitle').textContent = title;
+              showToast('Đã lưu thông tin bộ đề!', 'success');
+            } catch (e) {
+              alert('Lỗi: ' + e.message);
+            }
+          });
+
+          document.getElementById('togglePublishBtn').addEventListener('click', async () => {
+            if (!currentEditSetId) return;
+            try {
+              const newState = !currentEditSetPublished;
+              await togglePublishSet(currentEditSetId, newState);
+              currentEditSetPublished = newState;
+              updatePublishBtnUI();
+              showToast(newState ? 'Đã publish bộ đề!' : 'Đã gỡ publish!', 'success');
+            } catch (e) {
+              alert('Lỗi: ' + e.message);
+            }
+          });
+
+          document.getElementById('deleteQSetBtn').addEventListener('click', async () => {
+            if (!currentEditSetId) return;
+            if (!confirm('Bạn có chắc muốn xóa bộ đề này?')) return;
+            try {
+              await deleteQuestionSet(currentEditSetId);
+              showToast('Đã xóa bộ đề!', 'success');
+              navigateTo('questionsets');
+            } catch (e) {
+              alert('Lỗi: ' + e.message);
+            }
+          });
+
+          document.getElementById('addQuestionBtn').addEventListener('click', () => {
+            document.getElementById('editQuestionId').value = '';
+            document.getElementById('qPartTitleInput').value = '';
+            document.getElementById('qPrepTimeInput').value = '15';
+            document.getElementById('qResponseTimeInput').value = '45';
+            document.getElementById('qTextInput').value = '';
+            document.getElementById('qRefInput').value = '';
+            document.getElementById('qHintInput').value = '';
+            document.getElementById('questionModalTitle').innerHTML =
+              '<i class="bi bi-chat-square-text me-2 text-primary"></i>Thêm câu hỏi';
+            new bootstrap.Modal(document.getElementById('questionModal')).show();
+          });
+
+          document.getElementById('saveQuestionBtn').addEventListener('click', async () => {
+            const qText = document.getElementById('qTextInput').value.trim();
+            if (!qText) { alert('Vui lòng nhập câu hỏi!'); return; }
+            const editId = document.getElementById('editQuestionId').value;
+            const partTitle = document.getElementById('qPartTitleInput').value.trim() || null;
+            const prepTime = parseInt(document.getElementById('qPrepTimeInput').value) || 15;
+            const responseTime = parseInt(document.getElementById('qResponseTimeInput').value) || 45;
+
+            try {
+              if (editId) {
+                await updateQuestion(editId, {
+                  question_text: qText,
+                  reference_text: document.getElementById('qRefInput').value.trim() || null,
+                  hint: document.getElementById('qHintInput').value.trim() || null,
+                  part_title: partTitle,
+                  prep_time: prepTime,
+                  response_time: responseTime,
+                });
+              } else {
+                const existingQs = await fetchQuestions(currentEditSetId);
+                await addQuestion(currentEditSetId, {
+                  question_text: qText,
+                  reference_text: document.getElementById('qRefInput').value.trim() || null,
+                  hint: document.getElementById('qHintInput').value.trim() || null,
+                  order_num: existingQs.length + 1,
+                  part_title: partTitle,
+                  prep_time: prepTime,
+                  response_time: responseTime,
+                });
+              }
+              bootstrap.Modal.getInstance(document.getElementById('questionModal')).hide();
+              showToast(editId ? 'Đã cập nhật câu hỏi!' : 'Đã thêm câu hỏi!', 'success');
+              renderQuestionEditor();
+            } catch (e) {
+              alert('Lỗi: ' + e.message);
+            }
+          });
+
+          // Filters
+          document.getElementById('qsetFilterLevel').addEventListener('change', renderQuestionSets);
+          document.getElementById('qsetFilterStatus').addEventListener('change', renderQuestionSets);
+        }
+
+        function updatePublishBtnUI() {
+          const btn = document.getElementById('togglePublishBtn');
+          const text = document.getElementById('publishBtnText');
+          if (currentEditSetPublished) {
+            btn.className = 'btn btn-success btn-sm';
+            text.textContent = 'Đã Publish ✓';
+          } else {
+            btn.className = 'btn btn-outline-secondary btn-sm';
+            text.textContent = 'Publish';
+          }
+        }
+
+        async function renderQuestionSets() {
+          const grid = document.getElementById('qsetGrid');
+          try {
+            let sets = await fetchQuestionSets(currentUser.id);
+            const filterLevel = document.getElementById('qsetFilterLevel').value;
+            const filterStatus = document.getElementById('qsetFilterStatus').value;
+            if (filterLevel) sets = sets.filter(s => s.level === filterLevel);
+            if (filterStatus === 'published') sets = sets.filter(s => s.is_published);
+            if (filterStatus === 'draft') sets = sets.filter(s => !s.is_published);
+
+            if (!sets.length) {
+              grid.innerHTML = `
+                <div class="col-12">
+                  <div class="empty-state">
+                    <i class="bi bi-journal-text"></i>
+                    <div class="empty-title">Chưa có bộ đề nào</div>
+                    <p>Nhấn "Tạo bộ đề mới" để bắt đầu</p>
+                  </div>
+                </div>`;
+              return;
+            }
+
+            grid.innerHTML = sets.map(s => {
+              const levelLabels = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
+              const examTypeLabels = { general: 'General', vstep: 'VSTEP', toeic: 'TOEIC', ielts: 'IELTS' };
+              const examType = s.exam_type || 'general';
+              return `
+                <div class="col-md-6 col-lg-4">
+                  <div class="qset-card" onclick="openQuestionSetEditor('${s.id}')">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                      <span class="exam-type-badge ${examType}">${examTypeLabels[examType] || examType.toUpperCase()}</span>
+                      <span class="status-pill ${s.is_published ? 'published' : 'draft'}">${s.is_published ? '● Đã publish' : '○ Bản nháp'}</span>
+                    </div>
+                    <div class="qset-title">${s.title}</div>
+                    ${s.description ? `<div class="qset-desc">${s.description}</div>` : ''}
+                    <div class="qset-meta mt-2">
+                      <span class="level-badge ${s.level}">${levelLabels[s.level] || s.level}</span>
+                      <span class="badge bg-secondary"><i class="bi bi-chat-square-text me-1"></i>${s.question_count} câu</span>
+                    </div>
+                    <div class="text-muted smaller mt-2 mb-2">${new Date(s.created_at).toLocaleDateString('vi-VN')}</div>
+                    <div class="pt-2 border-top border-secondary border-opacity-25">
+                      <button class="btn btn-sm btn-outline-info w-100 fw-semibold" onclick="event.stopPropagation(); openTeacherSetSubmissions('${s.id}', '${encodeURIComponent(s.title)}')">
+                        <i class="bi bi-people me-1"></i>Xem bài nộp học viên
+                      </button>
+                    </div>
+                  </div>
+                </div>`;
+            }).join('');
+          } catch (e) {
+            grid.innerHTML = `<div class="col-12 text-danger">Lỗi tải dữ liệu: ${e.message}</div>`;
+          }
+        }
+
+        window.openQuestionSetEditor = async function (setId) {
+          currentEditSetId = setId;
+          // Show editor page
+          document.querySelectorAll('.page-section').forEach(p => p.classList.add('d-none'));
+          document.getElementById('page-teacher-questionset-edit').classList.remove('d-none');
+
+          try {
+            // Load set info
+            const { data: setData, error } = await supabase
+              .from('question_sets')
+              .select('*')
+              .eq('id', setId)
+              .single();
+            if (error) throw error;
+
+            document.getElementById('qsetTitleInput').value = setData.title;
+            document.getElementById('qsetDescInput').value = setData.description || '';
+            document.getElementById('qsetLevelSelect').value = setData.level;
+            document.getElementById('qsetExamTypeSelect').value = setData.exam_type || 'general';
+            document.getElementById('qsetEditorTitle').textContent = setData.title;
+            document.getElementById('qsetEditorSubtitle').textContent =
+              `Tạo ngày ${new Date(setData.created_at).toLocaleDateString('vi-VN')}`;
+            currentEditSetPublished = setData.is_published;
+            updatePublishBtnUI();
+
+            renderQuestionEditor();
+          } catch (e) {
+            alert('Lỗi tải bộ đề: ' + e.message);
+          }
+        };
+
+        async function renderQuestionEditor() {
+          const list = document.getElementById('questionsList');
+          try {
+            const questions = await fetchQuestions(currentEditSetId);
+            document.getElementById('questionCount').textContent = questions.length;
+
+            if (!questions.length) {
+              list.innerHTML = `
+                <div class="empty-state py-4">
+                  <i class="bi bi-chat-square-text" style="font-size:2rem;"></i>
+                  <div class="empty-title">Chưa có câu hỏi</div>
+                  <p class="small">Nhấn nút bên dưới để thêm câu hỏi đầu tiên</p>
+                </div>`;
+              return;
+            }
+
+            list.innerHTML = questions.map((q, idx) => `
+              <div class="question-editor-item" data-id="${q.id}">
+                <div class="d-flex align-items-start gap-3">
+                  <div class="q-number">${idx + 1}</div>
+                  <div class="flex-grow-1">
+                    ${q.part_title ? `<div class="text-primary small fw-semibold mb-1"><i class="bi bi-bookmark me-1"></i>${q.part_title}</div>` : ''}
+                    <div class="fw-semibold mb-1">${q.question_text}</div>
+                    ${q.reference_text ? `<div class="text-muted small"><i class="bi bi-chat-quote me-1"></i>Mẫu: ${q.reference_text}</div>` : ''}
+                    ${q.hint ? `<div class="text-muted small fst-italic"><i class="bi bi-lightbulb me-1"></i>${q.hint}</div>` : ''}
+                    <div class="d-flex gap-2 mt-2">
+                      <span class="badge bg-secondary-subtle text-secondary small"><i class="bi bi-hourglass-split me-1"></i>Chuẩn bị: ${q.prep_time || 15}s</span>
+                      <span class="badge bg-secondary-subtle text-secondary small"><i class="bi bi-mic me-1"></i>Trả lời: ${q.response_time || 45}s</span>
+                    </div>
+                  </div>
+                  <div class="d-flex gap-1 flex-shrink-0">
+                    <button class="btn btn-sm btn-outline-primary" onclick="editQuestionItem('${q.id}', ${JSON.stringify(q.question_text).replace(/'/g, "&#39;")}, ${JSON.stringify(q.reference_text || '').replace(/'/g, "&#39;")}, ${JSON.stringify(q.hint || '').replace(/'/g, "&#39;")}, ${JSON.stringify(q.part_title || '').replace(/'/g, "&#39;")}, ${q.prep_time || 15}, ${q.response_time || 45})">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteQuestionItem('${q.id}')">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `).join('');
+          } catch (e) {
+            list.innerHTML = `<div class="text-danger">Lỗi: ${e.message}</div>`;
+          }
+        }
+
+        window.editQuestionItem = function (id, text, ref, hint, partTitle = '', prepTime = 15, responseTime = 45) {
+          document.getElementById('editQuestionId').value = id;
+          document.getElementById('qPartTitleInput').value = partTitle || '';
+          document.getElementById('qPrepTimeInput').value = prepTime || 15;
+          document.getElementById('qResponseTimeInput').value = responseTime || 45;
+          document.getElementById('qTextInput').value = text;
+          document.getElementById('qRefInput').value = ref;
+          document.getElementById('qHintInput').value = hint;
+          document.getElementById('questionModalTitle').innerHTML =
+            '<i class="bi bi-pencil me-2 text-primary"></i>Sửa câu hỏi';
+          new bootstrap.Modal(document.getElementById('questionModal')).show();
+        };
+
+        window.deleteQuestionItem = async function (id) {
+          if (!confirm('Xóa câu hỏi này?')) return;
+          try {
+            await deleteQuestion(id);
+            showToast('Đã xóa!', 'success');
+            renderQuestionEditor();
+          } catch (e) {
+            alert('Lỗi: ' + e.message);
+          }
+        };
+
+        // ══════════════════════════════════════════════════════════
+        // STUDENT: PRACTICE & EXAM FLOW (VSTEP / TOEIC / IELTS)
+        // ══════════════════════════════════════════════════════════
+        let practiceSession = null;        // { id, set_id }
+        let practiceQuestions = [];        // Array of question objects
+        let practiceCurrentIdx = 0;        // Current question index
+        let practiceAnswers = {};          // questionId -> { blob, result, scores, transcript, audioUrl, pending }
+        let currentSessionMode = 'practice'; // 'practice' | 'exam'
+        let currentSetData = null;
+        let selectedSetForModal = null;
+        let examAssessPromises = [];
+        let pendingResumeData = null; // Holds activeSession & setData for resume modal
+
+        // Recording & Timers
+        let practiceRecorder = null;
+        let practiceRecordStream = null;
+        let practiceRecordTimer = null;
+        let practiceRecordStartTime = null;
+
+        let examTimerInterval = null;
+        let examRemainingSeconds = 0;
+        let examCurrentPhase = 'idle';     // 'idle' | 'prep' | 'speaking'
+
+        function initPracticeUI() {
+          // Practice interactive mic
+          document.getElementById('practiceRecordBtn').addEventListener('click', togglePracticeRecord);
+          document.getElementById('practiceNextBtn').addEventListener('click', practiceGoNext);
+          document.getElementById('practicePrevBtn').addEventListener('click', practiceGoPrev);
+
+          // Exit & Retry buttons
+          document.getElementById('exitPracticeBtn').addEventListener('click', () => {
+            const promptText = currentSessionMode === 'exam'
+              ? 'Bạn đang trong bài thi thử! Thoát ra sẽ hủy kết quả bài thi. Bạn có chắc chắn muốn thoát?'
+              : 'Bạn có muốn tạm dừng phiên luyện tập? Các câu đã hoàn thành sẽ được lưu lại để bạn có thể làm tiếp sau.';
+            if (confirm(promptText)) {
+              cleanupPracticeTimers();
+              navigateTo('practice');
+            }
+          });
+          document.getElementById('summaryBackToListBtn').addEventListener('click', () => {
+            cleanupPracticeTimers();
+            navigateTo('practice');
+          });
+          document.getElementById('summaryRetryBtn').addEventListener('click', () => {
+            if (practiceSession) {
+              startSessionWithMode(practiceSession.set_id, currentSessionMode, true);
+            }
+          });
+
+          // Filter listeners
+          document.getElementById('practiceFilterLevel').addEventListener('change', renderPracticeSets);
+          document.getElementById('practiceFilterType').addEventListener('change', renderPracticeSets);
+          document.getElementById('historyFilterMode').addEventListener('change', renderPracticeHistory);
+
+          // Mode Selection Modal buttons
+          document.getElementById('selectPracticeModeBtn').addEventListener('click', () => {
+            if (selectedSetForModal) {
+              const modalEl = document.getElementById('modeSelectModal');
+              const modalInst = bootstrap.Modal.getInstance(modalEl);
+              if (modalInst) modalInst.hide();
+              startSessionWithMode(selectedSetForModal.id, 'practice');
+            }
+          });
+
+          document.getElementById('selectExamModeBtn').addEventListener('click', () => {
+            if (selectedSetForModal) {
+              const modalEl = document.getElementById('modeSelectModal');
+              const modalInst = bootstrap.Modal.getInstance(modalEl);
+              if (modalInst) modalInst.hide();
+              startSessionWithMode(selectedSetForModal.id, 'exam');
+            }
+          });
+
+          // Resume Session Modal buttons (Làm tiếp bài dở dang)
+          document.getElementById('resumeContinueBtn').addEventListener('click', () => {
+            const modalEl = document.getElementById('resumeSessionModal');
+            const modalInst = bootstrap.Modal.getInstance(modalEl);
+            if (modalInst) modalInst.hide();
+            if (pendingResumeData) {
+              resumePracticeSession(pendingResumeData.activeSession, pendingResumeData.setData);
+              pendingResumeData = null;
+            }
+          });
+
+          document.getElementById('resumeStartFreshBtn').addEventListener('click', async () => {
+            const modalEl = document.getElementById('resumeSessionModal');
+            const modalInst = bootstrap.Modal.getInstance(modalEl);
+            if (modalInst) modalInst.hide();
+            if (pendingResumeData) {
+              const setId = pendingResumeData.setData.id;
+              await cancelSession(pendingResumeData.activeSession.id);
+              pendingResumeData = null;
+              startSessionWithMode(setId, 'practice', true);
+            }
+          });
+
+          // Exam action buttons
+          document.getElementById('skipPrepBtn').addEventListener('click', () => {
+            if (examCurrentPhase === 'prep') {
+              if (examTimerInterval) { clearInterval(examTimerInterval); examTimerInterval = null; }
+              startExamSpeakingPhase();
+            }
+          });
+
+          document.getElementById('finishExamSpeakBtn').addEventListener('click', () => {
+            if (examCurrentPhase === 'speaking') {
+              stopExamSpeaking();
+            }
+          });
+        }
+
+        function cleanupPracticeTimers() {
+          if (examTimerInterval) { clearInterval(examTimerInterval); examTimerInterval = null; }
+          if (practiceRecordTimer) { clearInterval(practiceRecordTimer); practiceRecordTimer = null; }
+          if (practiceRecorder && practiceRecorder.state === 'recording') {
+            try { practiceRecorder.stop(); } catch (e) {}
+            practiceRecorder = null;
+          }
+          if (practiceRecordStream) {
+            try { practiceRecordStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+            practiceRecordStream = null;
+          }
+        }
+
+        async function renderPracticeSets() {
+          const grid = document.getElementById('practiceSetGrid');
+          try {
+            let sets = await fetchPublishedSets();
+            const filterLevel = document.getElementById('practiceFilterLevel').value;
+            const filterType = document.getElementById('practiceFilterType').value;
+            if (filterLevel) sets = sets.filter(s => s.level === filterLevel);
+            if (filterType) sets = sets.filter(s => (s.exam_type || 'general') === filterType);
+
+            if (!sets.length) {
+              grid.innerHTML = `
+                <div class="col-12">
+                  <div class="empty-state">
+                    <i class="bi bi-journal-text"></i>
+                    <div class="empty-title">Chưa có bộ đề nào phù hợp</div>
+                    <p>Hãy thử thay đổi bộ lọc hoặc đợi giáo viên publish thêm bộ đề</p>
+                  </div>
+                </div>`;
+              return;
+            }
+
+            const levelLabels = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
+            const examTypeLabels = { general: 'General', vstep: 'VSTEP', toeic: 'TOEIC', ielts: 'IELTS' };
+
+            grid.innerHTML = sets.map(s => {
+              const examType = s.exam_type || 'general';
+              return `
+                <div class="col-md-6 col-lg-4">
+                  <div class="qset-card" onclick="openModeSelectModal('${s.id}')">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <span class="exam-type-badge ${examType}">${examTypeLabels[examType] || examType.toUpperCase()}</span>
+                      <span class="level-badge ${s.level}">${levelLabels[s.level] || s.level}</span>
+                    </div>
+                    <div class="qset-title">${s.title}</div>
+                    ${s.description ? `<div class="qset-desc">${s.description}</div>` : ''}
+                    <div class="qset-meta mt-3">
+                      <span class="badge bg-secondary"><i class="bi bi-chat-square-text me-1"></i>${s.question_count} câu</span>
+                      <span class="badge bg-outline-secondary"><i class="bi bi-person me-1"></i>${s.teacher_name}</span>
+                    </div>
+                  </div>
+                </div>`;
+            }).join('');
+          } catch (e) {
+            grid.innerHTML = `<div class="col-12 text-danger">Lỗi: ${e.message}</div>`;
+          }
+        }
+
+        window.openModeSelectModal = async function (setId) {
+          try {
+            const setData = await fetchSetWithQuestions(setId);
+            if (!setData.questions || setData.questions.length === 0) {
+              alert('Bộ đề này hiện chưa có câu hỏi nào!');
+              return;
+            }
+            selectedSetForModal = setData;
+
+            document.getElementById('modeModalTitle').textContent = setData.title;
+            const examTypeLabels = { general: 'General', vstep: 'VSTEP (B1-B2-C1)', toeic: 'TOEIC Speaking', ielts: 'IELTS Speaking' };
+            const examLabel = examTypeLabels[setData.exam_type] || (setData.exam_type || 'General').toUpperCase();
+            document.getElementById('modeModalSubtitle').innerHTML =
+              `<span class="badge bg-primary-soft text-primary me-2">${examLabel}</span>Trình độ: <b class="text-white">${setData.level.toUpperCase()}</b> • <b>${setData.questions.length}</b> câu hỏi`;
+
+            new bootstrap.Modal(document.getElementById('modeSelectModal')).show();
+          } catch (e) {
+            alert('Lỗi tải thông tin bộ đề: ' + e.message);
+          }
+        };
+
+        window.startSessionWithMode = async function (setId, mode = 'practice', forceFresh = false) {
+          cleanupPracticeTimers();
+          try {
+            const setData = await fetchSetWithQuestions(setId);
+            if (!setData.questions || setData.questions.length === 0) {
+              alert('Bộ đề này chưa có câu hỏi nào!');
+              return;
+            }
+
+            // Nếu là chế độ Luyện tập và không ép làm mới: kiểm tra bài làm dở dang
+            if (mode === 'practice' && !forceFresh) {
+              const activeSession = await fetchActiveSession(currentUser.id, setId, 'practice');
+              const answered = activeSession ? (activeSession.practice_answers || []) : [];
+              if (activeSession && answered.length > 0) {
+                pendingResumeData = { activeSession, setData };
+                document.getElementById('resumeModalMessage').textContent =
+                  `Bạn đang có một bài luyện tập dở dang cho bộ đề "${setData.title}".`;
+                document.getElementById('resumeModalProgress').textContent =
+                  `${answered.length}/${setData.questions.length} câu đã hoàn thành`;
+                const pct = Math.min(100, Math.round((answered.length / setData.questions.length) * 100));
+                document.getElementById('resumeModalProgressBar').style.width = `${pct}%`;
+
+                new bootstrap.Modal(document.getElementById('resumeSessionModal')).show();
+                return;
+              }
+            }
+
+            const session = await startSession(currentUser.id, setId, mode);
+            practiceSession = { id: session.id, set_id: setId };
+            currentSessionMode = mode;
+            currentSetData = setData;
+            practiceQuestions = setData.questions;
+            practiceCurrentIdx = 0;
+            practiceAnswers = {};
+            examAssessPromises = [];
+
+            // Switch page
+            document.querySelectorAll('.page-section').forEach(p => p.classList.add('d-none'));
+            document.getElementById('page-student-practice-session').classList.remove('d-none');
+
+            // Header UI
+            document.getElementById('practiceSetTitle').textContent = setData.title;
+            document.getElementById('practiceTotalQ').textContent = practiceQuestions.length;
+
+            const examBanner = document.getElementById('examModeBanner');
+            const modeBadge = document.getElementById('sessionModeBadge');
+            const prevBtn = document.getElementById('practicePrevBtn');
+
+            if (mode === 'exam') {
+              examBanner.classList.remove('d-none');
+              const typeBadge = document.getElementById('examTypeBadge');
+              const examType = setData.exam_type || 'general';
+              typeBadge.className = `exam-type-badge ${examType}`;
+              typeBadge.textContent = examType.toUpperCase();
+
+              modeBadge.className = 'badge bg-warning text-dark fw-bold';
+              modeBadge.textContent = `THI THỬ (${examType.toUpperCase()})`;
+              prevBtn.classList.add('d-none'); // Thi thật không quay lại câu trước
+            } else {
+              examBanner.classList.add('d-none');
+              modeBadge.className = 'badge bg-primary-soft text-primary fw-bold';
+              modeBadge.textContent = 'LUYỆN TẬP';
+              prevBtn.classList.remove('d-none');
+            }
+
+            renderCurrentQuestion();
+          } catch (e) {
+            alert('Lỗi khởi tạo phiên làm bài: ' + e.message);
+          }
+        };
+
+        function resumePracticeSession(activeSession, setData) {
+          cleanupPracticeTimers();
+          practiceSession = { id: activeSession.id, set_id: setData.id };
+          currentSessionMode = 'practice';
+          currentSetData = setData;
+          practiceQuestions = setData.questions;
+          practiceAnswers = {};
+          examAssessPromises = [];
+
+          // Khôi phục các câu trả lời trước đó từ Supabase
+          for (const a of (activeSession.practice_answers || [])) {
+            practiceAnswers[a.question_id] = {
+              audioUrl: a.audio_url,
+              transcript: a.transcript,
+              scores: {
+                total: a.score_total || 0,
+                accuracy: a.score_accuracy || 0,
+                fluency: a.score_fluency || 0,
+                prosodic: a.score_prosodic || 0,
+              },
+              result: a.result_json,
+            };
+          }
+
+          // Nhảy tới câu chưa làm đầu tiên (hoặc câu 1 nếu đã làm hết)
+          const firstUnanswered = practiceQuestions.findIndex(q => !practiceAnswers[q.id]);
+          practiceCurrentIdx = firstUnanswered !== -1 ? firstUnanswered : 0;
+
+          // Switch page
+          document.querySelectorAll('.page-section').forEach(p => p.classList.add('d-none'));
+          document.getElementById('page-student-practice-session').classList.remove('d-none');
+
+          // Header UI
+          document.getElementById('practiceSetTitle').textContent = setData.title;
+          document.getElementById('practiceTotalQ').textContent = practiceQuestions.length;
+          document.getElementById('examModeBanner').classList.add('d-none');
+          const modeBadge = document.getElementById('sessionModeBadge');
+          modeBadge.className = 'badge bg-primary-soft text-primary fw-bold';
+          modeBadge.textContent = 'LUYỆN TẬP';
+          document.getElementById('practicePrevBtn').classList.remove('d-none');
+
+          renderCurrentQuestion();
+        }
+
+        window.jumpToPracticeQuestion = function (idx) {
+          if (currentSessionMode !== 'practice') return;
+          if (idx >= 0 && idx < practiceQuestions.length) {
+            practiceCurrentIdx = idx;
+            renderCurrentQuestion();
+          }
+        };
+
+        function renderCurrentQuestion() {
+          cleanupPracticeTimers();
+
+          const q = practiceQuestions[practiceCurrentIdx];
+          const area = document.getElementById('practiceQuestionArea');
+          const num = practiceCurrentIdx + 1;
+          const total = practiceQuestions.length;
+
+          document.getElementById('practiceCurrentQ').textContent = num;
+          document.getElementById('practiceProgressFill').style.width = `${(num / total) * 100}%`;
+
+          // Navigation Strip (Pills)
+          const stripEl = document.getElementById('practiceQuestionStrip');
+          if (stripEl) {
+            if (currentSessionMode === 'practice') {
+              stripEl.classList.remove('d-none');
+              stripEl.innerHTML = practiceQuestions.map((ques, idx) => {
+                const isCurrent = idx === practiceCurrentIdx;
+                const isDone = !!(practiceAnswers[ques.id] && practiceAnswers[ques.id].scores);
+                const cls = `q-nav-pill ${isDone ? 'completed' : ''} ${isCurrent ? 'current' : ''}`;
+                const label = isDone && !isCurrent ? '<i class="bi bi-check"></i>' : `${idx + 1}`;
+                return `<div class="${cls}" onclick="jumpToPracticeQuestion(${idx})" title="Câu ${idx + 1}: ${isDone ? 'Đã hoàn thành' : 'Chưa làm'}">${label}</div>`;
+              }).join('');
+            } else {
+              stripEl.classList.add('d-none');
+            }
+          }
+
+          // Navigation buttons
+          const prevBtn = document.getElementById('practicePrevBtn');
+          prevBtn.disabled = practiceCurrentIdx === 0;
+          const nextBtn = document.getElementById('practiceNextBtn');
+
+          if (practiceCurrentIdx === total - 1) {
+            nextBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Hoàn thành';
+            nextBtn.className = 'btn btn-success btn-glow';
+          } else {
+            nextBtn.innerHTML = 'Câu tiếp<i class="bi bi-chevron-right ms-1"></i>';
+            nextBtn.className = 'btn btn-primary btn-glow';
+          }
+
+          // Render Question Card
+          if (currentSessionMode === 'exam') {
+            // EXAM MODE: No hints, no reference text!
+            area.innerHTML = `
+              <div class="practice-question-card">
+                ${q.part_title ? `<div class="text-primary small fw-semibold mb-1"><i class="bi bi-bookmark me-1"></i>${q.part_title}</div>` : ''}
+                <div class="question-number">Câu hỏi ${num} / ${total}</div>
+                <div class="question-text">${q.question_text}</div>
+                <div class="text-muted small fst-italic mt-3">
+                  <i class="bi bi-shield-lock me-1"></i>Chế độ thi: Hãy suy nghĩ trong thời gian chuẩn bị và trả lời rõ ràng vào micro khi có tín hiệu Beep.
+                </div>
+              </div>`;
+
+            // Hide practice recording controls and instant score
+            document.getElementById('practiceRecordingArea').classList.add('d-none');
+            document.getElementById('practiceAnswerResult').classList.add('d-none');
+            document.getElementById('practiceScoringOverlay').classList.add('d-none');
+
+            // Start Exam Preparation Phase
+            startExamPrepPhase();
+
+          } else {
+            // PRACTICE MODE: Full hints, reference text, interactive recording
+            area.innerHTML = `
+              <div class="practice-question-card">
+                ${q.part_title ? `<div class="text-primary small fw-semibold mb-1"><i class="bi bi-bookmark me-1"></i>${q.part_title}</div>` : ''}
+                <div class="question-number">Câu hỏi ${num} / ${total}</div>
+                <div class="question-text">${q.question_text}</div>
+                ${q.hint ? `<div class="question-hint"><i class="bi bi-lightbulb me-1"></i>${q.hint}</div>` : ''}
+                ${q.reference_text ? `<div class="reference-text"><i class="bi bi-chat-quote me-1"></i>Gợi ý trả lời: ${q.reference_text}</div>` : ''}
+              </div>`;
+
+            document.getElementById('examPrepArea').classList.add('d-none');
+            document.getElementById('examSpeakArea').classList.add('d-none');
+
+            // Show existing answer if already recorded
+            const existing = practiceAnswers[q.id];
+            const resultArea = document.getElementById('practiceAnswerResult');
+            if (existing && existing.scores) {
+              renderAnswerResult(existing);
+              resultArea.classList.remove('d-none');
+            } else {
+              resultArea.classList.add('d-none');
+            }
+
+            // Reset recording UI
+            const recordBtn = document.getElementById('practiceRecordBtn');
+            recordBtn.classList.remove('recording');
+            recordBtn.innerHTML = '<i class="bi bi-mic-fill"></i>';
+            document.getElementById('practiceRecordTimer').classList.add('d-none');
+            document.getElementById('practiceRecordStatus').textContent =
+              existing ? 'Nhấn để ghi âm lại' : 'Nhấn để bắt đầu ghi âm';
+            document.getElementById('practiceRecordingArea').classList.remove('d-none');
+            document.getElementById('practiceScoringOverlay').classList.add('d-none');
+          }
+        }
+
+        // ── EXAM MODE PHASES ──────────────────────────────────────
+        function startExamPrepPhase() {
+          examCurrentPhase = 'prep';
+          const q = practiceQuestions[practiceCurrentIdx];
+          const prepSeconds = (q.prep_time !== undefined && q.prep_time !== null) ? q.prep_time : 15;
+
+          document.getElementById('examPrepArea').classList.remove('d-none');
+          document.getElementById('examSpeakArea').classList.add('d-none');
+
+          if (prepSeconds <= 0) {
+            startExamSpeakingPhase();
+            return;
+          }
+
+          examRemainingSeconds = prepSeconds;
+          document.getElementById('examPrepSeconds').textContent = examRemainingSeconds;
+
+          if (examTimerInterval) clearInterval(examTimerInterval);
+          examTimerInterval = setInterval(() => {
+            examRemainingSeconds--;
+            document.getElementById('examPrepSeconds').textContent = examRemainingSeconds;
+
+            if (examRemainingSeconds <= 3 && examRemainingSeconds > 0) {
+              playBeep(700, 0.08);
+            } else if (examRemainingSeconds <= 0) {
+              clearInterval(examTimerInterval);
+              examTimerInterval = null;
+              startExamSpeakingPhase();
+            }
+          }, 1000);
+        }
+
+        async function startExamSpeakingPhase() {
+          if (examTimerInterval) clearInterval(examTimerInterval);
+          examTimerInterval = null;
+          examCurrentPhase = 'speaking';
+
+          playStartTone(); // Beep hiệu lệnh bắt đầu nói!
+
+          document.getElementById('examPrepArea').classList.add('d-none');
+          document.getElementById('examSpeakArea').classList.remove('d-none');
+
+          const q = practiceQuestions[practiceCurrentIdx];
+          const speakSeconds = (q.response_time !== undefined && q.response_time !== null) ? q.response_time : 45;
+          examRemainingSeconds = speakSeconds;
+
+          const updateSpeakTimerDisplay = () => {
+            const mins = String(Math.floor(examRemainingSeconds / 60)).padStart(2, '0');
+            const secs = String(examRemainingSeconds % 60).padStart(2, '0');
+            document.getElementById('examSpeakTimer').textContent = `${mins}:${secs}`;
+          };
+          updateSpeakTimerDisplay();
+
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: { noiseSuppression: true, echoCancellation: true, autoGainControl: true }
+            });
+            practiceRecordStream = stream;
+            const recorder = new MediaRecorder(stream);
+            const chunks = [];
+            recorder.ondataavailable = e => chunks.push(e.data);
+            recorder.onstop = () => {
+              const blob = new Blob(chunks, { type: 'audio/webm' });
+              if (practiceRecordStream) {
+                practiceRecordStream.getTracks().forEach(t => t.stop());
+                practiceRecordStream = null;
+              }
+              submitExamAnswer(blob);
+            };
+            recorder.start();
+            practiceRecorder = recorder;
+
+            examTimerInterval = setInterval(() => {
+              examRemainingSeconds--;
+              updateSpeakTimerDisplay();
+
+              if (examRemainingSeconds <= 3 && examRemainingSeconds > 0) {
+                playBeep(440, 0.12, 'triangle');
+              } else if (examRemainingSeconds <= 0) {
+                clearInterval(examTimerInterval);
+                examTimerInterval = null;
+                stopExamSpeaking();
+              }
+            }, 1000);
+
+          } catch (e) {
+            alert('Không thể truy cập microphone trong phòng thi: ' + e.message);
+          }
+        }
+
+        function stopExamSpeaking() {
+          if (examTimerInterval) {
+            clearInterval(examTimerInterval);
+            examTimerInterval = null;
+          }
+          playEndTone();
+          if (practiceRecorder && practiceRecorder.state === 'recording') {
+            practiceRecorder.stop();
+            practiceRecorder = null;
+          }
+        }
+
+        async function submitExamAnswer(audioBlob) {
+          const q = practiceQuestions[practiceCurrentIdx];
+          const isLast = (practiceCurrentIdx === practiceQuestions.length - 1);
+
+          // Tạo promise xử lý upload & chấm câu này
+          const assessPromise = (async () => {
+            try {
+              const apiUrl = window.globalApiUrl;
+              let sEmb = currentProfile.voice_embeddings;
+              if (typeof sEmb === 'string') {
+                try { sEmb = JSON.parse(sEmb); } catch (e) {}
+              }
+
+              // Upload audio
+              const audioUrl = await uploadPracticeAudio(currentUser.id, audioBlob, `q${practiceCurrentIdx + 1}_exam.webm`);
+
+              // Assess
+              let scores = { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
+              let transcript = '';
+              let result = null;
+
+              if (apiUrl) {
+                result = await assessSingleAnswer(apiUrl, audioBlob, sEmb || []);
+                const studentData = result.student || {};
+                const sentences = studentData.sentences || [];
+                if (sentences.length > 0) {
+                  let count = 0;
+                  for (const s of sentences) {
+                    if (s.scores) {
+                      scores.total += s.scores.total || 0;
+                      scores.accuracy += s.scores.accuracy || 0;
+                      scores.fluency += s.scores.fluency || 0;
+                      scores.prosodic += s.scores.prosodic || 0;
+                      count++;
+                    }
+                    if (s.transcript) transcript += (transcript ? ' ' : '') + s.transcript;
+                  }
+                  if (count > 0) {
+                    scores.total /= count;
+                    scores.accuracy /= count;
+                    scores.fluency /= count;
+                    scores.prosodic /= count;
+                  }
+                }
+              }
+
+              // Lưu DB
+              await saveAnswer(practiceSession.id, q.id, {
+                audio_url: audioUrl,
+                transcript,
+                score_total: scores.total,
+                score_accuracy: scores.accuracy,
+                score_fluency: scores.fluency,
+                score_prosodic: scores.prosodic,
+                result_json: result,
+              });
+
+              practiceAnswers[q.id] = { blob: audioBlob, result, scores, transcript, audioUrl };
+            } catch (e) {
+              console.error(`Lỗi xử lý câu ${q.id}:`, e);
+              practiceAnswers[q.id] = { blob: audioBlob, scores: { total: 5, accuracy: 5, fluency: 5, prosodic: 5 }, transcript: '' };
+            }
+          })();
+
+          examAssessPromises.push(assessPromise);
+
+          if (!isLast) {
+            // Chuyển sang câu tiếp theo ngay lập tức như thi thật!
+            practiceCurrentIdx++;
+            renderCurrentQuestion();
+          } else {
+            // Câu cuối cùng -> Đợi chấm toàn bài và hiển thị kết quả
+            document.getElementById('examSpeakArea').classList.add('d-none');
+            document.getElementById('practiceScoringOverlay').classList.remove('d-none');
+            document.getElementById('practiceScoringStep').textContent = 'Đang thu bài và chấm điểm toàn bộ bài thi...';
+
+            await Promise.all(examAssessPromises);
+            await finishPracticeSession();
+          }
+        }
+
+        // ── PRACTICE MODE RECORDING ───────────────────────────────
+        async function togglePracticeRecord() {
+          const btn = document.getElementById('practiceRecordBtn');
+          const timerEl = document.getElementById('practiceRecordTimer');
+          const statusEl = document.getElementById('practiceRecordStatus');
+
+          if (!practiceRecorder || practiceRecorder.state !== 'recording') {
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { noiseSuppression: true, echoCancellation: true, autoGainControl: true }
+              });
+              practiceRecordStream = stream;
+              const recorder = new MediaRecorder(stream);
+              const chunks = [];
+              recorder.ondataavailable = e => chunks.push(e.data);
+              recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'audio/webm' });
+                practiceRecordStream.getTracks().forEach(t => t.stop());
+                clearInterval(practiceRecordTimer);
+                submitPracticeAnswer(blob);
+              };
+              recorder.start();
+              practiceRecorder = recorder;
+              practiceRecordStartTime = Date.now();
+
+              btn.classList.add('recording');
+              btn.innerHTML = '<i class="bi bi-stop-fill"></i>';
+              timerEl.classList.remove('d-none');
+              timerEl.textContent = '00:00';
+              statusEl.textContent = '● Đang ghi âm... Nhấn để dừng';
+
+              practiceRecordTimer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - practiceRecordStartTime) / 1000);
+                const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                const secs = String(elapsed % 60).padStart(2, '0');
+                timerEl.textContent = `${mins}:${secs}`;
+              }, 500);
+            } catch (e) {
+              alert('Không thể truy cập microphone: ' + e.message);
+            }
+          } else {
+            practiceRecorder.stop();
+            practiceRecorder = null;
+          }
+        }
+
+        async function submitPracticeAnswer(audioBlob) {
+          const q = practiceQuestions[practiceCurrentIdx];
+          const recordBtn = document.getElementById('practiceRecordBtn');
+          const timerEl = document.getElementById('practiceRecordTimer');
+          const statusEl = document.getElementById('practiceRecordStatus');
+          const scoringOverlay = document.getElementById('practiceScoringOverlay');
+
+          recordBtn.classList.remove('recording');
+          recordBtn.innerHTML = '<i class="bi bi-mic-fill"></i>';
+          timerEl.classList.add('d-none');
+
+          document.getElementById('practiceRecordingArea').classList.add('d-none');
+          scoringOverlay.classList.remove('d-none');
+          document.getElementById('practiceScoringStep').textContent = 'Đang gửi audio lên server...';
+
+          try {
+            const apiUrl = window.globalApiUrl;
+            if (!apiUrl) throw new Error('API URL chưa được cấu hình!');
+
+            let sEmb = currentProfile.voice_embeddings;
+            if (typeof sEmb === 'string') {
+              try { sEmb = JSON.parse(sEmb); } catch (e) {}
+            }
+
+            document.getElementById('practiceScoringStep').textContent = 'Đang lưu audio...';
+            const audioUrl = await uploadPracticeAudio(currentUser.id, audioBlob, `q${practiceCurrentIdx + 1}.webm`);
+
+            document.getElementById('practiceScoringStep').textContent = 'Đang phân tích phát âm...';
+            const result = await assessSingleAnswer(apiUrl, audioBlob, sEmb || []);
+
+            let scores = { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
+            let transcript = '';
+            const studentData = result.student || {};
+            const sentences = studentData.sentences || [];
+            if (sentences.length > 0) {
+              let count = 0;
+              for (const s of sentences) {
+                if (s.scores) {
+                  scores.total += s.scores.total || 0;
+                  scores.accuracy += s.scores.accuracy || 0;
+                  scores.fluency += s.scores.fluency || 0;
+                  scores.prosodic += s.scores.prosodic || 0;
+                  count++;
+                }
+                if (s.transcript) transcript += (transcript ? ' ' : '') + s.transcript;
+              }
+              if (count > 0) {
+                scores.total /= count;
+                scores.accuracy /= count;
+                scores.fluency /= count;
+                scores.prosodic /= count;
+              }
+            }
+
+            await saveAnswer(practiceSession.id, q.id, {
+              audio_url: audioUrl,
+              transcript,
+              score_total: scores.total,
+              score_accuracy: scores.accuracy,
+              score_fluency: scores.fluency,
+              score_prosodic: scores.prosodic,
+              result_json: result,
+            });
+
+            practiceAnswers[q.id] = { blob: audioBlob, result, scores, transcript, audioUrl };
+
+            scoringOverlay.classList.add('d-none');
+            document.getElementById('practiceRecordingArea').classList.remove('d-none');
+            statusEl.textContent = 'Nhấn để ghi âm lại';
+            renderAnswerResult(practiceAnswers[q.id]);
+            document.getElementById('practiceAnswerResult').classList.remove('d-none');
+
+          } catch (e) {
+            scoringOverlay.classList.add('d-none');
+            document.getElementById('practiceRecordingArea').classList.remove('d-none');
+            statusEl.textContent = 'Lỗi chấm điểm. Nhấn để thử lại.';
+            alert('Lỗi chấm điểm: ' + e.message);
+          }
+        }
+
+        function renderAnswerResult(answer) {
+          const s = answer.scores;
+          const resultArea = document.getElementById('practiceAnswerResult');
+          const scoreClass = (v) => v >= 8 ? 'excellent' : v >= 6 ? 'good' : v >= 4 ? 'average' : 'poor';
+
+          resultArea.innerHTML = `
+            <div class="answer-result-card">
+              <div class="result-scores">
+                <div class="result-score-item">
+                  <div class="score-label">Total</div>
+                  <div class="score-val ${scoreClass(s.total)}">${s.total.toFixed(1)}</div>
+                </div>
+                <div class="result-score-item">
+                  <div class="score-label">Accuracy</div>
+                  <div class="score-val ${scoreClass(s.accuracy)}">${s.accuracy.toFixed(1)}</div>
+                </div>
+                <div class="result-score-item">
+                  <div class="score-label">Fluency</div>
+                  <div class="score-val ${scoreClass(s.fluency)}">${s.fluency.toFixed(1)}</div>
+                </div>
+                <div class="result-score-item">
+                  <div class="score-label">Prosody</div>
+                  <div class="score-val ${scoreClass(s.prosodic)}">${s.prosodic.toFixed(1)}</div>
+                </div>
+              </div>
+              ${answer.transcript ? `<div class="text-muted small"><i class="bi bi-chat-dots me-1"></i>"${answer.transcript}"</div>` : ''}
+              ${answer.audioUrl ? `<audio controls class="w-100 mt-2" src="${answer.audioUrl}"></audio>` : ''}
+            </div>`;
+        }
+
+        function practiceGoNext() {
+          if (practiceCurrentIdx < practiceQuestions.length - 1) {
+            practiceCurrentIdx++;
+            renderCurrentQuestion();
+          } else {
+            finishPracticeSession();
+          }
+        }
+
+        function practiceGoPrev() {
+          if (currentSessionMode === 'exam') return; // Không cho phép quay lại trong Exam mode
+          if (practiceCurrentIdx > 0) {
+            practiceCurrentIdx--;
+            renderCurrentQuestion();
+          }
+        }
+
+        async function finishPracticeSession() {
+          cleanupPracticeTimers();
+          try {
+            let bandInfo = null;
+            if (currentSessionMode === 'exam') {
+              // Tính sơ bộ band
+              const examType = currentSetData?.exam_type || 'general';
+              let sum = 0, count = 0;
+              for (const q of practiceQuestions) {
+                const a = practiceAnswers[q.id];
+                if (a && a.scores && a.scores.total != null) {
+                  sum += a.scores.total;
+                  count++;
+                }
+              }
+              const avgScore = count > 0 ? (sum / count) : 0;
+              bandInfo = calculateBandScore(avgScore, examType);
+            }
+
+            const finalScores = await completeSession(practiceSession.id, bandInfo ? bandInfo.band : null);
+
+            // Show summary page
+            document.querySelectorAll('.page-section').forEach(p => p.classList.add('d-none'));
+            document.getElementById('page-student-practice-summary').classList.remove('d-none');
+
+            // Exam Band Card
+            const examBandCard = document.getElementById('summaryExamBandCard');
+            if (currentSessionMode === 'exam' && bandInfo) {
+              examBandCard.classList.remove('d-none');
+              document.getElementById('summaryBandCategory').textContent = `KẾT QUẢ THI THỬ ${bandInfo.title.toUpperCase()}`;
+              const badgeEl = document.getElementById('summaryBandBadge');
+              badgeEl.className = `exam-band-badge ${bandInfo.badgeClass}`;
+              badgeEl.textContent = bandInfo.band;
+              document.getElementById('summaryBandTitle').textContent = bandInfo.title;
+              document.getElementById('summaryBandDesc').textContent = bandInfo.description;
+            } else {
+              examBandCard.classList.add('d-none');
+            }
+
+            document.getElementById('summaryTotalScore').textContent = finalScores.score_total.toFixed(1);
+            document.getElementById('summaryAccScore').textContent = finalScores.score_accuracy.toFixed(1);
+            document.getElementById('summaryFluScore').textContent = finalScores.score_fluency.toFixed(1);
+            document.getElementById('summaryProScore').textContent = finalScores.score_prosodic.toFixed(1);
+
+            // Detail list
+            const detailList = document.getElementById('summaryDetailList');
+            detailList.innerHTML = practiceQuestions.map((q, idx) => {
+              const answer = practiceAnswers[q.id];
+              const scoreClass = (v) => v >= 8 ? 'score-success' : v >= 6 ? 'score-warning' : 'score-danger';
+              if (answer && answer.scores) {
+                return `
+                  <div class="practice-history-card" style="cursor:default;">
+                    <div class="history-score ${scoreClass(answer.scores.total)}">${answer.scores.total.toFixed(1)}</div>
+                    <div class="flex-grow-1">
+                      <div class="fw-semibold small">Câu ${idx + 1}: ${q.question_text}</div>
+                      ${answer.transcript ? `<div class="text-muted smaller">"${answer.transcript}"</div>` : ''}
+                      <div class="d-flex gap-2 mt-1">
+                        <span class="badge bg-secondary">Acc: ${answer.scores.accuracy.toFixed(1)}</span>
+                        <span class="badge bg-secondary">Flu: ${answer.scores.fluency.toFixed(1)}</span>
+                        <span class="badge bg-secondary">Pro: ${answer.scores.prosodic.toFixed(1)}</span>
+                      </div>
+                      ${answer.audioUrl ? `<audio controls class="w-100 mt-2" src="${answer.audioUrl}"></audio>` : ''}
+                    </div>
+                  </div>`;
+              }
+              return `
+                <div class="practice-history-card" style="cursor:default;">
+                  <div class="history-score score-danger">--</div>
+                  <div class="flex-grow-1">
+                    <div class="fw-semibold small">Câu ${idx + 1}: ${q.question_text}</div>
+                    <div class="text-muted smaller">Chưa trả lời</div>
+                  </div>
+                </div>`;
+            }).join('');
+
+          } catch (e) {
+            alert('Lỗi hoàn thành phiên: ' + e.message);
+          }
+        }
+
+        async function renderPracticeHistory() {
+          const list = document.getElementById('practiceHistoryList');
+          try {
+            let sessions = await fetchSessionHistory(currentUser.id);
+            const filterMode = document.getElementById('historyFilterMode').value;
+            if (filterMode) sessions = sessions.filter(s => s.mode === filterMode);
+
+            if (!sessions.length) {
+              list.innerHTML = `
+                <div class="empty-state">
+                  <i class="bi bi-clock-history"></i>
+                  <div class="empty-title">Chưa có lịch sử làm bài</div>
+                  <p>Bắt đầu luyện tập hoặc thi thử để xem kết quả tại đây</p>
+                </div>`;
+              return;
+            }
+
+            list.innerHTML = sessions.map(s => {
+              const scoreColor = (s.score_total || 0) >= 8 ? 'score-success' : (s.score_total || 0) >= 6 ? 'score-warning' : 'score-danger';
+              const date = new Date(s.started_at).toLocaleDateString('vi-VN');
+              const time = new Date(s.started_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+              const setTitle = s.question_set?.title || 'Bộ đề';
+              const level = s.question_set?.level || '';
+              const levelLabels = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
+              const isExam = s.mode === 'exam';
+
+              return `
+                <div class="practice-history-card" onclick="openPracticeDetail('${s.id}')">
+                  <div class="history-score ${scoreColor}">${(s.score_total || 0).toFixed(1)}</div>
+                  <div class="flex-grow-1">
+                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                      <span class="fw-semibold">${setTitle}</span>
+                      ${isExam
+                        ? `<span class="badge bg-warning-subtle text-warning border border-warning-subtle small"><i class="bi bi-award me-1"></i>Thi thử: ${s.exam_band || 'Exam'}</span>`
+                        : `<span class="badge bg-success-subtle text-success border border-success-subtle small"><i class="bi bi-book me-1"></i>Luyện tập</span>`
+                      }
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap mt-1">
+                      ${level ? `<span class="level-badge ${level}">${levelLabels[level]}</span>` : ''}
+                      <span class="text-muted small">${date} ${time}</span>
+                    </div>
+                    <div class="d-flex gap-2 mt-1">
+                      <span class="badge bg-secondary">Acc: ${(s.score_accuracy || 0).toFixed(1)}</span>
+                      <span class="badge bg-secondary">Flu: ${(s.score_fluency || 0).toFixed(1)}</span>
+                      <span class="badge bg-secondary">Pro: ${(s.score_prosodic || 0).toFixed(1)}</span>
+                    </div>
+                  </div>
+                  <i class="bi bi-chevron-right text-muted"></i>
+                </div>`;
+            }).join('');
+          } catch (e) {
+            list.innerHTML = `<div class="text-danger">Lỗi: ${e.message}</div>`;
+          }
+        }
+
+        window.openPracticeDetail = async function (sessionId) {
+          try {
+            const detail = await fetchSessionDetail(sessionId);
+            const body = document.getElementById('practiceDetailBody');
+
+            const valClass = (v) => v >= 8 ? 'excellent' : v >= 6 ? 'good' : v >= 4 ? 'average' : 'poor';
+            const isExam = detail.mode === 'exam';
+
+            body.innerHTML = `
+              ${isExam ? `
+                <div class="exam-band-card mb-3" style="padding:1.25rem;">
+                  <div class="text-warning small fw-bold text-uppercase">KẾT QUẢ THI THỬ</div>
+                  <div class="exam-band-badge" style="font-size:2rem; padding:0.25rem 1rem;">${detail.exam_band || 'Thi thử'}</div>
+                </div>
+              ` : ''}
+
+              <div class="practice-summary mb-4" style="padding:1.5rem;">
+                <div class="summary-score" style="font-size:2.5rem;">${(detail.score_total || 0).toFixed(1)}</div>
+                <div class="summary-label">Điểm trung bình / 10</div>
+                <div class="d-flex justify-content-center gap-3 mt-2">
+                  <div class="text-center">
+                    <div class="fw-bold">${(detail.score_accuracy || 0).toFixed(1)}</div>
+                    <div class="text-muted small">Accuracy</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="fw-bold">${(detail.score_fluency || 0).toFixed(1)}</div>
+                    <div class="text-muted small">Fluency</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="fw-bold">${(detail.score_prosodic || 0).toFixed(1)}</div>
+                    <div class="text-muted small">Prosody</div>
+                  </div>
+                </div>
+              </div>
+
+              <h6 class="fw-semibold mb-3"><i class="bi bi-list-check me-2 text-primary"></i>Chi tiết từng câu</h6>
+              ${(detail.answers || []).map((a, idx) => `
+                <div class="answer-result-card mb-2">
+                  <div class="fw-semibold small mb-2">
+                    <span class="text-primary">Câu ${a.question?.order_num || (idx + 1)}:</span>
+                    ${a.question?.question_text || ''}
+                  </div>
+                  <div class="result-scores">
+                    <div class="result-score-item">
+                      <div class="score-label">Total</div>
+                      <div class="score-val ${valClass(a.score_total || 0)}">${(a.score_total || 0).toFixed(1)}</div>
+                    </div>
+                    <div class="result-score-item">
+                      <div class="score-label">Accuracy</div>
+                      <div class="score-val ${valClass(a.score_accuracy || 0)}">${(a.score_accuracy || 0).toFixed(1)}</div>
+                    </div>
+                    <div class="result-score-item">
+                      <div class="score-label">Fluency</div>
+                      <div class="score-val ${valClass(a.score_fluency || 0)}">${(a.score_fluency || 0).toFixed(1)}</div>
+                    </div>
+                    <div class="result-score-item">
+                      <div class="score-label">Prosody</div>
+                      <div class="score-val ${valClass(a.score_prosodic || 0)}">${(a.score_prosodic || 0).toFixed(1)}</div>
+                    </div>
+                  </div>
+                  ${a.transcript ? `<div class="text-muted small mt-1"><i class="bi bi-chat-dots me-1"></i>"${a.transcript}"</div>` : ''}
+                  ${a.audio_url ? `<audio controls class="w-100 mt-2" src="${a.audio_url}"></audio>` : ''}
+                </div>
+              `).join('')}
+            `;
+
+            new bootstrap.Modal(document.getElementById('practiceDetailModal')).show();
+          } catch (e) {
+            alert('Lỗi tải chi tiết: ' + e.message);
+          }
+        };
+
+        // ── TEACHER: VIEW STUDENT SESSIONS & SUBMISSIONS ───────────
+        window.currentTeacherLoadedSessions = [];
+
+        window.openTeacherStudentSessions = async function (studentId, encodedName) {
+          const studentName = decodeURIComponent(encodedName);
+          const modalEl = document.getElementById('teacherSessionsModal');
+          document.getElementById('teacherSessionsModalTitle').innerHTML =
+            `<i class="bi bi-award text-warning me-2"></i>Bài làm của ${studentName}`;
+          document.getElementById('teacherSessionsModalSubtitle').textContent = 'Xem kết quả bài làm và nghe lại audio từng câu';
+          const listEl = document.getElementById('teacherSessionsList');
+          listEl.innerHTML = '<div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Đang tải dữ liệu...</div>';
+
+          new bootstrap.Modal(modalEl).show();
+
+          try {
+            const { data: sessions, error } = await supabase
+              .from('practice_sessions')
+              .select(`
+                id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, exam_band,
+                started_at, completed_at,
+                question_set:question_sets(id, title, level, exam_type)
+              `)
+              .eq('student_id', studentId)
+              .order('started_at', { ascending: false });
+
+            if (error) throw error;
+
+            window.currentTeacherLoadedSessions = (sessions || []).map(s => ({
+              ...s,
+              displayTitle: s.question_set?.title || 'Bộ đề',
+              displaySubtitle: s.question_set?.exam_type ? s.question_set.exam_type.toUpperCase() : ''
+            }));
+            renderTeacherSessionsFiltered();
+          } catch (e) {
+            listEl.innerHTML = `<div class="alert alert-danger py-2">Lỗi tải dữ liệu: ${e.message}</div>`;
+          }
+        };
+
+        window.openTeacherSetSubmissions = async function (setId, encodedTitle) {
+          const setTitle = decodeURIComponent(encodedTitle);
+          const modalEl = document.getElementById('teacherSessionsModal');
+          document.getElementById('teacherSessionsModalTitle').innerHTML =
+            `<i class="bi bi-journal-check text-info me-2"></i>Bài nộp: ${setTitle}`;
+          document.getElementById('teacherSessionsModalSubtitle').textContent = 'Danh sách tất cả học viên đã làm bài thi / luyện tập bộ đề này';
+          const listEl = document.getElementById('teacherSessionsList');
+          listEl.innerHTML = '<div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Đang tải dữ liệu...</div>';
+
+          new bootstrap.Modal(modalEl).show();
+
+          try {
+            const { data: sessions, error } = await supabase
+              .from('practice_sessions')
+              .select(`
+                id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, exam_band,
+                started_at, completed_at,
+                question_set:question_sets(id, title, level, exam_type),
+                student:profiles!student_id(id, full_name, email)
+              `)
+              .eq('set_id', setId)
+              .order('started_at', { ascending: false });
+
+            if (error) throw error;
+
+            window.currentTeacherLoadedSessions = (sessions || []).map(s => ({
+              ...s,
+              displayTitle: s.student?.full_name ? `Học viên: ${s.student.full_name}` : 'Học viên',
+              displaySubtitle: s.student?.email || '',
+            }));
+            renderTeacherSessionsFiltered();
+          } catch (e) {
+            listEl.innerHTML = `<div class="alert alert-danger py-2">Lỗi tải dữ liệu: ${e.message}</div>`;
+          }
+        };
+
+        function renderTeacherSessionsFiltered() {
+          const listEl = document.getElementById('teacherSessionsList');
+          const filter = document.getElementById('teacherSessionsFilterMode')?.value || '';
+          let list = window.currentTeacherLoadedSessions || [];
+          if (filter) list = list.filter(s => s.mode === filter);
+
+          if (!list.length) {
+            listEl.innerHTML = `
+              <div class="empty-state py-4 text-center">
+                <i class="bi bi-journal-x fs-2 text-muted"></i>
+                <div class="text-muted mt-2">Chưa có bài nộp nào trong danh mục này</div>
+              </div>`;
+            return;
+          }
+
+          listEl.innerHTML = list.map(s => {
+            const isExam = s.mode === 'exam';
+            const isDone = s.status === 'completed';
+            const date = new Date(s.started_at).toLocaleDateString('vi-VN');
+            const time = new Date(s.started_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+            const scoreVal = s.score_total != null ? s.score_total.toFixed(1) : '--';
+            const scoreColor = (s.score_total || 0) >= 8 ? 'score-success' : (s.score_total || 0) >= 6 ? 'score-warning' : 'score-danger';
+            const title = s.displayTitle || 'Bộ đề';
+
+            return `
+              <div class="practice-history-card p-3 rounded bg-dark border border-secondary border-opacity-25 d-flex align-items-center gap-3 cursor-pointer" onclick="openPracticeDetailFromTeacher('${s.id}')">
+                <div class="history-score ${scoreColor}" style="min-width:54px; text-align:center; font-size:1.4rem; font-weight:800;">${scoreVal}</div>
+                <div class="flex-grow-1">
+                  <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                    <span class="fw-bold text-white">${title}</span>
+                    ${s.displaySubtitle ? `<span class="text-muted small">(${s.displaySubtitle})</span>` : ''}
+                    ${isExam
+                      ? `<span class="badge bg-warning text-dark fw-bold"><i class="bi bi-award me-1"></i>Thi thử: ${s.exam_band || 'Exam'}</span>`
+                      : `<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-book me-1"></i>Luyện tập</span>`
+                    }
+                    ${!isDone ? `<span class="badge bg-secondary-subtle text-secondary small">Đang làm dở</span>` : ''}
+                  </div>
+                  <div class="d-flex gap-3 flex-wrap small text-muted">
+                    <span><i class="bi bi-calendar3 me-1"></i>${date} ${time}</span>
+                    ${s.score_accuracy != null ? `<span class="text-light">Accuracy: ${s.score_accuracy.toFixed(1)}</span>` : ''}
+                    ${s.score_fluency != null ? `<span class="text-light">Fluency: ${s.score_fluency.toFixed(1)}</span>` : ''}
+                    ${s.score_prosodic != null ? `<span class="text-light">Prosody: ${s.score_prosodic.toFixed(1)}</span>` : ''}
+                  </div>
+                </div>
+                <button class="btn btn-sm btn-outline-info rounded-pill px-3">
+                  <i class="bi bi-eye me-1"></i>Chi tiết & Nghe
+                </button>
+              </div>`;
+          }).join('');
+        }
+
+        window.openPracticeDetailFromTeacher = function (sessionId) {
+          const tModalEl = document.getElementById('teacherSessionsModal');
+          if (tModalEl) {
+            const inst = bootstrap.Modal.getInstance(tModalEl);
+            if (inst) inst.hide();
+          }
+          openPracticeDetail(sessionId);
+        };
+
+        document.getElementById('teacherSessionsFilterMode')?.addEventListener('change', renderTeacherSessionsFiltered);

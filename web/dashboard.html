@@ -73,6 +73,7 @@
     <nav class="sidebar-nav d-none" id="teacherNav">
       <a href="#" class="nav-item active" data-page="overview"><i class="bi bi-grid-1x2"></i><span>Tổng quan</span></a>
       <a href="#" class="nav-item" data-page="students"><i class="bi bi-people"></i><span>Học viên</span></a>
+      <a href="#" class="nav-item" data-page="questionsets"><i class="bi bi-journal-text"></i><span>Bộ đề</span></a>
       <a href="#" class="nav-item" data-page="assess"><i class="bi bi-waveform"></i><span>Chấm điểm</span></a>
       <a href="#" class="nav-item" data-page="history"><i class="bi bi-clock-history"></i><span>Lịch sử</span></a>
       <a href="#" class="nav-item" data-page="profile"><i class="bi bi-person-circle"></i><span>Profile</span></a>
@@ -81,6 +82,8 @@
     <!-- STUDENT NAV -->
     <nav class="sidebar-nav d-none" id="studentNav">
       <a href="#" class="nav-item active" data-page="overview"><i class="bi bi-grid-1x2"></i><span>Tổng quan</span></a>
+      <a href="#" class="nav-item" data-page="practice"><i class="bi bi-mic"></i><span>Luyện Speaking</span></a>
+      <a href="#" class="nav-item" data-page="practice-history"><i class="bi bi-clock-history"></i><span>Lịch sử luyện</span></a>
       <a href="#" class="nav-item" data-page="results"><i class="bi bi-bar-chart-line"></i><span>Kết quả của
           tôi</span></a>
       <a href="#" class="nav-item" data-page="profile"><i class="bi bi-person-circle"></i><span>Profile</span></a>
@@ -392,6 +395,156 @@
       </div>
     </div>
 
+    <!-- TEACHER QUESTION SETS -->
+    <div id="page-teacher-questionsets" class="page-section d-none">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Quản lý Bộ đề Speaking</h1>
+          <p class="text-muted small mb-0">Tạo và quản lý bộ câu hỏi cho học viên luyện tập</p>
+        </div>
+        <button class="btn btn-primary btn-glow" id="createQSetBtn">
+          <i class="bi bi-plus-circle me-2"></i>Tạo bộ đề mới
+        </button>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="d-flex gap-2 mb-4 flex-wrap">
+        <select class="form-select form-select-sm" style="max-width:160px;" id="qsetFilterLevel">
+          <option value="">Tất cả level</option>
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="advanced">Advanced</option>
+        </select>
+        <select class="form-select form-select-sm" style="max-width:160px;" id="qsetFilterStatus">
+          <option value="">Tất cả trạng thái</option>
+          <option value="published">Đã publish</option>
+          <option value="draft">Bản nháp</option>
+        </select>
+      </div>
+
+      <div class="row g-3" id="qsetGrid"></div>
+    </div>
+
+    <!-- TEACHER QUESTION SET EDITOR -->
+    <div id="page-teacher-questionset-edit" class="page-section d-none">
+      <div class="page-header">
+        <div class="d-flex align-items-center gap-3">
+          <button class="btn btn-sm btn-outline-secondary" id="backToQSetsBtn">
+            <i class="bi bi-arrow-left"></i>
+          </button>
+          <div>
+            <h1 class="page-title" id="qsetEditorTitle">Tạo bộ đề mới</h1>
+            <p class="text-muted small mb-0" id="qsetEditorSubtitle">Thêm câu hỏi và cấu hình bộ đề</p>
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary btn-sm" id="togglePublishBtn">
+            <i class="bi bi-globe me-1"></i><span id="publishBtnText">Publish</span>
+          </button>
+          <button class="btn btn-danger btn-sm" id="deleteQSetBtn">
+            <i class="bi bi-trash me-1"></i>Xóa
+          </button>
+        </div>
+      </div>
+
+      <!-- Set info form -->
+      <div class="section-card mb-4">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-info-circle me-2 text-primary"></i>Thông tin bộ đề</h6>
+        <div class="row g-3">
+          <div class="col-md-5">
+            <label class="form-label text-muted small">Tiêu đề bộ đề *</label>
+            <input type="text" class="form-control" id="qsetTitleInput" placeholder="VD: IELTS Speaking Part 1 - Hobbies" />
+          </div>
+          <div class="col-md-3">
+            <label class="form-label text-muted small">Loại đề thi / Chuẩn</label>
+            <select class="form-select" id="qsetExamTypeSelect">
+              <option value="general">Luyện tập chung (General)</option>
+              <option value="vstep">Đề thi VSTEP (B1-B2-C1)</option>
+              <option value="toeic">Đề thi TOEIC Speaking</option>
+              <option value="ielts">Đề thi IELTS Speaking</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label text-muted small">Trình độ</label>
+            <select class="form-select" id="qsetLevelSelect">
+              <option value="beginner">Beginner</option>
+              <option value="intermediate" selected>Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-primary w-100" id="saveQSetInfoBtn">
+              <i class="bi bi-check-circle me-2"></i>Lưu
+            </button>
+          </div>
+          <div class="col-12">
+            <label class="form-label text-muted small">Mô tả (tùy chọn)</label>
+            <textarea class="form-control" id="qsetDescInput" rows="2" placeholder="Mô tả ngắn về bộ đề..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Questions list -->
+      <div class="section-card">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="fw-semibold mb-0"><i class="bi bi-list-ol me-2 text-primary"></i>Danh sách câu hỏi (<span id="questionCount">0</span>)</h6>
+        </div>
+        <div class="d-flex flex-column gap-2" id="questionsList"></div>
+        <button class="add-question-btn mt-3" id="addQuestionBtn">
+          <i class="bi bi-plus-circle me-2"></i>Thêm câu hỏi mới
+        </button>
+      </div>
+    </div>
+
+    <!-- Add/Edit Question Modal -->
+    <div class="modal fade" id="questionModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content glass-modal">
+          <div class="modal-header border-0">
+            <h5 class="modal-title fw-bold" id="questionModalTitle">
+              <i class="bi bi-chat-square-text me-2 text-primary"></i>Thêm câu hỏi
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="editQuestionId" />
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label text-muted small">Phần thi / Tiêu đề câu (Tùy chọn)</label>
+                <input type="text" class="form-control" id="qPartTitleInput" placeholder="VD: Part 1 - Social Interaction" />
+              </div>
+              <div class="col-md-3">
+                <label class="form-label text-muted small">Chuẩn bị (giây)</label>
+                <input type="number" class="form-control" id="qPrepTimeInput" value="15" min="0" max="300" />
+              </div>
+              <div class="col-md-3">
+                <label class="form-label text-muted small">Nói tối đa (giây)</label>
+                <input type="number" class="form-control" id="qResponseTimeInput" value="45" min="10" max="600" />
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Câu hỏi *</label>
+              <textarea class="form-control" id="qTextInput" rows="2" placeholder="VD: What do you usually do in your free time?"></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Câu trả lời mẫu (dùng chấm pronunciation và gợi ý ở chế độ Luyện tập)</label>
+              <textarea class="form-control" id="qRefInput" rows="2" placeholder="VD: I usually spend my free time reading books and going for walks in the park."></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Gợi ý trả lời (chỉ hiển thị ở chế độ Luyện tập)</label>
+              <input type="text" class="form-control" id="qHintInput" placeholder="VD: Talk about 2-3 activities" />
+            </div>
+          </div>
+          <div class="modal-footer border-0">
+            <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
+            <button class="btn btn-primary" id="saveQuestionBtn">
+              <i class="bi bi-check-circle me-2"></i>Lưu câu hỏi
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- TEACHER HISTORY -->
     <div id="page-teacher-history" class="page-section d-none">
       <div class="page-header">
@@ -473,6 +626,344 @@
         <h1 class="page-title">Kết quả của tôi</h1>
       </div>
       <div id="stuResultsList" class="d-flex flex-column gap-3"></div>
+    </div>
+
+    <!-- STUDENT PRACTICE - Chọn bộ đề -->
+    <div id="page-student-practice" class="page-section d-none">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Luyện & Thi Speaking</h1>
+          <p class="text-muted small mb-0">Chọn bộ đề và bắt đầu chế độ Luyện tập hoặc Thi thử theo chuẩn VSTEP / TOEIC / IELTS</p>
+        </div>
+      </div>
+      <div class="d-flex gap-2 mb-4 flex-wrap">
+        <select class="form-select form-select-sm" style="max-width:160px;" id="practiceFilterLevel">
+          <option value="">Tất cả level</option>
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="advanced">Advanced</option>
+        </select>
+        <select class="form-select form-select-sm" style="max-width:180px;" id="practiceFilterType">
+          <option value="">Tất cả định dạng</option>
+          <option value="general">Luyện tập chung</option>
+          <option value="vstep">Đề thi VSTEP</option>
+          <option value="toeic">Đề thi TOEIC</option>
+          <option value="ielts">Đề thi IELTS</option>
+        </select>
+      </div>
+      <div class="row g-3" id="practiceSetGrid"></div>
+    </div>
+
+    <!-- Mode Selection Modal -->
+    <div class="modal fade" id="modeSelectModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content glass-modal">
+          <div class="modal-header border-0 pb-0">
+            <div>
+              <h5 class="modal-title fw-bold" id="modeModalTitle">Chọn chế độ làm bài</h5>
+              <div class="text-muted small" id="modeModalSubtitle">Bộ đề Speaking</div>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-4">
+            <div class="row g-3">
+              <!-- Practice Mode Option -->
+              <div class="col-md-6">
+                <div class="mode-select-card practice" id="selectPracticeModeBtn">
+                  <div class="mode-icon-circle">
+                    <i class="bi bi-book-half"></i>
+                  </div>
+                  <div class="d-flex align-items-center justify-content-between mb-1">
+                    <div class="mode-title">Chế độ Luyện tập</div>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">Học tập tự do</span>
+                  </div>
+                  <p class="mode-desc">Tập trung nâng cao phát âm từng câu, không áp lực phòng thi.</p>
+                  <ul class="mode-features-list">
+                    <li><i class="bi bi-check-circle-fill"></i> Có gợi ý & câu trả lời tham khảo</li>
+                    <li><i class="bi bi-check-circle-fill"></i> Tự do thời gian, không đếm ngược ép buộc</li>
+                    <li><i class="bi bi-check-circle-fill"></i> Được thu âm lại nhiều lần đến khi chuẩn</li>
+                    <li><i class="bi bi-check-circle-fill"></i> Chấm điểm và sửa lỗi phát âm tức thì</li>
+                  </ul>
+                  <button class="btn btn-outline-success w-100 mt-auto fw-bold py-2">
+                    <i class="bi bi-mic me-2"></i>Bắt đầu Luyện tập
+                  </button>
+                </div>
+              </div>
+
+              <!-- Exam Mode Option -->
+              <div class="col-md-6">
+                <div class="mode-select-card exam" id="selectExamModeBtn">
+                  <div class="mode-icon-circle">
+                    <i class="bi bi-award-fill"></i>
+                  </div>
+                  <div class="d-flex align-items-center justify-content-between mb-1">
+                    <div class="mode-title">Chế độ Thi thử</div>
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Mô phỏng thi thật</span>
+                  </div>
+                  <p class="mode-desc">Trải nghiệm áp lực thi thực tế chuẩn VSTEP / TOEIC / IELTS.</p>
+                  <ul class="mode-features-list">
+                    <li><i class="bi bi-hourglass-split"></i> Đếm ngược thời gian Chuẩn bị & Trả lời tự động</li>
+                    <li><i class="bi bi-volume-up-fill"></i> Âm thanh hiệu lệnh (Beep) chuẩn phòng thi</li>
+                    <li><i class="bi bi-mic-mute-fill"></i> Chỉ nói 1 lần duy nhất, không thu âm lại</li>
+                    <li><i class="bi bi-eye-slash-fill"></i> Ẩn toàn bộ gợi ý và câu mẫu</li>
+                    <li><i class="bi bi-trophy-fill"></i> Quy đổi Band điểm chuẩn sau khi nộp bài</li>
+                  </ul>
+                  <button class="btn btn-warning w-100 mt-auto fw-bold py-2 shadow-sm text-dark">
+                    <i class="bi bi-play-circle-fill me-2"></i>Bắt đầu Thi thử
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resume Session Modal (Làm tiếp bài dở) -->
+    <div class="modal fade" id="resumeSessionModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-modal border-0 shadow-lg">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title fw-bold text-white d-flex align-items-center gap-2">
+              <i class="bi bi-arrow-clockwise text-primary"></i> Tiếp tục bài luyện tập?
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body py-3">
+            <p class="text-secondary mb-2" id="resumeModalMessage">
+              Bạn đang có một bài luyện tập dở dang cho bộ đề này.
+            </p>
+            <div class="p-3 rounded bg-dark border border-secondary border-opacity-25 mb-3">
+              <div class="d-flex justify-content-between small text-muted mb-1">
+                <span>Tiến độ đã hoàn thành:</span>
+                <span class="fw-bold text-success" id="resumeModalProgress">0/0 câu</span>
+              </div>
+              <div class="progress" style="height: 6px; background: rgba(255,255,255,0.1);">
+                <div class="progress-bar bg-success" id="resumeModalProgressBar" style="width: 0%"></div>
+              </div>
+            </div>
+            <p class="small text-muted mb-0">
+              Bạn muốn tiếp tục hoàn thành các câu còn lại hay bắt đầu lại từ đầu?
+            </p>
+          </div>
+          <div class="modal-footer border-0 pt-0 d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary flex-grow-1" id="resumeStartFreshBtn">
+              <i class="bi bi-arrow-repeat me-1"></i> Làm lại từ đầu
+            </button>
+            <button type="button" class="btn btn-primary flex-grow-1 btn-glow fw-bold" id="resumeContinueBtn">
+              <i class="bi bi-play-fill me-1"></i> Tiếp tục làm tiếp
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STUDENT PRACTICE SESSION - Làm bài -->
+    <div id="page-student-practice-session" class="page-section d-none">
+      <!-- Exam Banner (only visible in exam mode) -->
+      <div id="examModeBanner" class="exam-banner d-none">
+        <div class="d-flex align-items-center">
+          <span class="exam-status-dot"></span>
+          <span class="fw-bold text-white me-2">PHÒNG THI THỬ TRỰC TUYẾN</span>
+          <span class="exam-type-badge general" id="examTypeBadge">GENERAL</span>
+        </div>
+        <div class="text-white-50 small">
+          <i class="bi bi-shield-lock me-1"></i>Mô phỏng thi thực tế
+        </div>
+      </div>
+
+      <!-- Practice Header -->
+      <div class="practice-header" id="practiceSessionHeader">
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-sm btn-outline-secondary" id="exitPracticeBtn"><i class="bi bi-x-lg"></i></button>
+            <span class="badge bg-primary-soft text-primary" id="sessionModeBadge">Luyện tập</span>
+            <span class="fw-bold text-truncate" style="max-width:300px;" id="practiceSetTitle">Bộ đề</span>
+          </div>
+          <div class="text-end">
+            <span class="text-muted small">Câu hỏi </span>
+            <span class="fw-bold text-primary" id="practiceCurrentQ">1</span>
+            <span class="text-muted small"> / </span>
+            <span class="fw-bold" id="practiceTotalQ">0</span>
+          </div>
+        </div>
+        <div class="practice-progress-bar">
+          <div class="progress-fill" id="practiceProgressFill" style="width: 0%"></div>
+        </div>
+        <!-- Question Navigation Strip (Pills to jump / see status in Practice mode) -->
+        <div class="practice-question-nav-strip d-flex gap-1 flex-wrap mt-2 d-none" id="practiceQuestionStrip"></div>
+      </div>
+
+      <!-- Question Area -->
+      <div id="practiceQuestionArea"></div>
+
+      <!-- EXAM MODE: Preparation Phase Box -->
+      <div id="examPrepArea" class="section-card text-center p-4 mt-3 d-none">
+        <div class="exam-phase-badge prep">
+          <i class="bi bi-hourglass-split"></i>Thời gian chuẩn bị
+        </div>
+        <div class="exam-countdown-number" id="examPrepSeconds">15</div>
+        <div class="text-muted small mb-3">Đọc kỹ đề bài và chuẩn bị câu trả lời của bạn...</div>
+        <button class="btn btn-outline-primary btn-sm px-3" id="skipPrepBtn">
+          <i class="bi bi-play-fill me-1"></i>Sẵn sàng - Bắt đầu nói ngay
+        </button>
+      </div>
+
+      <!-- EXAM MODE: Speaking Phase Box -->
+      <div id="examSpeakArea" class="section-card text-center p-4 mt-3 d-none">
+        <div class="exam-phase-badge speak">
+          <span class="rec-dot"></span>Đang ghi âm câu trả lời
+        </div>
+        <div class="exam-speak-timer" id="examSpeakTimer">00:45</div>
+        <div class="audio-wave-visualizer mb-3">
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="text-muted small mb-3">Nói to, rõ ràng vào micro. Hệ thống sẽ tự động chuyển câu khi hết giờ.</div>
+        <button class="btn btn-danger btn-sm px-3" id="finishExamSpeakBtn">
+          <i class="bi bi-check2-circle me-1"></i>Nộp câu này sớm
+        </button>
+      </div>
+
+      <!-- PRACTICE MODE: Interactive Recording Controls -->
+      <div id="practiceRecordingArea" class="text-center mt-4">
+        <button class="record-btn-practice" id="practiceRecordBtn">
+          <i class="bi bi-mic-fill"></i>
+        </button>
+        <div class="recording-timer d-none" id="practiceRecordTimer">00:00</div>
+        <div class="recording-status" id="practiceRecordStatus">Nhấn để bắt đầu ghi âm</div>
+      </div>
+
+      <!-- Answer Result (Instant feedback in practice mode) -->
+      <div id="practiceAnswerResult" class="d-none"></div>
+
+      <!-- Nav buttons -->
+      <div class="d-flex justify-content-between mt-4" id="practiceNavBtns">
+        <button class="btn btn-outline-secondary" id="practicePrevBtn" disabled>
+          <i class="bi bi-chevron-left me-1"></i>Câu trước
+        </button>
+        <button class="btn btn-primary btn-glow" id="practiceNextBtn">
+          Câu tiếp<i class="bi bi-chevron-right ms-1"></i>
+        </button>
+      </div>
+
+      <!-- Loading overlay for scoring -->
+      <div id="practiceScoringOverlay" class="d-none">
+        <div class="section-card text-center p-4 mt-3">
+          <div class="loading-wave mb-3">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="fw-semibold">Đang chấm điểm phát âm...</div>
+          <div class="text-muted small" id="practiceScoringStep">Đang gửi audio lên server</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STUDENT PRACTICE SUMMARY - Kết quả tổng -->
+    <div id="page-student-practice-summary" class="page-section d-none">
+      <!-- Exam Band Score Card (only in Exam Mode) -->
+      <div class="exam-band-card mb-4 d-none" id="summaryExamBandCard">
+        <div class="text-uppercase tracking-wider small fw-bold text-warning mb-2" id="summaryBandCategory">KẾT QUẢ THI THỬ CHUẨN</div>
+        <div class="exam-band-badge badge-vstep-b2" id="summaryBandBadge">VSTEP B2</div>
+        <div class="exam-band-title" id="summaryBandTitle">VSTEP Speaking (Bậc 4 / B2)</div>
+        <div class="exam-band-desc text-muted" id="summaryBandDesc">Đạt chuẩn năng lực trung cấp cao</div>
+      </div>
+
+      <div class="practice-summary mb-4" id="practiceSummaryBox">
+        <div class="mb-2"><i class="bi bi-trophy fs-1 text-warning"></i></div>
+        <h4 class="fw-bold">Hoàn thành bài!</h4>
+        <div class="summary-score" id="summaryTotalScore">0.0</div>
+        <div class="summary-label">Điểm trung bình / 10</div>
+        <div class="d-flex justify-content-center gap-3 mt-3">
+          <div class="text-center">
+            <div class="fw-bold" id="summaryAccScore">--</div>
+            <div class="text-muted small">Accuracy</div>
+          </div>
+          <div class="text-center">
+            <div class="fw-bold" id="summaryFluScore">--</div>
+            <div class="text-muted small">Fluency</div>
+          </div>
+          <div class="text-center">
+            <div class="fw-bold" id="summaryProScore">--</div>
+            <div class="text-muted small">Prosody</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detail per question -->
+      <div class="section-card mb-4">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-list-check me-2 text-primary"></i>Chi tiết từng câu</h6>
+        <div id="summaryDetailList" class="d-flex flex-column gap-2"></div>
+      </div>
+
+      <div class="d-flex gap-3 justify-content-center">
+        <button class="btn btn-outline-secondary" id="summaryBackToListBtn">
+          <i class="bi bi-arrow-left me-2"></i>Về danh sách
+        </button>
+        <button class="btn btn-primary btn-glow" id="summaryRetryBtn">
+          <i class="bi bi-arrow-repeat me-2"></i>Làm lại
+        </button>
+      </div>
+    </div>
+
+    <!-- STUDENT PRACTICE HISTORY -->
+    <div id="page-student-practice-history" class="page-section d-none">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Lịch sử Luyện & Thi Speaking</h1>
+          <p class="text-muted small mb-0">Xem lại các phiên luyện tập và kết quả thi thử</p>
+        </div>
+      </div>
+      <div class="d-flex gap-2 mb-4">
+        <select class="form-select form-select-sm" style="max-width:160px;" id="historyFilterMode">
+          <option value="">Tất cả chế độ</option>
+          <option value="practice">Luyện tập</option>
+          <option value="exam">Thi thử</option>
+        </select>
+      </div>
+      <div id="practiceHistoryList" class="d-flex flex-column gap-3"></div>
+    </div>
+
+    <!-- Practice Session Detail Modal -->
+    <div class="modal fade" id="practiceDetailModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-md-down">
+        <div class="modal-content glass-modal">
+          <div class="modal-header border-0">
+            <h5 class="modal-title fw-bold">
+              <i class="bi bi-mic me-2 text-primary"></i>Chi tiết phiên luyện tập
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="practiceDetailBody"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Teacher Student Practice Sessions Modal -->
+    <div class="modal fade" id="teacherSessionsModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-md-down">
+        <div class="modal-content glass-modal border-0 shadow-lg">
+          <div class="modal-header border-0 pb-0">
+            <div>
+              <h5 class="modal-title fw-bold d-flex align-items-center gap-2" id="teacherSessionsModalTitle">
+                <i class="bi bi-award text-warning"></i> Bài Thi thử & Luyện tập của Học viên
+              </h5>
+              <div class="text-muted small" id="teacherSessionsModalSubtitle">Xem kết quả bài làm và nghe lại audio từng câu</div>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="text-muted small">Danh sách các bài đã nộp:</div>
+              <select class="form-select form-select-sm w-auto bg-dark text-white border-secondary" id="teacherSessionsFilterMode">
+                <option value="">Tất cả chế độ</option>
+                <option value="exam">Chỉ bài Thi thử</option>
+                <option value="practice">Chỉ bài Luyện tập</option>
+              </select>
+            </div>
+            <div id="teacherSessionsList" class="d-flex flex-column gap-2" style="max-height: 520px; overflow-y: auto;"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- PROFILE PAGE -->

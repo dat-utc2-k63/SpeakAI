@@ -69,7 +69,7 @@ audio_preprocess:
   vad_hop_ms: 10.0
 
 inference:
-  device: cuda
+  device: cuda:1
   max_audio_duration_sec: 3600
   max_duration_sec: null
   max_upload_mb: 300
@@ -77,7 +77,7 @@ inference:
 asr:
   model_name: pretrained_models/whisper-large-v3
   language: en
-  device: cuda
+  device: cuda:0
   torch_dtype: float16
   max_new_tokens: 440
   lang_id:
@@ -517,20 +517,26 @@ run_cells.append(code_cell([
     "        return _orig_wt_gen(self, input_features)\n",
     "    it_mod.WhisperTranscriber._generate = _patched_wt_gen\n",
     "\n",
-    "print('Loading Pipeline models on GPU 1 (cuda:1)...')\n",
-    "pipeline = SpeakingPipeline(\n",
-    "    config_path=tmp_config,\n",
-    "    device='cuda:1',\n",
-    "    l2_mdd_ckpt=L2_MDD_PATH,\n",
-    ")\n",
-    "print('Pipeline ready!')\n",
+    "print('=== KHỞI TẠO PIPELINE PARALLELISM TRÊN 2 GPU (NVIDIA T4 x 2) ===')\n",
+    "print('  GPU 0 (cuda:0): Whisper-large-v3 ASR + TwoSpeakerSplitter + Registration Embedder')\n",
+    "print('  GPU 1 (cuda:1): SpeechOcean762 (WavLM-large + GAT) + L2-MDD (WavLM-large + CTC)')\n",
     "\n",
     "print('Loading Registration Model on GPU 0 (cuda:0)...')\n",
     "from speaker_diarize.embedding import ERes2NetEmbedder\n",
     "extract_embedder = ERes2NetEmbedder(device='cuda:0')\n",
-    "print('Registration Embedder ready!')\n",
+    "print('Registration Embedder ready on cuda:0!')\n",
     "\n",
-    "print('Setup complete!')\n"
+    "print('Loading SpeakingPipeline (ASR & Diarize on cuda:0, Scoring on cuda:1)...')\n",
+    "pipeline = SpeakingPipeline(\n",
+    "    config_path=tmp_config,\n",
+    "    device='cuda:1',\n",
+    "    asr_device='cuda:0',\n",
+    "    diarize_device='cuda:0',\n",
+    "    l2_mdd_ckpt=L2_MDD_PATH,\n",
+    ")\n",
+    "print('Pipeline ready!')\n",
+    "\n",
+    "print('Setup complete! 2 GPUs are actively sharing the workload.')\n"
 ]))
 
 run_cells.append(md_cell(["---\n", "## Hàm Sinh Feedback Tổng Hợp"]))

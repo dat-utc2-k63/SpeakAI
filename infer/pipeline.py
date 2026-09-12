@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import yaml
 
 from data.audio_preprocess import PreprocessConfig
-from data.silence_split import export_diarization_clips, split_audio_file
+from data.silence_split import SilenceSplitConfig, export_diarization_clips, split_audio_file
 from infer.lang_id import is_vietnamese_segment
 
 from infer.pronunciation import Predictor, L2MDDPredictor
@@ -144,6 +144,8 @@ class SpeakingPipeline:
         l2_mdd_ckpt: Optional[str] = None,
         enable_feedback: bool = True,
         load_progress: Optional[Any] = None,
+        asr_device: Optional[str] = None,
+        diarize_device: Optional[str] = None,
     ):
         config_path = Path(config_path or PRONUNCIATION_CONFIG)
         if load_progress is not None:
@@ -153,14 +155,25 @@ class SpeakingPipeline:
         if load_progress is not None:
             load_progress.finish("config")
 
-        self.device = resolve_device(self.config, device)
+        # ── Multi-GPU Resolution (Kaggle 2x T4 or single GPU/CPU) ──
+        num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+        if num_gpus >= 2:
+            self.device = resolve_device(self.config, device or "cuda:1")
+            self.asr_device = asr_device or "cuda:0"
+            self.diarize_device = diarize_device or "cuda:0"
+        else:
+            self.device = resolve_device(self.config, device)
+            self.asr_device = asr_device or (self.config.get("asr") or {}).get("device") or self.device
+            self.diarize_device = diarize_device or self.device
+
+        print(f"[Pipeline Parallelism] Devices: Scoring={self.device} | Whisper ASR={self.asr_device} | Diarizer={self.diarize_device}", flush=True)
+
         asr_cfg = self.config.setdefault("asr", {})
-        if not asr_cfg.get("device"):
-            asr_cfg["device"] = self.device
+        asr_cfg["device"] = self.asr_device
         self.preprocess = PreprocessConfig.from_dict(self.config.get("audio_preprocess"))
         wavlm_name = self.config.get("wavlm", {}).get("model_name", "microsoft/wavlm-large")
         
-        # ── Load Pronunciation Model (SpeechOcean762) ──
+        # ── Load Pronunciation Model (SpeechOcean762) on self.device (cuda:1) ──
         self.pronunciation = Predictor(
             config_path,
             pronunciation_ckpt,
@@ -172,7 +185,7 @@ class SpeakingPipeline:
         )
         self.pronunciation.preprocess = self.preprocess
 
-        # ── Load L2-MDD Model ──
+        # ── Load L2-MDD Model on self.device (cuda:1) ──
         self.l2_mdd: Optional[L2MDDPredictor] = None
         try:
             self.l2_mdd = L2MDDPredictor(
@@ -184,7 +197,7 @@ class SpeakingPipeline:
                 ckpt_step="l2_mdd_ckpt",
             )
             self.l2_mdd.preprocess = self.preprocess
-            print("[OK] L2-MDD model loaded successfully")
+            print(f"[OK] L2-MDD model loaded successfully on {self.device}")
         except Exception as e:
             print(f"[WARN] L2-MDD model not available: {e}")
             self.l2_mdd = None
@@ -195,8 +208,9 @@ class SpeakingPipeline:
             sys.path.insert(0, str(SPEAKER_DIARIZE_DIR))
         from speaker_diarize.pipeline import TwoSpeakerSplitter
         
+        # ── Load TwoSpeakerSplitter on self.diarize_device (cuda:0) ──
         self.diarizer = TwoSpeakerSplitter(
-            device=self.device,
+            device=self.diarize_device,
             cluster_window_sec=1.5,
             boundary_window_sec=0.5,
             min_speech_sec=0.25,
@@ -206,8 +220,10 @@ class SpeakingPipeline:
             step_sec=0.25,
             boundary_step_sec=0.05
         )
+        
+        # ── Load Whisper Transcriber on self.asr_device (cuda:0) ──
         from infer.transcribe import get_transcriber
-        get_transcriber(load_progress)
+        get_transcriber(load_progress, device=self.asr_device)
         
         self.enable_feedback = enable_feedback
         self._lang_id_cfg = (self.config.get("asr") or {}).get("lang_id") or {}
@@ -289,7 +305,7 @@ class SpeakingPipeline:
             drop_vi, reason = is_vietnamese_segment(
                 seg["path"],
                 transcript,
-                device=self.device,
+                device=self.asr_device,
                 cfg=self._lang_id_cfg,
             )
             if drop_vi:
@@ -604,6 +620,123 @@ class SpeakingPipeline:
             "diarization": {
                 "teacher": str(split["teacher"]) if split.get("teacher") else None,
                 "student": str(split["student"]) if split.get("student") else None,
+            },
+        }
+
+    def assess_single_speaker(
+        self,
+        audio: Union[str, Path],
+        *,
+        output_dir: Optional[Union[str, Path]] = None,
+        use_asr: bool = True,
+        feedback: Optional[bool] = None,
+        lang: Optional[str] = None,
+        role: str = "student",
+    ) -> Dict[str, Any]:
+        """Chấm điểm phát âm trực tiếp cho 1 người nói (Luyện tập / Thi thử) KHÔNG cần tách giọng Diarization."""
+        fb = self.enable_feedback if feedback is None else feedback
+        audio = Path(audio)
+
+        base_dir = Path(output_dir or audio.parent / f"{audio.stem}_single_split")
+        sent_dir = base_dir / "sentences"
+        sent_dir.mkdir(parents=True, exist_ok=True)
+
+        split_cfg = SilenceSplitConfig.from_dict(self.config.get("sentence_split"))
+        segments = split_audio_file(
+            audio,
+            sent_dir,
+            preprocess=self.preprocess,
+            split_cfg=split_cfg,
+            prefix=f"{role.lower()}_turn",
+        )
+
+        if not segments:
+            # Fallback nếu audio quá ngắn hoặc không tách được khoảng lặng
+            segments = [{
+                "index": 0,
+                "start_sec": 0.0,
+                "end_sec": 0.0,
+                "duration_sec": 0.0,
+                "path": str(audio),
+            }]
+
+        sentences: List[Dict[str, Any]] = []
+        filtered_vi = 0
+        for seg in segments:
+            item, was_vi = self._process_segment(
+                seg, use_asr=use_asr, lang=lang, score=True, role=role,
+            )
+            if was_vi:
+                filtered_vi += 1
+            elif item:
+                sentences.append(item)
+
+        if not sentences:
+            print(f"[{role}] Không có câu nói tiếng Anh hợp lệ sau nhận diện", flush=True)
+            student_data = {
+                "role": role,
+                "scored": True,
+                "sentences": [],
+                "sentence_count": 0,
+                "transcript": "",
+                "transcript_lines": [],
+                "scores": {"total": 0.0, "accuracy": 0.0, "fluency": 0.0, "prosodic": 0.0},
+                "filtered_vi_count": filtered_vi,
+                "message": f"{role}: không có câu nói tiếng Anh hợp lệ sau nhận diện",
+            }
+        else:
+            summary = _build_summary(
+                sentences,
+                pipeline=self,
+                feedback=fb,
+                lang=lang,
+                speaker="Student",
+                filtered_vi=filtered_vi,
+            )
+            student_data = {
+                "role": role,
+                "scored": True,
+                "sentences": sentences,
+                **summary,
+            }
+
+        dialogue = {
+            "turns": [
+                {
+                    "role": "student",
+                    "scored": True,
+                    "start_sec": s.get("start_sec"),
+                    "end_sec": s.get("end_sec"),
+                    "transcript": s.get("transcript", ""),
+                    "audio": s.get("audio"),
+                    "scores": s.get("scores"),
+                    "errors": s.get("errors"),
+                    "transformer_feedback": s.get("transformer_feedback"),
+                    "words_detail": s.get("words_detail"),
+                    "l2_mdd_feedback": s.get("l2_mdd_feedback"),
+                }
+                for s in sentences
+            ],
+            "student_turns": sentences,
+        }
+
+        overall_tf = PronunciationScorer.generate_transformer_feedback(
+            scores_pronunciation=student_data.get("scores", {}),
+            errors_pronunciation=None,
+            transcript=student_data.get("transcript", ""),
+        )
+
+        return {
+            "mode": "single_speaker",
+            "source_audio": str(audio),
+            "duration_sec": sum(s.get("duration_sec", 0) for s in segments),
+            "student": student_data,
+            "dialogue": dialogue,
+            "has_l2_mdd": self.l2_mdd is not None,
+            "overall_transformer_feedback": overall_tf,
+            "diarization": {
+                "teacher": None,
+                "student": str(audio),
             },
         }
 

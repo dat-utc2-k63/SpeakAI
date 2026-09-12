@@ -147,7 +147,7 @@ class WhisperTranscriber:
         return normalized
 
 
-def get_transcriber(load_progress: Optional[Any] = None) -> WhisperTranscriber:
+def get_transcriber(load_progress: Optional[Any] = None, device: Optional[str] = None) -> WhisperTranscriber:
     global _transcriber, _transcriber_error
     if _transcriber is not None:
         return _transcriber
@@ -160,10 +160,11 @@ def get_transcriber(load_progress: Optional[Any] = None) -> WhisperTranscriber:
             raise RuntimeError(_transcriber_error)
         try:
             asr = _load_asr_config()
+            target_device = device or asr.get("device")
             _transcriber = WhisperTranscriber(
                 model_name=asr.get("model_name", "openai/whisper-small.en"),
                 language=asr.get("language", "en"),
-                device=asr.get("device"),
+                device=target_device,
                 load_progress=load_progress,
                 torch_dtype=asr.get("torch_dtype", "float16"),
                 max_new_tokens=int(asr.get("max_new_tokens", 448)),
