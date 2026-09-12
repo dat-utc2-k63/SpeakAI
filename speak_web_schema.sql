@@ -253,54 +253,45 @@ create policy "Allow update global_settings for admin and authenticated"
   using (true)
   with check (true);
 
--- 6.4. Policies: question_sets
+-- 6.4. Policies: question_sets (Giáo viên có thể xem và tùy chỉnh bộ đề của nhau, bảo toàn quyền tác giả)
 drop policy if exists "Teacher manages own question sets" on public.question_sets;
-create policy "Teacher manages own question sets"
+drop policy if exists "Teachers and admins manage all question sets" on public.question_sets;
+drop policy if exists "Students can view published question sets" on public.question_sets;
+
+create policy "Teachers and admins manage all question sets"
   on public.question_sets for all
   using (
-    auth.uid() = teacher_id
-    or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    exists (select 1 from public.profiles where id = auth.uid() and role in ('teacher', 'admin'))
   )
   with check (
-    auth.uid() = teacher_id
-    or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    exists (select 1 from public.profiles where id = auth.uid() and role in ('teacher', 'admin'))
   );
 
-drop policy if exists "Students can view published question sets" on public.question_sets;
 create policy "Students can view published question sets"
   on public.question_sets for select
   using (is_published = true);
 
--- 6.5. Policies: questions
+-- 6.5. Policies: questions (Giáo viên quản lý toàn bộ câu hỏi trong các bộ đề)
 drop policy if exists "Questions follow parent set access" on public.questions;
-create policy "Questions follow parent set access"
+drop policy if exists "Teacher manages questions in own sets" on public.questions;
+drop policy if exists "Teachers manage all questions" on public.questions;
+drop policy if exists "Students can view published questions" on public.questions;
+
+create policy "Teachers manage all questions"
+  on public.questions for all
+  using (
+    exists (select 1 from public.profiles where id = auth.uid() and role in ('teacher', 'admin'))
+  )
+  with check (
+    exists (select 1 from public.profiles where id = auth.uid() and role in ('teacher', 'admin'))
+  );
+
+create policy "Students can view published questions"
   on public.questions for select
   using (
     exists (
       select 1 from public.question_sets qs
-      where qs.id = set_id
-      and (qs.teacher_id = auth.uid() or qs.is_published = true
-           or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'))
-    )
-  );
-
-drop policy if exists "Teacher manages questions in own sets" on public.questions;
-create policy "Teacher manages questions in own sets"
-  on public.questions for all
-  using (
-    exists (
-      select 1 from public.question_sets qs
-      where qs.id = set_id
-      and (qs.teacher_id = auth.uid()
-           or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'))
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.question_sets qs
-      where qs.id = set_id
-      and (qs.teacher_id = auth.uid()
-           or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'))
+      where qs.id = set_id and qs.is_published = true
     )
   );
 

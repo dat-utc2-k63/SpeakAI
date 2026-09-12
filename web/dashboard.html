@@ -420,6 +420,11 @@
           <option value="published">Đã publish</option>
           <option value="draft">Bản nháp</option>
         </select>
+        <select class="form-select form-select-sm" style="max-width:180px;" id="qsetFilterAuthor">
+          <option value="">Tất cả giáo viên</option>
+          <option value="mine">Bộ đề của tôi</option>
+          <option value="others">Của giáo viên khác</option>
+        </select>
       </div>
 
       <div class="row g-3" id="qsetGrid"></div>
@@ -523,16 +528,8 @@
               </div>
             </div>
             <div class="mb-3">
-              <label class="form-label text-muted small">Câu hỏi *</label>
-              <textarea class="form-control" id="qTextInput" rows="2" placeholder="VD: What do you usually do in your free time?"></textarea>
-            </div>
-            <div class="mb-3">
-              <label class="form-label text-muted small">Câu trả lời mẫu (dùng chấm pronunciation và gợi ý ở chế độ Luyện tập)</label>
-              <textarea class="form-control" id="qRefInput" rows="2" placeholder="VD: I usually spend my free time reading books and going for walks in the park."></textarea>
-            </div>
-            <div class="mb-3">
-              <label class="form-label text-muted small">Gợi ý trả lời (chỉ hiển thị ở chế độ Luyện tập)</label>
-              <input type="text" class="form-control" id="qHintInput" placeholder="VD: Talk about 2-3 activities" />
+              <label class="form-label text-muted small">Nội dung câu hỏi *</label>
+              <textarea class="form-control" id="qTextInput" rows="3" placeholder="VD: What do you usually do in your free time?"></textarea>
             </div>
           </div>
           <div class="modal-footer border-0">

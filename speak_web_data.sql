@@ -24,7 +24,10 @@ begin
 
   raise notice 'Đang nạp bộ đề mẫu với teacher_id: %', v_teacher_id;
 
-  -- 2. Xóa các bộ đề mẫu cũ (nếu có) để nạp lại bộ đề mới sạch gọn
+  -- 2. Xóa sạch câu trả lời mẫu (reference_text) và gợi ý trả lời (hint) của TẤT CẢ câu hỏi hiện có
+  update public.questions set reference_text = null, hint = null;
+
+  -- 3. Xóa các bộ đề mẫu cũ (nếu có) để nạp lại bộ đề mới sạch gọn
   delete from public.question_sets 
   where title in (
     'Đề thi thử VSTEP Speaking B1-B2-C1 (Đề chuẩn số 1)',

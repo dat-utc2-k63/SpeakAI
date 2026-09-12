@@ -8,21 +8,29 @@ import { supabase } from './supabase.js';
 /**
  * Lấy danh sách bộ đề của teacher
  */
-export async function fetchQuestionSets(teacherId) {
-  const { data, error } = await supabase
+export async function fetchQuestionSets(teacherId = null) {
+  let query = supabase
     .from('question_sets')
     .select(`
-      id, title, description, level, exam_type, time_limit, is_published, created_at,
+      id, teacher_id, title, description, level, exam_type, time_limit, is_published, created_at,
+      creator:profiles!teacher_id(id, full_name, email),
       questions(id)
     `)
-    .eq('teacher_id', teacherId)
     .order('created_at', { ascending: false });
+
+  if (teacherId) {
+    query = query.eq('teacher_id', teacherId);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
-  // Attach question count
+  // Attach question count and creator info
   return (data || []).map(qs => ({
     ...qs,
     exam_type: qs.exam_type || 'general',
     time_limit: qs.time_limit || 0,
+    creator_name: qs.creator?.full_name || 'Giáo viên',
+    creator_email: qs.creator?.email || '',
     question_count: qs.questions ? qs.questions.length : 0,
   }));
 }
@@ -48,12 +56,14 @@ export async function createQuestionSet(teacherId, { title, description, level, 
 }
 
 /**
- * Cập nhật bộ đề
+ * Cập nhật bộ đề (bảo toàn người tạo gốc teacher_id)
  */
 export async function updateQuestionSet(setId, updates) {
+  // Loại bỏ teacher_id nếu có để luôn giữ nguyên người tạo ban đầu
+  const { teacher_id, id, created_at, ...safeUpdates } = updates;
   const { error } = await supabase
     .from('question_sets')
-    .update(updates)
+    .update(safeUpdates)
     .eq('id', setId);
   if (error) throw error;
 }
@@ -100,14 +110,14 @@ export async function fetchQuestions(setId) {
 /**
  * Thêm câu hỏi mới vào bộ đề
  */
-export async function addQuestion(setId, { question_text, reference_text, hint, order_num, part_title, prep_time, response_time }) {
+export async function addQuestion(setId, { question_text, order_num, part_title, prep_time, response_time }) {
   const { data, error } = await supabase
     .from('questions')
     .insert({
       set_id: setId,
       question_text,
-      reference_text,
-      hint,
+      reference_text: null,
+      hint: null,
       order_num: order_num || 1,
       part_title: part_title || null,
       prep_time: prep_time !== undefined ? parseInt(prep_time) : 15,

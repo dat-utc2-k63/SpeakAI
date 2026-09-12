@@ -1385,8 +1385,6 @@ import { supabase } from './supabase.js';
             document.getElementById('qPrepTimeInput').value = '15';
             document.getElementById('qResponseTimeInput').value = '45';
             document.getElementById('qTextInput').value = '';
-            document.getElementById('qRefInput').value = '';
-            document.getElementById('qHintInput').value = '';
             document.getElementById('questionModalTitle').innerHTML =
               '<i class="bi bi-chat-square-text me-2 text-primary"></i>Thêm câu hỏi';
             new bootstrap.Modal(document.getElementById('questionModal')).show();
@@ -1404,8 +1402,8 @@ import { supabase } from './supabase.js';
               if (editId) {
                 await updateQuestion(editId, {
                   question_text: qText,
-                  reference_text: document.getElementById('qRefInput').value.trim() || null,
-                  hint: document.getElementById('qHintInput').value.trim() || null,
+                  reference_text: null,
+                  hint: null,
                   part_title: partTitle,
                   prep_time: prepTime,
                   response_time: responseTime,
@@ -1414,8 +1412,8 @@ import { supabase } from './supabase.js';
                 const existingQs = await fetchQuestions(currentEditSetId);
                 await addQuestion(currentEditSetId, {
                   question_text: qText,
-                  reference_text: document.getElementById('qRefInput').value.trim() || null,
-                  hint: document.getElementById('qHintInput').value.trim() || null,
+                  reference_text: null,
+                  hint: null,
                   order_num: existingQs.length + 1,
                   part_title: partTitle,
                   prep_time: prepTime,
@@ -1433,6 +1431,7 @@ import { supabase } from './supabase.js';
           // Filters
           document.getElementById('qsetFilterLevel').addEventListener('change', renderQuestionSets);
           document.getElementById('qsetFilterStatus').addEventListener('change', renderQuestionSets);
+          document.getElementById('qsetFilterAuthor')?.addEventListener('change', renderQuestionSets);
         }
 
         function updatePublishBtnUI() {
@@ -1450,12 +1449,16 @@ import { supabase } from './supabase.js';
         async function renderQuestionSets() {
           const grid = document.getElementById('qsetGrid');
           try {
-            let sets = await fetchQuestionSets(currentUser.id);
+            let sets = await fetchQuestionSets();
             const filterLevel = document.getElementById('qsetFilterLevel').value;
             const filterStatus = document.getElementById('qsetFilterStatus').value;
+            const filterAuthor = document.getElementById('qsetFilterAuthor')?.value;
+
             if (filterLevel) sets = sets.filter(s => s.level === filterLevel);
             if (filterStatus === 'published') sets = sets.filter(s => s.is_published);
             if (filterStatus === 'draft') sets = sets.filter(s => !s.is_published);
+            if (filterAuthor === 'mine') sets = sets.filter(s => s.teacher_id === currentUser.id);
+            if (filterAuthor === 'others') sets = sets.filter(s => s.teacher_id !== currentUser.id);
 
             if (!sets.length) {
               grid.innerHTML = `
@@ -1473,6 +1476,11 @@ import { supabase } from './supabase.js';
               const levelLabels = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
               const examTypeLabels = { general: 'General', vstep: 'VSTEP', toeic: 'TOEIC', ielts: 'IELTS' };
               const examType = s.exam_type || 'general';
+              const isMine = s.teacher_id === currentUser.id;
+              const creatorBadge = isMine
+                ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size:0.7rem;">Của bạn</span>`
+                : `<span class="badge bg-secondary-subtle text-light border border-secondary" style="font-size:0.7rem;"><i class="bi bi-people me-1"></i>Đồng nghiệp</span>`;
+
               return `
                 <div class="col-md-6 col-lg-4">
                   <div class="qset-card" onclick="openQuestionSetEditor('${s.id}')">
@@ -1486,7 +1494,13 @@ import { supabase } from './supabase.js';
                       <span class="level-badge ${s.level}">${levelLabels[s.level] || s.level}</span>
                       <span class="badge bg-secondary"><i class="bi bi-chat-square-text me-1"></i>${s.question_count} câu</span>
                     </div>
-                    <div class="text-muted smaller mt-2 mb-2">${new Date(s.created_at).toLocaleDateString('vi-VN')}</div>
+                    <div class="d-flex align-items-center justify-content-between gap-1 text-info small mt-2 mb-1">
+                      <span class="text-truncate" title="Người tạo: ${s.creator_name || 'Giáo viên'}">
+                        <i class="bi bi-person-fill me-1"></i>Tạo bởi: <b>${s.creator_name || 'Giáo viên'}</b>
+                      </span>
+                      ${creatorBadge}
+                    </div>
+                    <div class="text-muted smaller mb-2">${new Date(s.created_at).toLocaleDateString('vi-VN')}</div>
                     <div class="pt-2 border-top border-secondary border-opacity-25">
                       <button class="btn btn-sm btn-outline-info w-100 fw-semibold" onclick="event.stopPropagation(); openTeacherSetSubmissions('${s.id}', '${encodeURIComponent(s.title)}')">
                         <i class="bi bi-people me-1"></i>Xem bài nộp học viên
@@ -1507,10 +1521,13 @@ import { supabase } from './supabase.js';
           document.getElementById('page-teacher-questionset-edit').classList.remove('d-none');
 
           try {
-            // Load set info
+            // Load set info kèm thông tin người tạo
             const { data: setData, error } = await supabase
               .from('question_sets')
-              .select('*')
+              .select(`
+                *,
+                creator:profiles!teacher_id(id, full_name, email)
+              `)
               .eq('id', setId)
               .single();
             if (error) throw error;
@@ -1520,8 +1537,12 @@ import { supabase } from './supabase.js';
             document.getElementById('qsetLevelSelect').value = setData.level;
             document.getElementById('qsetExamTypeSelect').value = setData.exam_type || 'general';
             document.getElementById('qsetEditorTitle').textContent = setData.title;
-            document.getElementById('qsetEditorSubtitle').textContent =
-              `Tạo ngày ${new Date(setData.created_at).toLocaleDateString('vi-VN')}`;
+
+            const creatorName = setData.creator?.full_name || 'Giáo viên';
+            const isMine = setData.teacher_id === currentUser.id;
+            document.getElementById('qsetEditorSubtitle').innerHTML =
+              `<span class="text-info"><i class="bi bi-person-fill me-1"></i>Người tạo: <b>${creatorName}</b> ${isMine ? '(Bạn)' : ''}</span> • Ngày ${new Date(setData.created_at).toLocaleDateString('vi-VN')}`;
+
             currentEditSetPublished = setData.is_published;
             updatePublishBtnUI();
 
@@ -1554,15 +1575,13 @@ import { supabase } from './supabase.js';
                   <div class="flex-grow-1">
                     ${q.part_title ? `<div class="text-primary small fw-semibold mb-1"><i class="bi bi-bookmark me-1"></i>${q.part_title}</div>` : ''}
                     <div class="fw-semibold mb-1">${q.question_text}</div>
-                    ${q.reference_text ? `<div class="text-muted small"><i class="bi bi-chat-quote me-1"></i>Mẫu: ${q.reference_text}</div>` : ''}
-                    ${q.hint ? `<div class="text-muted small fst-italic"><i class="bi bi-lightbulb me-1"></i>${q.hint}</div>` : ''}
                     <div class="d-flex gap-2 mt-2">
                       <span class="badge bg-secondary-subtle text-secondary small"><i class="bi bi-hourglass-split me-1"></i>Chuẩn bị: ${q.prep_time || 15}s</span>
                       <span class="badge bg-secondary-subtle text-secondary small"><i class="bi bi-mic me-1"></i>Trả lời: ${q.response_time || 45}s</span>
                     </div>
                   </div>
                   <div class="d-flex gap-1 flex-shrink-0">
-                    <button class="btn btn-sm btn-outline-primary" onclick="editQuestionItem('${q.id}', ${JSON.stringify(q.question_text).replace(/'/g, "&#39;")}, ${JSON.stringify(q.reference_text || '').replace(/'/g, "&#39;")}, ${JSON.stringify(q.hint || '').replace(/'/g, "&#39;")}, ${JSON.stringify(q.part_title || '').replace(/'/g, "&#39;")}, ${q.prep_time || 15}, ${q.response_time || 45})">
+                    <button class="btn btn-sm btn-outline-primary" onclick="editQuestionItem('${q.id}', ${JSON.stringify(q.question_text).replace(/'/g, "&#39;")}, ${JSON.stringify(q.part_title || '').replace(/'/g, "&#39;")}, ${q.prep_time || 15}, ${q.response_time || 45})">
                       <i class="bi bi-pencil"></i>
                     </button>
                     <button class="btn btn-sm btn-outline-danger" onclick="deleteQuestionItem('${q.id}')">
@@ -1577,14 +1596,12 @@ import { supabase } from './supabase.js';
           }
         }
 
-        window.editQuestionItem = function (id, text, ref, hint, partTitle = '', prepTime = 15, responseTime = 45) {
+        window.editQuestionItem = function (id, text, partTitle = '', prepTime = 15, responseTime = 45) {
           document.getElementById('editQuestionId').value = id;
           document.getElementById('qPartTitleInput').value = partTitle || '';
           document.getElementById('qPrepTimeInput').value = prepTime || 15;
           document.getElementById('qResponseTimeInput').value = responseTime || 45;
           document.getElementById('qTextInput').value = text;
-          document.getElementById('qRefInput').value = ref;
-          document.getElementById('qHintInput').value = hint;
           document.getElementById('questionModalTitle').innerHTML =
             '<i class="bi bi-pencil me-2 text-primary"></i>Sửa câu hỏi';
           new bootstrap.Modal(document.getElementById('questionModal')).show();
