@@ -41,34 +41,52 @@ import { supabase } from './supabase.js';
         }
 
         (async () => {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) { window.location.href = 'index.html'; return; }
-          currentUser = session.user;
-          currentProfile = await getProfile(currentUser.id);
-          if (currentProfile && !currentProfile.voice_enrolled && hasVoiceEnrolled(currentProfile)) {
-            currentProfile.voice_enrolled = true;
-            updateProfile(currentUser.id, { voice_enrolled: true }).catch(console.error);
-          }
-
           try {
-            const m = await import('./auth.js');
-            const settings = await m.getGlobalSettings();
-            if (settings) {
-              if (settings.api_url) window.globalApiUrl = settings.api_url;
-              if (settings.gemini_api_key) window.globalGeminiApiKey = settings.gemini_api_key;
-              if (settings.gemini_api_url) window.globalGeminiApiUrl = settings.gemini_api_url;
-              if (settings.gemini_model) window.globalGeminiModel = settings.gemini_model;
-            } else {
-              console.warn("Chưa cấu hình API URL");
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError || !session) {
+              window.location.href = 'index.html';
+              return;
             }
-          } catch(e) {
-            console.error("Lỗi tải API URL", e);
+            currentUser = session.user;
+            currentProfile = await getProfile(currentUser.id);
+            if (!currentProfile) {
+              console.error("Không tìm thấy profile cho user:", currentUser.id);
+              document.getElementById('sidebarName').textContent = currentUser.email || 'Người dùng';
+              document.getElementById('sidebarRole').textContent = 'Chưa có vai trò';
+              alert('Tài khoản của bạn chưa có hồ sơ trong hệ thống. Vui lòng liên hệ Admin!');
+              return;
+            }
+
+            if (currentProfile && !currentProfile.voice_enrolled && hasVoiceEnrolled(currentProfile)) {
+              currentProfile.voice_enrolled = true;
+              updateProfile(currentUser.id, { voice_enrolled: true }).catch(console.error);
+            }
+
+            try {
+              const m = await import('./auth.js');
+              const settings = await m.getGlobalSettings();
+              if (settings) {
+                if (settings.api_url) window.globalApiUrl = settings.api_url;
+                if (settings.gemini_api_key) window.globalGeminiApiKey = settings.gemini_api_key;
+                if (settings.gemini_api_url) window.globalGeminiApiUrl = settings.gemini_api_url;
+                if (settings.gemini_model) window.globalGeminiModel = settings.gemini_model;
+              } else {
+                console.warn("Chưa cấu hình API URL");
+              }
+            } catch(e) {
+              console.error("Lỗi tải API URL", e);
+            }
+
+            initUI();
+          } catch (err) {
+            console.error("Lỗi khởi tạo dashboard:", err);
+            document.getElementById('sidebarName').textContent = 'Lỗi kết nối';
+            document.getElementById('sidebarRole').textContent = 'Error';
+            alert('Lỗi khởi tạo trang: ' + (err.message || err));
+          } finally {
+            const loader = document.getElementById('globalAiLoader');
+            if (loader) loader.remove();
           }
-
-          const loader = document.getElementById('globalAiLoader');
-          if (loader) loader.remove();
-
-          initUI();
         })();
 
         function initUI() {
@@ -688,6 +706,7 @@ import { supabase } from './supabase.js';
         // ===== ADMIN LOGIC =====
         async function initAdmin() {
           navigateTo('overview');
+          initApiConfigForm();
           import('./auth.js').then(async (m) => {
 
             // Load users
@@ -3095,49 +3114,6 @@ import { supabase } from './supabase.js';
         document.getElementById('teacherSessionsFilterMode')?.addEventListener('change', renderTeacherSessionsFiltered);
 
         // ── ADMIN & SYSTEM API CONFIGURATION ──────────────────────
-        function initAdmin() {
-          renderAdminUsers();
-          initApiConfigForm();
-        }
-
-        async function renderAdminUsers() {
-          const tbody = document.getElementById('adminUsersTableBody');
-          if (!tbody) return;
-          try {
-            const { data: users, error } = await supabase
-              .from('profiles')
-              .select('*')
-              .order('created_at', { ascending: false });
-            if (error) throw error;
-
-            if (!users || users.length === 0) {
-              tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Chưa có người dùng nào</td></tr>';
-              return;
-            }
-
-            tbody.innerHTML = users.map(u => {
-              const enrolled = hasVoiceEnrolled(u);
-              const date = new Date(u.created_at).toLocaleDateString('vi-VN');
-              const roleBadge = u.role === 'admin' ? 'bg-danger' : u.role === 'teacher' ? 'bg-primary' : 'bg-success';
-              return `
-                <tr>
-                  <td class="fw-semibold">${u.full_name || 'Chưa đặt tên'}</td>
-                  <td class="text-muted small">${u.email || ''}</td>
-                  <td><span class="badge ${roleBadge}">${u.role}</span></td>
-                  <td>${enrolled ? '<span class="badge bg-success">Đã ĐK</span>' : '<span class="badge bg-secondary">Chưa</span>'}</td>
-                  <td class="text-muted smaller">${date}</td>
-                  <td>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="alert('User ID: ${u.id}')" title="Xem ID">
-                      <i class="bi bi-info-circle"></i>
-                    </button>
-                  </td>
-                </tr>`;
-            }).join('');
-          } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center">Lỗi: ${e.message}</td></tr>`;
-          }
-        }
-
         function initApiConfigForm() {
           const cfg = getGeminiConfig();
           const gpuUrlInput = document.getElementById('adminGpuApiUrl');
