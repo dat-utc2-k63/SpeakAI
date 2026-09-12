@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import torch
 import yaml
 
 from data.audio_preprocess import PreprocessConfig
