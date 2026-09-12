@@ -97,7 +97,7 @@
     </nav>
 
     <div class="sidebar-footer">
-      <button class="btn btn-sm btn-outline-info w-100 mb-2 btn-open-api-config" data-bs-toggle="modal" data-bs-target="#apiConfigModal" title="Cài đặt Gemini API & Backend URL">
+      <button class="btn btn-sm btn-outline-info w-100 mb-2 btn-open-api-config d-none" id="sidebarApiConfigBtn" data-bs-toggle="modal" data-bs-target="#apiConfigModal" title="Cài đặt AI Evaluator & Backend GPU URL">
         <i class="bi bi-gear-fill me-2"></i>Cấu hình AI API
       </button>
       <button class="btn btn-sm btn-outline-danger w-100" id="logoutBtn">
@@ -129,7 +129,7 @@
       <div class="page-header d-flex justify-content-between align-items-center">
         <h1 class="page-title">Bảng Điều Khiển Quản Trị</h1>
         <button class="btn btn-primary btn-glow btn-open-api-config" data-bs-toggle="modal" data-bs-target="#apiConfigModal">
-          <i class="bi bi-gear-fill me-2"></i>Cấu hình Gemini & GPU API
+          <i class="bi bi-gear-fill me-2"></i>Cấu hình AI Evaluator & GPU API
         </button>
       </div>
       <div class="row g-4">
@@ -312,37 +312,57 @@
       <div id="assessResults" class="d-none">
         <!-- Score overview with level badge -->
         <div class="section-card mb-4">
-          <div class="d-flex justify-content-between align-items-start mb-4">
-            <h6 class="fw-bold mb-0"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Điểm Tổng Quát (SpeechOcean762)</h6>
-            <span class="badge fs-6" id="resLevelBadge">--</span>
+          <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+            <div>
+              <h6 class="fw-bold mb-1"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Điểm Đánh Giá Toàn Diện Cuộc Hội Thoại</h6>
+              <p class="text-muted smaller mb-0">Kết hợp Phát âm âm học (SpeechOcean762) & Khảo thí Ngữ pháp/Ngữ cảnh (AI Evaluator)</p>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-primary-subtle text-primary border border-primary-subtle small"><i class="bi bi-stars me-1"></i>AI Evaluator</span>
+              <span class="badge fs-6" id="resLevelBadge">--</span>
+            </div>
           </div>
           <div class="row g-3">
-            <div class="col-6 col-lg-3">
+            <div class="col-6 col-md-4 col-lg-2">
               <div class="score-card score-card-total">
-                <div class="score-label">Tổng</div>
+                <div class="score-label">Tổng Thể</div>
                 <div class="score-value" id="resTotal">--</div>
-                <div class="score-sub">/ 10</div>
+                <div class="score-sub">Hiệu chuẩn AI</div>
               </div>
             </div>
-            <div class="col-6 col-lg-3">
+            <div class="col-6 col-md-4 col-lg-2">
+              <div class="score-card">
+                <div class="score-label">Ngữ Pháp</div>
+                <div class="score-value text-primary" id="resGrammar">--</div>
+                <div class="score-sub">Cấu trúc câu</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+              <div class="score-card">
+                <div class="score-label">Ngữ Cảnh</div>
+                <div class="score-value text-info" id="resContext">--</div>
+                <div class="score-sub">Phản xạ & Ý</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
               <div class="score-card">
                 <div class="score-label">Accuracy</div>
                 <div class="score-value" id="resAcc">--</div>
-                <div class="score-sub">/ 10</div>
+                <div class="score-sub">Phát âm âm vị</div>
               </div>
             </div>
-            <div class="col-6 col-lg-3">
+            <div class="col-6 col-md-4 col-lg-2">
               <div class="score-card">
                 <div class="score-label">Fluency</div>
                 <div class="score-value" id="resFlu">--</div>
-                <div class="score-sub">/ 10</div>
+                <div class="score-sub">Độ lưu loát</div>
               </div>
             </div>
-            <div class="col-6 col-lg-3">
+            <div class="col-6 col-md-4 col-lg-2">
               <div class="score-card">
                 <div class="score-label">Prosody</div>
                 <div class="score-value" id="resPro">--</div>
-                <div class="score-sub">/ 10</div>
+                <div class="score-sub">Ngữ điệu nói</div>
               </div>
             </div>
           </div>
@@ -365,13 +385,17 @@
           </div>
         </div>
 
-        <!-- Transformer AI Feedback -->
+        <!-- AI Evaluator Comprehensive Feedback -->
         <div class="section-card mb-4 tf-feedback-section">
-          <h6 class="fw-bold mb-3"><i class="bi bi-cpu me-2 text-info"></i>Phân tích AI Chi tiết (Transformer)</h6>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold mb-0"><i class="bi bi-robot me-2 text-info"></i>Nhận Xét & Đánh Giá Chi Tiết từ AI Evaluator</h6>
+            <span class="badge bg-info-subtle text-info border border-info-subtle smaller" id="aiAssessStatus">Đang phân tích</span>
+          </div>
           <div id="transformerFeedbackBox">
             <!-- Summary -->
-            <div id="tfSummaryBox" class="mb-3 p-3 rounded-3" style="background: rgba(79, 70, 229, 0.08); border-left: 3px solid var(--color-indigo);"></div>
-
+            <div id="tfSummaryBox" class="mb-3 p-3 rounded-3" style="background: rgba(79, 70, 229, 0.08); border-left: 3px solid var(--color-indigo);">
+              <span class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Đang chuẩn bị đánh giá...</span>
+            </div>
           </div>
         </div>
 
@@ -1191,21 +1215,21 @@
             <h5 class="modal-title fw-bold text-light" id="apiConfigModalLabel">
               <i class="bi bi-cpu-fill text-info me-2"></i>Cấu Hình AI Evaluator & Hệ Thống
             </h5>
-            <p class="text-muted smaller mb-0">Cấu hình kết nối Gemini 3.7 Flash và Backend GPU âm học</p>
+            <p class="text-muted smaller mb-0">Cấu hình kết nối AI Evaluator và Backend GPU âm học</p>
           </div>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Đóng"></button>
         </div>
 
         <div class="modal-body p-4">
-          <!-- GEMINI API CONFIG -->
+          <!-- AI EVALUATOR API CONFIG -->
           <div class="mb-4">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="fw-bold small text-warning"><i class="bi bi-stars me-1"></i>Gemini 3.7 Flash API (RevidAPI)</span>
+              <span class="fw-bold small text-warning"><i class="bi bi-stars me-1"></i>AI Evaluator API (RevidAPI / OpenAI Compatible)</span>
               <span class="badge bg-warning-subtle text-warning border border-warning-subtle smaller">Chấm Ngữ pháp & Ngữ cảnh</span>
             </div>
             
             <div class="mb-3">
-              <label class="form-label smaller text-muted mb-1">API Key (x-api-key) <span class="text-danger">*</span></label>
+              <label class="form-label smaller text-muted mb-1">API Key (x-api-key / Bearer) <span class="text-danger">*</span></label>
               <div class="input-group">
                 <span class="input-group-text bg-dark border-secondary border-opacity-50 text-muted"><i class="bi bi-key-fill"></i></span>
                 <input type="password" class="form-control bg-dark text-light border-secondary border-opacity-50" id="modalGeminiKey" placeholder="YOUR_API_KEY" />
@@ -1222,14 +1246,14 @@
             </div>
 
             <div class="mb-3">
-              <label class="form-label smaller text-muted mb-1">AI Model</label>
+              <label class="form-label smaller text-muted mb-1">Mô hình AI (Model)</label>
               <input type="text" class="form-control bg-dark text-light border-secondary border-opacity-50 font-monospace smaller" id="modalGeminiModel" value="gemini-3.7-flash" />
             </div>
 
             <!-- Test Connection Button & Status -->
             <div class="d-flex align-items-center justify-content-between pt-1">
               <button type="button" class="btn btn-sm btn-outline-warning" id="modalTestGeminiBtn">
-                <i class="bi bi-plug-fill me-1"></i>Kiểm Tra Kết Nối
+                <i class="bi bi-plug-fill me-1"></i>Kiểm Tra Kết Nối AI
               </button>
               <div id="modalGeminiTestStatus" class="ms-2 text-end flex-grow-1"></div>
             </div>
@@ -1267,7 +1291,7 @@
 
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script type="module" src="js/dashboard.js?v=3"></script>
+  <script type="module" src="js/dashboard.js?v=6"></script>
 </body>
 
 </html>

@@ -638,6 +638,37 @@ class SpeakingPipeline:
         fb = self.enable_feedback if feedback is None else feedback
         audio = Path(audio)
 
+        # Voice Activity Detection (VAD) check toàn bộ file audio trước khi tách câu và đưa vào Whisper
+        from data.audio_preprocess import load_audio_file
+        try:
+            wav_check, _ = load_audio_file(audio)
+            if wav_check.numel() > 0:
+                mono_check = wav_check.mean(0) if wav_check.dim() > 1 else wav_check
+                peak_amp = float(mono_check.abs().max())
+                rms_amp = float(torch.sqrt(torch.mean(mono_check ** 2)))
+                if peak_amp < 0.015 or rms_amp < 0.003:
+                    print(f"[{role}] VAD: Không phát hiện tiếng người trong audio (peak={peak_amp:.4f}, rms={rms_amp:.4f}). Bỏ qua Whisper.", flush=True)
+                    student_data = {
+                        "role": role,
+                        "scored": True,
+                        "sentences": [],
+                        "sentence_count": 0,
+                        "transcript": "",
+                        "transcript_lines": [],
+                        "scores": {"total": 0.0, "accuracy": 0.0, "fluency": 0.0, "prosodic": 0.0},
+                        "filtered_vi_count": 0,
+                        "message": f"{role}: Không phát hiện tiếng người trong bản ghi âm (VAD)",
+                    }
+                    return {
+                        "role": role,
+                        "audio": str(audio),
+                        "student": student_data,
+                        "dialogue": {"turns": [], "has_l2_mdd": self.l2_mdd is not None},
+                        "has_l2_mdd": self.l2_mdd is not None,
+                    }
+        except Exception as vad_e:
+            print(f"[{role}] VAD check warning: {vad_e}", flush=True)
+
         base_dir = Path(output_dir or audio.parent / f"{audio.stem}_single_split")
         sent_dir = base_dir / "sentences"
         sent_dir.mkdir(parents=True, exist_ok=True)

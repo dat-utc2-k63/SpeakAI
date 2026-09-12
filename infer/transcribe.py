@@ -132,6 +132,14 @@ class WhisperTranscriber:
         if sr != WHISPER_SR:
             wav = torchaudio.functional.resample(wav, sr, WHISPER_SR)
 
+        # Voice Activity Detection (VAD) check trước khi đưa vào Whisper: lọc silence / noise nền
+        if wav.numel() == 0:
+            raise ValueError("File audio rỗng")
+        peak_amp = float(wav.abs().max())
+        rms = float(torch.sqrt(torch.mean(wav ** 2)))
+        if peak_amp < 0.015 or rms < 0.003:
+            raise ValueError(f"Không phát hiện tiếng người trong audio (VAD: peak={peak_amp:.4f}, rms={rms:.4f})")
+
         chunk_samples = int(WHISPER_CHUNK_SEC * WHISPER_SR)
         if wav.shape[0] <= chunk_samples:
             text = self._transcribe_waveform(wav)

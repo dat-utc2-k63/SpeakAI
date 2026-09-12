@@ -423,6 +423,120 @@ export async function uploadPracticeAudio(studentId, audioBlob, filename) {
 }
 
 /**
+ * Voice Activity Detection (VAD) client-side sử dụng Web Audio API.
+ * Phân tích năng lượng âm thanh (Short-Time RMS & Peak Amplitude) để xác định
+ * có tiếng người nói thực sự hay không trước khi gửi sang mô hình Whisper.
+ *
+ * @param {Blob} audioBlob - Dữ liệu audio ghi âm từ MediaRecorder
+ * @param {Object} [options]
+ * @param {number} [options.minSpeechDuration=0.35] - Tổng thời lượng tiếng nói tối thiểu (giây)
+ * @param {number} [options.speechRmsThreshold=0.012] - Ngưỡng RMS xác định frame có tiếng người
+ * @param {number} [options.minPeakAmp=0.025] - Biên độ đỉnh tối thiểu của toàn bộ file
+ * @returns {Promise<{hasVoice: boolean, speechDurationSec: number, totalDurationSec: number, maxRms: number, avgRms: number, peakAmp: number, reason: string}>}
+ */
+export async function detectVoiceActivity(audioBlob, options = {}) {
+  const minSpeechDuration = options.minSpeechDuration ?? 0.35;
+  const speechRmsThreshold = options.speechRmsThreshold ?? 0.012;
+  const minPeakAmp = options.minPeakAmp ?? 0.025;
+
+  if (!audioBlob || audioBlob.size === 0) {
+    return { hasVoice: false, speechDurationSec: 0, totalDurationSec: 0, maxRms: 0, avgRms: 0, peakAmp: 0, reason: 'File ghi âm rỗng' };
+  }
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) {
+    return { hasVoice: true, speechDurationSec: 1.0, totalDurationSec: 1.0, maxRms: 0.1, avgRms: 0.05, peakAmp: 0.1, reason: 'Web Audio API không hỗ trợ, cho phép pass' };
+  }
+
+  const audioCtx = new AudioContextClass();
+  try {
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const audioBuffer = await new Promise((resolve, reject) => {
+      audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
+    });
+
+    const sampleRate = audioBuffer.sampleRate;
+    const totalDurationSec = audioBuffer.duration;
+
+    if (totalDurationSec < 0.4) {
+      return {
+        hasVoice: false,
+        speechDurationSec: 0,
+        totalDurationSec: Number(totalDurationSec.toFixed(2)),
+        maxRms: 0,
+        avgRms: 0,
+        peakAmp: 0,
+        reason: 'Thời lượng ghi âm quá ngắn (< 0.4s)'
+      };
+    }
+
+    const channelData = audioBuffer.getChannelData(0);
+    const frameSamples = Math.floor(sampleRate * 0.025); // 25ms
+    const hopSamples = Math.floor(sampleRate * 0.010);   // 10ms
+    const hopSec = hopSamples / sampleRate;
+
+    let speechFrames = 0;
+    let totalFrames = 0;
+    let maxRms = 0;
+    let sumRms = 0;
+    let peakAmp = 0;
+
+    for (let i = 0; i <= channelData.length - frameSamples; i += hopSamples) {
+      let sumSq = 0;
+      for (let j = 0; j < frameSamples; j++) {
+        const s = channelData[i + j];
+        sumSq += s * s;
+        const absVal = Math.abs(s);
+        if (absVal > peakAmp) peakAmp = absVal;
+      }
+      const rms = Math.sqrt(sumSq / frameSamples);
+      if (rms > maxRms) maxRms = rms;
+      sumRms += rms;
+      totalFrames++;
+
+      if (rms >= speechRmsThreshold) {
+        speechFrames++;
+      }
+    }
+
+    const avgRms = totalFrames > 0 ? sumRms / totalFrames : 0;
+    const speechDurationSec = speechFrames * hopSec;
+
+    const hasVoice = (peakAmp >= minPeakAmp) &&
+                     (maxRms >= speechRmsThreshold * 1.25) &&
+                     (speechDurationSec >= minSpeechDuration);
+
+    let reason = hasVoice ? 'Phát hiện giọng nói hợp lệ' : 'Không phát hiện giọng nói';
+    if (!hasVoice) {
+      if (peakAmp < minPeakAmp) {
+        reason = 'Âm lượng mic quá nhỏ hoặc micro bị tắt tiếng (mute)';
+      } else if (speechDurationSec < minSpeechDuration) {
+        reason = `Thời lượng tiếng người quá ngắn (${speechDurationSec.toFixed(2)}s)`;
+      } else {
+        reason = 'Năng lượng âm thanh dưới ngưỡng giọng nói người';
+      }
+    }
+
+    return {
+      hasVoice,
+      speechDurationSec: Number(speechDurationSec.toFixed(2)),
+      totalDurationSec: Number(totalDurationSec.toFixed(2)),
+      maxRms: Number(maxRms.toFixed(4)),
+      avgRms: Number(avgRms.toFixed(4)),
+      peakAmp: Number(peakAmp.toFixed(4)),
+      reason
+    };
+  } catch (err) {
+    console.warn('[VAD] Lỗi giải mã audio buffer, cho phép bỏ qua VAD:', err);
+    return { hasVoice: true, speechDurationSec: 1.0, totalDurationSec: 1.0, maxRms: 0.1, avgRms: 0.05, peakAmp: 0.1, reason: 'Lỗi giải mã audio' };
+  } finally {
+    try {
+      await audioCtx.close();
+    } catch (_) {}
+  }
+}
+
+/**
  * Gọi API backend để chấm điểm phát âm 1 câu
  */
 export async function assessSingleAnswer(apiUrl, audioBlob, studentEmbeddings) {

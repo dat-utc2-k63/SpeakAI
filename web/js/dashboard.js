@@ -15,12 +15,12 @@ import { supabase } from './supabase.js';
         import {
           fetchPublishedSets, fetchSetWithQuestions, startSession, saveAnswer,
           completeSession, fetchSessionHistory, fetchSessionDetail,
-          uploadPracticeAudio, assessSingleAnswer,
+          uploadPracticeAudio, assessSingleAnswer, detectVoiceActivity,
           playBeep, playStartTone, playEndTone, calculateBandScore,
           fetchActiveSession, cancelSession
         } from './practice.js';
         import {
-          evaluateAnswerWithGemini, getGeminiConfig, saveLocalGeminiConfig,
+          evaluateAnswerWithGemini, evaluateConversationWithAi, getGeminiConfig, saveLocalGeminiConfig,
           testGeminiConnection, DEFAULT_GEMINI_ENDPOINT, DEFAULT_GEMINI_MODEL
         } from './gemini_eval.js';
 
@@ -109,6 +109,7 @@ import { supabase } from './supabase.js';
             roleBadge.textContent = 'Quản trị';
             roleBadge.className = 'badge bg-danger';
             document.getElementById('adminNav').classList.remove('d-none');
+            document.getElementById('sidebarApiConfigBtn')?.classList.remove('d-none');
             initAdmin();
           } else {
             roleBadge.textContent = 'Học viên';
@@ -464,13 +465,13 @@ import { supabase } from './supabase.js';
         let currentAssessmentId = null;
         let currentApiResult = null;
 
-        function showRealResults(assessmentId, resultObj, llmFeedback) {
+        async function showRealResults(assessmentId, resultObj, llmFeedback) {
           currentAssessmentId = assessmentId;
           currentApiResult = { ...resultObj, llm_feedback: llmFeedback };
 
           // Trích xuất điểm trung bình của học viên từ resultObj.student
           let total = 0, acc = 0, flu = 0, pro = 0;
-          const sentences = resultObj.student.sentences || [];
+          const sentences = resultObj.student?.sentences || [];
           if (sentences.length > 0) {
             let count = 0;
             for (const s of sentences) {
@@ -491,15 +492,20 @@ import { supabase } from './supabase.js';
           document.getElementById('resAcc').textContent = acc.toFixed(1);
           document.getElementById('resFlu').textContent = flu.toFixed(1);
           document.getElementById('resPro').textContent = pro.toFixed(1);
+          if (document.getElementById('resGrammar')) document.getElementById('resGrammar').textContent = '--';
+          if (document.getElementById('resContext')) document.getElementById('resContext').textContent = '--';
 
           // Level badge
-          const levelBadge = document.getElementById('resLevelBadge');
-          const otf = resultObj.overall_transformer_feedback || {};
-          const level = otf.level || (total >= 8.5 ? 'excellent' : total >= 7.0 ? 'good' : total >= 5.0 ? 'average' : total >= 3.0 ? 'weak' : 'critical');
-          const levelLabels = { excellent: 'Xuất sắc', good: 'Tốt', average: 'Trung bình', weak: 'Yếu', critical: 'Cần cải thiện' };
-          const levelColors = { excellent: 'bg-success', good: 'bg-info', average: 'bg-warning text-dark', weak: 'bg-danger', critical: 'bg-danger' };
-          levelBadge.textContent = levelLabels[level] || level;
-          levelBadge.className = `badge fs-6 ${levelColors[level] || 'bg-secondary'}`;
+          function updateLevelBadge(score) {
+            const levelBadge = document.getElementById('resLevelBadge');
+            if (!levelBadge) return;
+            const level = score >= 8.5 ? 'excellent' : score >= 7.0 ? 'good' : score >= 5.0 ? 'average' : score >= 3.0 ? 'weak' : 'critical';
+            const levelLabels = { excellent: 'Xuất sắc', good: 'Tốt', average: 'Trung bình', weak: 'Yếu', critical: 'Cần cải thiện' };
+            const levelColors = { excellent: 'bg-success', good: 'bg-info', average: 'bg-warning text-dark', weak: 'bg-danger', critical: 'bg-danger' };
+            levelBadge.textContent = levelLabels[level] || level;
+            levelBadge.className = `badge fs-6 ${levelColors[level] || 'bg-secondary'}`;
+          }
+          updateLevelBadge(total);
 
           // Hide model comparison table (SpeechOcean762 is sole scoring model)
           const comparisonInfo = document.getElementById('modelComparisonInfo');
@@ -507,26 +513,132 @@ import { supabase } from './supabase.js';
             comparisonInfo.classList.add('d-none');
           }
 
-          // Transformer feedback panel
-          const tfSummaryBox = document.getElementById('tfSummaryBox');
-          if (tfSummaryBox) {
-            if (otf && otf.summary) {
-              tfSummaryBox.innerHTML = simpleMarkdown(otf.summary);
-            } else {
-              tfSummaryBox.innerHTML = '<span class="text-muted">Đang phân tích...</span>';
-            }
-          }
-
-          document.getElementById('dialogueTimeline').innerHTML = (resultObj.dialogue.turns || []).map(renderTurnApi).join('');
+          document.getElementById('dialogueTimeline').innerHTML = (resultObj.dialogue?.turns || []).map(renderTurnApi).join('');
           document.getElementById('assessTitleInput').value = '';
           document.getElementById('assessResults').classList.remove('d-none');
           document.getElementById('runAssessBtn').disabled = false;
 
-          // Lấy các điểm trung bình lưu vào lại để saveAssessment dùng
+          // Lưu điểm tạm thời
           currentApiResult.score_total = total;
           currentApiResult.score_accuracy = acc;
           currentApiResult.score_fluency = flu;
           currentApiResult.score_prosodic = pro;
+
+          // ── KÍCH HOẠT AI EVALUATOR ĐÁNH GIÁ NGỮ PHÁP, NGỮ CẢNH & HIỆU CHUẨN ĐIỂM HỘI THOẠI ──
+          const tfSummaryBox = document.getElementById('tfSummaryBox');
+          const statusBadge = document.getElementById('aiAssessStatus');
+          if (statusBadge) {
+            statusBadge.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>AI đang đánh giá...';
+            statusBadge.className = 'badge bg-warning-subtle text-warning border border-warning-subtle smaller';
+          }
+          if (tfSummaryBox) {
+            tfSummaryBox.innerHTML = `
+              <div class="d-flex align-items-center gap-2 text-info py-2">
+                <span class="spinner-border spinner-border-sm"></span>
+                <span>AI Evaluator đang phân tích ngữ pháp, ngữ cảnh và hiệu chuẩn điểm toàn diện cho cuộc hội thoại...</span>
+              </div>`;
+          }
+
+          try {
+            const turns = resultObj.dialogue?.turns || [];
+            const aiEval = await evaluateConversationWithAi({
+              dialogueTurns: turns,
+              pronunciationScores: { total, accuracy: acc, fluency: flu, prosodic: pro },
+            });
+
+            if (aiEval && aiEval.score_total != null) {
+              total = aiEval.score_total;
+              document.getElementById('resTotal').textContent = total.toFixed(1);
+              if (document.getElementById('resGrammar')) {
+                document.getElementById('resGrammar').textContent = aiEval.score_grammar.toFixed(1);
+              }
+              if (document.getElementById('resContext')) {
+                document.getElementById('resContext').textContent = aiEval.score_context.toFixed(1);
+              }
+              updateLevelBadge(total);
+
+              if (statusBadge) {
+                statusBadge.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>Đã hiệu chuẩn AI';
+                statusBadge.className = 'badge bg-success-subtle text-success border border-success-subtle smaller';
+              }
+
+              // Hiển thị Nhận xét Sư phạm & Lỗi Ngữ pháp của AI Evaluator
+              if (tfSummaryBox) {
+                let html = `
+                  <div class="mb-3">
+                    <div class="fw-semibold text-white mb-2 d-flex align-items-center gap-2">
+                      <i class="bi bi-robot text-primary fs-5"></i>
+                      <span>Nhận Xét Sư Phạm từ AI Evaluator</span>
+                      ${aiEval.is_fallback ? '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle smaller">Đánh giá cơ bản</span>' : '<span class="badge bg-primary-subtle text-primary border border-primary-subtle smaller">Chuẩn Khảo Thí</span>'}
+                    </div>
+                    <div class="text-light text-opacity-90 small lh-base p-3 rounded-3" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08);">
+                      ${simpleMarkdown(aiEval.conversation_summary || '')}
+                    </div>
+                  </div>`;
+
+                if (aiEval.grammar_errors && aiEval.grammar_errors.length > 0) {
+                  html += `
+                    <div class="mb-3">
+                      <div class="small fw-semibold text-warning mb-2">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>Các điểm ngữ pháp & cấu trúc cần cải thiện:
+                      </div>
+                      <div class="d-flex flex-column gap-2">
+                        ${aiEval.grammar_errors.map(ge => `
+                          <div class="p-2 rounded bg-dark border border-secondary border-opacity-25 small">
+                            <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                              <span class="badge bg-danger-subtle text-danger border border-danger-subtle smaller">Học viên nói</span>
+                              <span class="text-danger font-monospace">"${ge.error_text}"</span>
+                              <i class="bi bi-arrow-right text-muted"></i>
+                              <span class="badge bg-success-subtle text-success border border-success-subtle smaller">Sửa chuẩn</span>
+                              <span class="text-success fw-bold font-monospace">"${ge.fix}"</span>
+                            </div>
+                            ${ge.explanation ? `<div class="text-muted smaller">${ge.explanation}</div>` : ''}
+                          </div>
+                        `).join('')}
+                      </div>
+                    </div>`;
+                }
+
+                if (aiEval.communication_tips && aiEval.communication_tips.length > 0) {
+                  html += `
+                    <div class="mb-2">
+                      <div class="small fw-semibold text-info mb-1">
+                        <i class="bi bi-lightbulb-fill me-1"></i>Lời khuyên phản xạ & giao tiếp tự nhiên:
+                      </div>
+                      <ul class="mb-0 ps-3 small text-muted">
+                        ${aiEval.communication_tips.map(tip => `<li>${tip}</li>`).join('')}
+                      </ul>
+                    </div>`;
+                }
+
+                if (aiEval.better_dialogue_expressions && aiEval.better_dialogue_expressions.length > 0) {
+                  html += `
+                    <div class="mt-3 pt-2 border-top border-secondary border-opacity-25">
+                      <div class="small fw-semibold text-success mb-1">
+                        <i class="bi bi-chat-quote-fill me-1"></i>Cách diễn đạt mẫu tự nhiên, nâng cao:
+                      </div>
+                      <div class="small text-light fst-italic ps-2 border-start border-success border-2">
+                        "${aiEval.better_dialogue_expressions.join('" / "')}"
+                      </div>
+                    </div>`;
+                }
+
+                tfSummaryBox.innerHTML = html;
+              }
+
+              // Lưu dữ liệu vào kết quả
+              currentApiResult.ai_eval = aiEval;
+              currentApiResult.score_grammar = aiEval.score_grammar;
+              currentApiResult.score_context = aiEval.score_context;
+              currentApiResult.score_total = total;
+            }
+          } catch (aiErr) {
+            console.warn('Lỗi gọi AI Evaluator cho hội thoại:', aiErr);
+            if (tfSummaryBox) {
+              const otf = resultObj.overall_transformer_feedback || {};
+              tfSummaryBox.innerHTML = otf.summary ? simpleMarkdown(otf.summary) : '<span class="text-muted">Đã hoàn thành phân tích âm học.</span>';
+            }
+          }
         }
 
         function renderTurnApi(turn) {
@@ -688,7 +800,7 @@ import { supabase } from './supabase.js';
 
             await saveAssessment(currentAssessmentId, {
               score_total: r.score_total, score_accuracy: r.score_accuracy, score_fluency: r.score_fluency,
-              score_prosodic: r.score_prosodic, llm_feedback: r.llm_feedback, result_json: r,
+              score_prosodic: r.score_prosodic, llm_feedback: r.ai_eval?.conversation_summary || r.llm_feedback, result_json: r,
               title: document.getElementById('assessTitleInput').value.trim()
             });
 
@@ -943,25 +1055,55 @@ import { supabase } from './supabase.js';
           const levelColors = { excellent: 'bg-success', good: 'bg-info', average: 'bg-warning text-dark', weak: 'bg-danger', critical: 'bg-danger' };
           const levelBadgeHtml = `<span class="badge fs-6 ${levelColors[level] || 'bg-secondary'}">${levelLabels[level] || level}</span>`;
 
-          // Transformer feedback HTML
-          let tfHtml = '';
-          if (otf.summary) {
-            tfHtml = `
-    <div class="section-card mb-4 tf-feedback-section">
-      <h6 class="fw-bold mb-3"><i class="bi bi-cpu me-2 text-info"></i>Phân tích AI Chi tiết (Transformer)</h6>
-      <div class="mb-3 p-3 rounded-3" style="background: rgba(79, 70, 229, 0.08); border-left: 3px solid var(--color-indigo);">
-        ${simpleMarkdown(otf.summary)}
-      </div>
-    </div>`;
-          }
+          const aiEval = a.result_json?.ai_eval;
+          const gramVal = a.score_grammar ?? aiEval?.score_grammar;
+          const ctxVal = a.score_context ?? aiEval?.score_context;
 
-          document.getElementById('assessDetailBody').innerHTML = `
-    <!-- Score overview -->
-    <div class="section-card mb-4">
-      <div class="d-flex justify-content-between align-items-start mb-4">
-        <h6 class="fw-bold mb-0"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Điểm Tổng Quát (SpeechOcean762)</h6>
-        ${levelBadgeHtml}
-      </div>
+          const scoresGridHtml = (gramVal != null || ctxVal != null) ? `
+      <div class="row g-3">
+        <div class="col-6 col-md-4 col-lg-2">
+          <div class="score-card score-card-total">
+            <div class="score-label">Tổng Thể</div>
+            <div class="score-value">${(a.score_total || 0).toFixed(1)}</div>
+            <div class="score-sub">Hiệu chuẩn AI</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+          <div class="score-card">
+            <div class="score-label">Ngữ Pháp</div>
+            <div class="score-value text-primary">${gramVal != null ? Number(gramVal).toFixed(1) : '--'}</div>
+            <div class="score-sub">Cấu trúc câu</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+          <div class="score-card">
+            <div class="score-label">Ngữ Cảnh</div>
+            <div class="score-value text-info">${ctxVal != null ? Number(ctxVal).toFixed(1) : '--'}</div>
+            <div class="score-sub">Phản xạ & Ý</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+          <div class="score-card">
+            <div class="score-label">Accuracy</div>
+            <div class="score-value">${(a.score_accuracy || 0).toFixed(1)}</div>
+            <div class="score-sub">Phát âm âm vị</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+          <div class="score-card">
+            <div class="score-label">Fluency</div>
+            <div class="score-value">${(a.score_fluency || 0).toFixed(1)}</div>
+            <div class="score-sub">Độ lưu loát</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+          <div class="score-card">
+            <div class="score-label">Prosody</div>
+            <div class="score-value">${(a.score_prosodic || 0).toFixed(1)}</div>
+            <div class="score-sub">Ngữ điệu nói</div>
+          </div>
+        </div>
+      </div>` : `
       <div class="row g-3">
         <div class="col-6 col-lg-3">
           <div class="score-card score-card-total">
@@ -991,7 +1133,102 @@ import { supabase } from './supabase.js';
             <div class="score-sub">/ 10</div>
           </div>
         </div>
+      </div>`;
+
+          // AI Feedback HTML
+          let tfHtml = '';
+          if (aiEval) {
+            let innerHtml = `
+              <div class="mb-3">
+                <div class="fw-semibold text-white mb-2 d-flex align-items-center gap-2">
+                  <i class="bi bi-robot text-primary fs-5"></i>
+                  <span>Nhận Xét Sư Phạm từ AI Evaluator</span>
+                  <span class="badge bg-primary-subtle text-primary border border-primary-subtle smaller">Chuẩn Khảo Thí</span>
+                </div>
+                <div class="text-light text-opacity-90 small lh-base p-3 rounded-3" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08);">
+                  ${simpleMarkdown(aiEval.conversation_summary || '')}
+                </div>
+              </div>`;
+
+            if (aiEval.grammar_errors && aiEval.grammar_errors.length > 0) {
+              innerHtml += `
+                <div class="mb-3">
+                  <div class="small fw-semibold text-warning mb-2">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>Các điểm ngữ pháp & cấu trúc cần cải thiện:
+                  </div>
+                  <div class="d-flex flex-column gap-2">
+                    ${aiEval.grammar_errors.map(ge => `
+                      <div class="p-2 rounded bg-dark border border-secondary border-opacity-25 small">
+                        <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                          <span class="badge bg-danger-subtle text-danger border border-danger-subtle smaller">Học viên nói</span>
+                          <span class="text-danger font-monospace">"${ge.error_text}"</span>
+                          <i class="bi bi-arrow-right text-muted"></i>
+                          <span class="badge bg-success-subtle text-success border border-success-subtle smaller">Sửa chuẩn</span>
+                          <span class="text-success fw-bold font-monospace">"${ge.fix}"</span>
+                        </div>
+                        ${ge.explanation ? `<div class="text-muted smaller">${ge.explanation}</div>` : ''}
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>`;
+            }
+
+            if (aiEval.communication_tips && aiEval.communication_tips.length > 0) {
+              innerHtml += `
+                <div class="mb-2">
+                  <div class="small fw-semibold text-info mb-1">
+                    <i class="bi bi-lightbulb-fill me-1"></i>Lời khuyên phản xạ & giao tiếp tự nhiên:
+                  </div>
+                  <ul class="mb-0 ps-3 small text-muted">
+                    ${aiEval.communication_tips.map(tip => `<li>${tip}</li>`).join('')}
+                  </ul>
+                </div>`;
+            }
+
+            if (aiEval.better_dialogue_expressions && aiEval.better_dialogue_expressions.length > 0) {
+              innerHtml += `
+                <div class="mt-3 pt-2 border-top border-secondary border-opacity-25">
+                  <div class="small fw-semibold text-success mb-1">
+                    <i class="bi bi-chat-quote-fill me-1"></i>Cách diễn đạt mẫu tự nhiên, nâng cao:
+                  </div>
+                  <div class="small text-light fst-italic ps-2 border-start border-success border-2">
+                    "${aiEval.better_dialogue_expressions.join('" / "')}"
+                  </div>
+                </div>`;
+            }
+
+            tfHtml = `
+              <div class="section-card mb-4 tf-feedback-section">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h6 class="fw-bold mb-0"><i class="bi bi-robot me-2 text-info"></i>Đánh Giá Toàn Diện của AI Evaluator</h6>
+                  <span class="badge bg-success-subtle text-success border border-success-subtle smaller">Đã hiệu chuẩn</span>
+                </div>
+                <div>${innerHtml}</div>
+              </div>`;
+          } else if (otf.summary) {
+            tfHtml = `
+              <div class="section-card mb-4 tf-feedback-section">
+                <h6 class="fw-bold mb-3"><i class="bi bi-cpu me-2 text-info"></i>Phân tích AI Chi tiết (Transformer)</h6>
+                <div class="mb-3 p-3 rounded-3" style="background: rgba(79, 70, 229, 0.08); border-left: 3px solid var(--color-indigo);">
+                  ${simpleMarkdown(otf.summary)}
+                </div>
+              </div>`;
+          }
+
+          document.getElementById('assessDetailBody').innerHTML = `
+    <!-- Score overview -->
+    <div class="section-card mb-4">
+      <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+        <div>
+          <h6 class="fw-bold mb-1"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Điểm Đánh Giá Toàn Diện Cuộc Hội Thoại</h6>
+          <p class="text-muted smaller mb-0">Kết hợp Phát âm âm học & Khảo thí Ngữ pháp/Ngữ cảnh (AI Evaluator)</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge bg-primary-subtle text-primary border border-primary-subtle small"><i class="bi bi-stars me-1"></i>AI Evaluator</span>
+          ${levelBadgeHtml}
+        </div>
       </div>
+      ${scoresGridHtml}
     </div>
 
     ${tfHtml}
@@ -1002,7 +1239,7 @@ import { supabase } from './supabase.js';
       <div class="timeline">${turns.map(renderTurnApi).join('')}</div>
     </div>
   `;
-          new bootstrap.Modal(document.getElementById('assessDetailModal')).show();
+          bootstrap.Modal.getOrCreateInstance(document.getElementById('assessDetailModal')).show();
         };
 
         function simpleMarkdown(text) {
@@ -2260,6 +2497,40 @@ import { supabase } from './supabase.js';
           // Tạo promise xử lý chấm câu này (không upload lên Supabase khi chưa nộp bài)
           const assessPromise = (async () => {
             try {
+              // [VAD CHECK TRƯỚC KHI ĐƯA VÀO WHISPER]
+              let vadResult = { hasVoice: true };
+              try {
+                vadResult = await detectVoiceActivity(audioBlob);
+              } catch (vadErr) {
+                console.warn('[VAD Exam] Lỗi check VAD client:', vadErr);
+              }
+
+              if (!vadResult.hasVoice) {
+                console.log(`[VAD Exam] Câu ${q.order_num || practiceCurrentIdx + 1}: Không phát hiện tiếng người (${vadResult.reason}). Bỏ qua Whisper, chấm 0 điểm.`);
+                const zeroScores = { total: 0, accuracy: 0, fluency: 0, prosodic: 0, grammar: 0, context: 0 };
+                const emptyTranscript = '(Không phát hiện giọng nói)';
+                const emptyGemini = {
+                  score_total: 0,
+                  score_grammar: 0,
+                  score_context: 0,
+                  feedback_summary: 'Hệ thống không phát hiện giọng nói của thí sinh trong câu trả lời này (bản ghi âm im lặng hoặc micro không thu được tiếng).',
+                  relevance_level: 'too_short',
+                  grammar_errors: []
+                };
+                practiceAnswers[q.id] = {
+                  blob: audioBlob,
+                  result: {
+                    student: { sentences: [], transcript: '', scores: zeroScores, message: 'No speech detected (VAD)' },
+                    gemini_eval: emptyGemini
+                  },
+                  scores: zeroScores,
+                  transcript: emptyTranscript,
+                  audioUrl: null,
+                  geminiEval: emptyGemini
+                };
+                return;
+              }
+
               const apiUrl = window.globalApiUrl;
               let sEmb = currentProfile.voice_embeddings;
               if (typeof sEmb === 'string') {
@@ -2398,6 +2669,20 @@ import { supabase } from './supabase.js';
           recordBtn.innerHTML = '<i class="bi bi-mic-fill"></i>';
           timerEl.classList.add('d-none');
 
+          // [VAD CHECK TRƯỚC KHI ĐƯA VÀO WHISPER]
+          statusEl.textContent = 'Đang kiểm tra tín hiệu giọng nói...';
+          try {
+            const vad = await detectVoiceActivity(audioBlob);
+            if (!vad.hasVoice) {
+              console.warn('[VAD Practice] Không phát hiện tiếng người:', vad);
+              statusEl.textContent = '⚠️ Không phát hiện tiếng người. Nhấn để ghi âm lại.';
+              showToast(`⚠️ Không phát hiện tiếng người trong bản ghi (${vad.reason}). Vui lòng nói to rõ hơn và ghi âm lại!`, 'danger');
+              return;
+            }
+          } catch (vadErr) {
+            console.warn('[VAD Practice] Lỗi kiểm tra VAD client, tiếp tục nộp:', vadErr);
+          }
+
           document.getElementById('practiceRecordingArea').classList.add('d-none');
           scoringOverlay.classList.remove('d-none');
           document.getElementById('practiceScoringStep').textContent = 'Đang gửi audio lên server...';
@@ -2441,8 +2726,8 @@ import { supabase } from './supabase.js';
               }
             }
 
-            // Gọi Gemini 3.7 Flash chấm điểm Ngữ pháp, Ngữ cảnh & Điểm tổng thể (Non-linear)
-            document.getElementById('practiceScoringStep').textContent = 'Đang đánh giá ngữ pháp & ngữ cảnh (Gemini 3.7 Flash)...';
+            // Gọi AI Evaluator chấm điểm Ngữ pháp, Ngữ cảnh & Điểm tổng thể (Non-linear)
+            document.getElementById('practiceScoringStep').textContent = 'Đang đánh giá ngữ pháp & ngữ cảnh (AI Evaluator)...';
             let geminiEval = null;
             try {
               geminiEval = await evaluateAnswerWithGemini({
@@ -2518,7 +2803,7 @@ import { supabase } from './supabase.js';
                 </div>
                 ${gemini?.is_fallback
                   ? `<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle small" title="Đánh giá dự phòng heuristic">Đánh giá cơ bản</span>`
-                  : `<span class="badge bg-primary-subtle text-primary border border-primary-subtle small"><i class="bi bi-stars me-1"></i>Gemini 3.7 Flash</span>`
+                  : `<span class="badge bg-primary-subtle text-primary border border-primary-subtle small"><i class="bi bi-stars me-1"></i>AI Evaluator</span>`
                 }
               </div>
 
@@ -3174,7 +3459,7 @@ import { supabase } from './supabase.js';
             }
 
             btn.disabled = true;
-            if (statusEl) statusEl.innerHTML = '<span class="text-info small"><span class="spinner-border spinner-border-sm me-1"></span>Đang kiểm tra kết nối tới Gemini AI...</span>';
+            if (statusEl) statusEl.innerHTML = '<span class="text-info small"><span class="spinner-border spinner-border-sm me-1"></span>Đang kiểm tra kết nối tới AI Evaluator...</span>';
 
             try {
               const res = await testGeminiConnection(key, url, model);
