@@ -155,11 +155,22 @@ export async function deleteQuestionSet(setId) {
  * Toggle publish/unpublish bộ đề
  */
 export async function togglePublishSet(setId, isPublished) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('question_sets')
     .update({ is_published: isPublished })
-    .eq('id', setId);
-  if (error) throw error;
+    .eq('id', setId)
+    .select('id, is_published')
+    .maybeSingle();
+
+  if (error) {
+    const { error: fallbackErr } = await supabase
+      .from('question_sets')
+      .update({ is_published: isPublished })
+      .eq('id', setId);
+    if (fallbackErr) throw fallbackErr;
+    return { id: setId, is_published: isPublished };
+  }
+  return data || { id: setId, is_published: isPublished };
 }
 
 // =========================================================

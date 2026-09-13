@@ -2003,8 +2003,10 @@ import { supabase } from './supabase.js';
           document.getElementById('togglePublishBtn').addEventListener('click', async () => {
             if (!currentEditSetCanEdit) { alert('Bạn không có quyền thay đổi trạng thái xuất bản bộ đề này!'); return; }
             try {
-              const updated = await togglePublishSet(currentEditSetId, !currentEditSetPublished);
-              currentEditSetPublished = updated.is_published;
+              const targetStatus = !currentEditSetPublished;
+              const updated = await togglePublishSet(currentEditSetId, targetStatus);
+              currentEditSetPublished = (updated && typeof updated.is_published === 'boolean') ? updated.is_published : targetStatus;
+              if (currentEditSetData) currentEditSetData.is_published = currentEditSetPublished;
               updatePublishBtnUI();
               showToast(currentEditSetPublished ? 'Đã xuất bản bộ đề!' : 'Đã chuyển về bản nháp!', 'info');
             } catch (e) {
@@ -2326,15 +2328,15 @@ import { supabase } from './supabase.js';
             const filterStatus = document.getElementById('qsetFilterStatus').value;
             const filterAuthor = document.getElementById('qsetFilterAuthor')?.value;
 
-            if (filterLevel) sets = sets.filter(s => s.level === filterLevel);
-            if (filterStatus === 'published') sets = sets.filter(s => s.is_published);
-            if (filterStatus === 'draft') sets = sets.filter(s => !s.is_published);
-            if (filterAuthor === 'mine') sets = sets.filter(s => s.teacher_id === currentUser.id);
+            if (filterLevel) sets = sets.filter(s => s && s.level === filterLevel);
+            if (filterStatus === 'published') sets = sets.filter(s => s && Boolean(s.is_published));
+            if (filterStatus === 'draft') sets = sets.filter(s => s && !s.is_published);
+            if (filterAuthor === 'mine') sets = sets.filter(s => s && s.teacher_id === currentUser.id);
             if (filterAuthor === 'shared_with_me') {
-              sets = sets.filter(s => s.teacher_id !== currentUser.id && Array.isArray(s.allowed_teacher_ids) && s.allowed_teacher_ids.includes(currentUser.id));
+              sets = sets.filter(s => s && s.teacher_id !== currentUser.id && Array.isArray(s.allowed_teacher_ids) && s.allowed_teacher_ids.includes(currentUser.id));
             }
             if (filterAuthor === 'others') {
-              sets = sets.filter(s => s.teacher_id !== currentUser.id && (!Array.isArray(s.allowed_teacher_ids) || !s.allowed_teacher_ids.includes(currentUser.id)));
+              sets = sets.filter(s => s && s.teacher_id !== currentUser.id && (!Array.isArray(s.allowed_teacher_ids) || !s.allowed_teacher_ids.includes(currentUser.id)));
             }
 
             if (!sets.length) {
