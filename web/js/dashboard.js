@@ -1714,18 +1714,78 @@ import { supabase } from './supabase.js';
         let currentEditSetIsOwner = true;
         let availableTeachersForPerm = [];
 
+        async function compressImage(file, maxDimension = 1280, quality = 0.85) {
+          return new Promise((resolve, reject) => {
+            if (!file || !file.type.startsWith('image/')) {
+              reject(new Error('Tệp tải lên không phải là hình ảnh hợp lệ!'));
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const img = new Image();
+              img.onload = () => {
+                let width = img.naturalWidth || img.width;
+                let height = img.naturalHeight || img.height;
+                if (width > maxDimension || height > maxDimension) {
+                  if (width > height) {
+                    height = Math.round((height * maxDimension) / width);
+                    width = maxDimension;
+                  } else {
+                    width = Math.round((width * maxDimension) / height);
+                    height = maxDimension;
+                  }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                resolve(dataUrl);
+              };
+              img.onerror = () => reject(new Error('Không thể đọc dữ liệu hình ảnh!'));
+              img.src = e.target.result;
+            };
+            reader.onerror = () => reject(new Error('Lỗi khi đọc file ảnh!'));
+            reader.readAsDataURL(file);
+          });
+        }
+
+        async function handleImageFileUpload(file) {
+          if (!file) return;
+          try {
+            const dataUrl = await compressImage(file);
+            const imgInput = document.getElementById('qImageUrlInput');
+            if (imgInput) imgInput.value = dataUrl;
+            updateQuestionImagePreview(dataUrl);
+            showToast('Đã tải và tối ưu ảnh thành công!', 'success');
+          } catch (err) {
+            alert(err.message || 'Không thể xử lý ảnh tải lên!');
+          }
+        }
+
         function updateQuestionImagePreview(url) {
+          const promptEl = document.getElementById('qImageUploadPrompt');
           const container = document.getElementById('qImagePreviewContainer');
           const previewImg = document.getElementById('qImagePreview');
           if (!container || !previewImg) return;
           const cleanUrl = (url || '').trim();
           if (cleanUrl) {
             previewImg.src = cleanUrl;
-            previewImg.onerror = () => { container.classList.add('d-none'); };
-            previewImg.onload = () => { container.classList.remove('d-none'); };
+            previewImg.onload = () => {
+              container.classList.remove('d-none');
+              if (promptEl) promptEl.classList.add('d-none');
+            };
+            previewImg.onerror = () => {
+              container.classList.add('d-none');
+              if (promptEl) promptEl.classList.remove('d-none');
+            };
           } else {
             previewImg.src = '';
             container.classList.add('d-none');
+            if (promptEl) promptEl.classList.remove('d-none');
+            const fileInput = document.getElementById('qImageFileInput');
+            if (fileInput) fileInput.value = '';
           }
         }
 
@@ -1768,7 +1828,7 @@ import { supabase } from './supabase.js';
           } else if (taskType === 'picture_description') {
             if (imgArea) imgArea.classList.remove('d-none');
             if (refArea) refArea.classList.add('d-none');
-            if (textLabel) textLabel.innerHTML = '<i class="bi bi-chat-left-text-fill me-1 text-primary"></i>Câu lệnh / Hướng dẫn miêu tả tranh (Instruction) *';
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-chat-left-text-fill me-1 text-primary"></i>Câu lệnh đề bài cho học viên (Instruction) *';
             if (textInput) {
               textInput.rows = 2;
               if (isInitialOrTypeChange && !textInput.value.trim()) {
@@ -1888,11 +1948,17 @@ import { supabase } from './supabase.js';
           });
 
           document.getElementById('backToQSetsBtn').addEventListener('click', () => {
-            document.getElementById('qsetEditorView').classList.add('d-none');
-            document.getElementById('qsetsMainView').classList.remove('d-none');
             currentEditSetId = null;
             currentEditSetData = null;
-            renderQuestionSets();
+            const editPage = document.getElementById('page-teacher-questionset-edit');
+            const mainPage = document.getElementById('page-teacher-questionsets');
+            if (editPage) editPage.classList.add('d-none');
+            if (mainPage) mainPage.classList.remove('d-none');
+            if (typeof navigateTo === 'function') {
+              navigateTo('questionsets');
+            } else {
+              renderQuestionSets();
+            }
           });
 
           // Lắng nghe thay đổi loại đề thi / chuẩn ngay lập tức
@@ -1953,11 +2019,17 @@ import { supabase } from './supabase.js';
             try {
               await deleteQuestionSet(currentEditSetId);
               showToast('Đã xóa bộ đề!', 'success');
-              document.getElementById('qsetEditorView').classList.add('d-none');
-              document.getElementById('qsetsMainView').classList.remove('d-none');
               currentEditSetId = null;
               currentEditSetData = null;
-              renderQuestionSets();
+              const editPage = document.getElementById('page-teacher-questionset-edit');
+              const mainPage = document.getElementById('page-teacher-questionsets');
+              if (editPage) editPage.classList.add('d-none');
+              if (mainPage) mainPage.classList.remove('d-none');
+              if (typeof navigateTo === 'function') {
+                navigateTo('questionsets');
+              } else {
+                renderQuestionSets();
+              }
             } catch (e) {
               alert('Lỗi: ' + e.message);
             }
@@ -2055,18 +2127,70 @@ import { supabase } from './supabase.js';
             });
           }
 
-          // Sự kiện xem trước ảnh
+          // Sự kiện xem trước và upload ảnh thật
           const qImgInput = document.getElementById('qImageUrlInput');
+          const qFileInput = document.getElementById('qImageFileInput');
+          const qDropzone = document.getElementById('qImageDropzone');
+          const qBrowseBtn = document.getElementById('qImageBrowseBtn');
+          const qImgClearBtn = document.getElementById('qImageClearBtn');
+
+          if (qBrowseBtn && qFileInput) {
+            qBrowseBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              qFileInput.click();
+            });
+          }
+
+          if (qDropzone && qFileInput) {
+            qDropzone.addEventListener('click', (e) => {
+              if (e.target.closest('#qImageClearBtn')) return;
+              if (document.getElementById('qImagePreviewContainer')?.classList.contains('d-none')) {
+                qFileInput.click();
+              }
+            });
+
+            qDropzone.addEventListener('dragover', (e) => {
+              e.preventDefault();
+              qDropzone.style.borderColor = '#0d6efd';
+              qDropzone.style.background = 'rgba(13, 110, 253, 0.08)';
+            });
+
+            qDropzone.addEventListener('dragleave', (e) => {
+              e.preventDefault();
+              qDropzone.style.borderColor = '';
+              qDropzone.style.background = 'rgba(255,255,255,0.03)';
+            });
+
+            qDropzone.addEventListener('drop', (e) => {
+              e.preventDefault();
+              qDropzone.style.borderColor = '';
+              qDropzone.style.background = 'rgba(255,255,255,0.03)';
+              if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                handleImageFileUpload(file);
+              }
+            });
+          }
+
+          if (qFileInput) {
+            qFileInput.addEventListener('change', (e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                handleImageFileUpload(e.target.files[0]);
+              }
+            });
+          }
+
           if (qImgInput) {
             qImgInput.addEventListener('input', (e) => {
               updateQuestionImagePreview(e.target.value);
             });
           }
 
-          const qImgClearBtn = document.getElementById('qImageClearBtn');
           if (qImgClearBtn) {
-            qImgClearBtn.addEventListener('click', () => {
+            qImgClearBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
               if (qImgInput) qImgInput.value = '';
+              if (qFileInput) qFileInput.value = '';
               updateQuestionImagePreview('');
             });
           }
@@ -3212,7 +3336,8 @@ import { supabase } from './supabase.js';
                   taskType: q.task_type || 'short_qa',
                   referenceText: q.task_type === 'read_aloud' ? (q.question_text || '') : (q.reference_text || ''),
                   transcript: transcript,
-                  pronunciationScores: scores
+                  pronunciationScores: scores,
+                  imageUrl: q.image_url || null
                 });
                 if (geminiEval && geminiEval.score_total != null) {
                   if (q.task_type === 'read_aloud') {
@@ -3397,7 +3522,8 @@ import { supabase } from './supabase.js';
                 taskType: q.task_type || 'short_qa',
                 referenceText: q.task_type === 'read_aloud' ? (q.question_text || '') : (q.reference_text || ''),
                 transcript: transcript,
-                pronunciationScores: scores
+                pronunciationScores: scores,
+                imageUrl: q.image_url || null
               });
               if (geminiEval && geminiEval.score_total != null) {
                 if (q.task_type === 'read_aloud') {

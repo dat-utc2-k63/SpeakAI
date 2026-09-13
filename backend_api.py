@@ -321,4 +321,33 @@ def assess_status(task_id: str):
     return JSONResponse({'success': True, 'data': jsonable_encoder(tasks[task_id])})
 
 if __name__ == '__main__':
-    uvicorn.run(app, host='0.0.0.0', port=8000)
+    import asyncio
+    is_in_notebook = False
+    try:
+        loop = asyncio.get_running_loop()
+        if loop and loop.is_running():
+            is_in_notebook = True
+    except RuntimeError:
+        is_in_notebook = False
+
+    if is_in_notebook:
+        # Khi chạy trong Jupyter Notebook / Kaggle (đã có sẵn asyncio event loop)
+        import threading
+        print("⚡ Phát hiện môi trường Jupyter / Kaggle (active event loop).")
+        print(f"🚀 Đang khởi chạy Uvicorn trong background thread trên cổng 8000 (Public: {PUBLIC_URL})...")
+        config = uvicorn.Config(app=app, host='0.0.0.0', port=8000, log_level='info')
+        server = uvicorn.Server(config)
+        server_thread = threading.Thread(target=server.run, daemon=True)
+        server_thread.start()
+        print("✅ FastAPI Server đang chạy! Nhấn nút Stop / Interrupt cell để dừng.")
+        try:
+            while server_thread.is_alive():
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nĐang tắt FastAPI Server...")
+            server.should_exit = True
+            server_thread.join(timeout=5)
+    else:
+        # Khi chạy từ dòng lệnh (python backend_api.py)
+        uvicorn.run(app, host='0.0.0.0', port=8000)
+

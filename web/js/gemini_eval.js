@@ -125,9 +125,12 @@ export function getTaskSpecificRubric(taskType = '', examType = '', referenceTex
 - Nhận xét: Nhận xét ngắn gọn về ngắt nghỉ đúng cụm nghĩa (pausing), ngữ điệu (intonation), trọng âm từ và nối âm.`;
 
     case 'picture_description':
-      return `- Dạng Miêu tả tranh (Picture Description):
-- Ngữ pháp: BẮT BUỘC kiểm tra việc sử dụng thì Hiện tại tiếp diễn (is/are + V-ing) khi tả hành động, cụm từ chỉ vị trí không gian (in the foreground/background, on the left/right, next to...) và cấu trúc "There is/are".
-- Ngữ cảnh: Miêu tả đối tượng chính (con người, hành động, trang phục) và bối cảnh xung quanh. Tránh nói chung chung xa rời bức tranh.`;
+      return `- Dạng Miêu tả tranh (Picture Description - PHÂN TÍCH THỊ GIÁC TRỰC TIẾP TỪ ẢNH THẬT):
+- Bức ảnh thật của đề thi được đính kèm trực tiếp. AI là chuyên gia thị giác (Vision AI), hãy QUAN SÁT TRỰC TIẾP bức ảnh thật này (TUYỆT ĐỐI KHÔNG dùng hay đòi hỏi mô tả văn bản thủ công từ giáo viên).
+- Ngữ cảnh (score_context): Đối chiếu từng chi tiết trong lời nói học viên với các yếu tố THỰC TẾ trong ảnh:
+  + Đúng người, hành động, bối cảnh không gian, trang phục, đồ vật, vị trí có thật trong ảnh -> Cho điểm ngữ cảnh cao (8.0 - 10.0).
+  + Tả sai sự thật có trong ảnh (nhầm người, bịa đặt đồ vật, nói sai hành động/màu sắc/bối cảnh) -> Trừ điểm score_context và chỉ rõ chi tiết học viên nói sai so với ảnh trong feedback_summary.
+- Ngữ pháp (score_grammar): Đánh giá việc sử dụng thì Hiện tại tiếp diễn (is/are + V-ing) khi tả hành động, cụm từ chỉ vị trí không gian (in the foreground/background, on the left/right, next to...) và cấu trúc "There is/are".`;
 
     case 'short_qa':
       return `- Dạng Trả lời ngắn (Short Q&A):
@@ -193,6 +196,7 @@ export async function evaluateAnswerWithGemini({
   examType = 'general',
   taskType = '',
   referenceText = '',
+  imageUrl = null,
   transcript = '',
   pronunciationScores = {},
   apiKey = null,
@@ -236,15 +240,39 @@ export async function evaluateAnswerWithGemini({
     });
   }
 
+  const isPictureTask = (taskType === 'picture_description') && Boolean(imageUrl);
   const taskTag = taskType ? ` [Dạng bài: ${taskType}]` : '';
   const refTag = referenceText ? `\nDữ liệu tham khảo / Văn bản gốc / Cue Card gợi ý:\n"""\n${referenceText}\n"""` : '';
   const taskRubric = getTaskSpecificRubric(taskType, examType, referenceText);
   const rubricTag = taskRubric ? `\nTIÊU CHÍ KHẢO THÍ DÀNH RIÊNG CHO DẠNG BÀI NÀY:\n${taskRubric}\n` : '';
 
-  const userContent = `Đề: "${questionText || 'N/A'}"${partTitle ? ` [${partTitle}]` : ''}${taskTag} [${examType.toUpperCase()}]${refTag}${rubricTag}
+  const imagePromptNotice = isPictureTask
+    ? `\nLƯU Ý THỊ GIÁC: Bức ảnh thật của đề thi được đính kèm ở trên. AI hãy trực tiếp quan sát bức ảnh thật này để đối chiếu chi tiết bài nói của học viên ("${cleanTranscript}") xem có đúng với các đối tượng, hành động, sự vật, bối cảnh thực tế trong tranh hay không (KHÔNG dùng mô tả văn bản thủ công).`
+    : '';
+
+  const userContentText = `Đề: "${questionText || 'N/A'}"${partTitle ? ` [${partTitle}]` : ''}${taskTag} [${examType.toUpperCase()}]${refTag}${rubricTag}${imagePromptNotice}
 Bài nói học viên: "${cleanTranscript}"
 Phát âm âm học (SpeechOcean): Điểm tổng=${rawPronTotal.toFixed(1)}/10 [Chi tiết: Accuracy=${acc.toFixed(1)}, Fluency=${flu.toFixed(1)}, Prosody=${pro.toFixed(1)}]
 Đánh giá ngữ pháp, ngữ cảnh theo đúng yêu cầu dạng bài; kết hợp Điểm tổng phát âm với Ngữ pháp & Ngữ cảnh để chốt score_total (KHÔNG tự tính lại điểm âm học); tận dụng các chỉ số Acc, Flu, Pro để nhận xét sư phạm sắc bén trong feedback_summary. Trả về đúng JSON.`;
+
+  // Xây dựng message content: Multimodal (Text + Image) nếu có ảnh, ngược lại String
+  let userMessageContent;
+  if (isPictureTask) {
+    userMessageContent = [
+      {
+        type: 'text',
+        text: userContentText,
+      },
+      {
+        type: 'image_url',
+        image_url: {
+          url: imageUrl,
+        },
+      },
+    ];
+  } else {
+    userMessageContent = userContentText;
+  }
 
   try {
     const response = await fetch(endpoint, {
@@ -257,7 +285,7 @@ Phát âm âm học (SpeechOcean): Điểm tổng=${rawPronTotal.toFixed(1)}/10 
         model: model,
         messages: [
           { role: 'system', content: buildExaminerSystemPrompt() },
-          { role: 'user', content: userContent },
+          { role: 'user', content: userMessageContent },
         ],
         temperature: 0.2,
       }),

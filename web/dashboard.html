@@ -586,19 +586,34 @@
               </div>
             </div>
 
-            <!-- DYNAMIC: Link Hình ảnh (dành cho Picture Description) -->
+            <!-- DYNAMIC: Tải lên Hình ảnh thật (dành cho Picture Description) -->
             <div class="mb-3 d-none" id="qImageArea">
               <label class="form-label text-muted small fw-semibold">
-                <i class="bi bi-image me-1 text-warning"></i>Link Hình ảnh / Tranh miêu tả *
+                <i class="bi bi-image me-1 text-warning"></i>Tải lên Hình ảnh / Tranh thật (AI sẽ quan sát trực tiếp bức ảnh này) *
               </label>
-              <div class="input-group mb-2">
-                <span class="input-group-text bg-dark-subtle border-secondary"><i class="bi bi-link-45deg"></i></span>
-                <input type="url" class="form-control" id="qImageUrlInput" placeholder="VD: https://images.unsplash.com/photo-example... hoặc link ảnh trực tuyến" />
-                <button class="btn btn-outline-secondary" type="button" id="qImageClearBtn" title="Xóa ảnh"><i class="bi bi-x"></i></button>
-              </div>
-              <div id="qImagePreviewContainer" class="d-none mt-2 p-2 border border-secondary border-opacity-25 rounded text-center" style="background: rgba(0,0,0,0.25);">
-                <img id="qImagePreview" src="" alt="Preview" style="max-height: 180px; max-width: 100%; object-fit: contain; border-radius: 6px;" />
-                <div class="smaller text-success mt-1"><i class="bi bi-check-circle me-1"></i>Ảnh hợp lệ</div>
+              <input type="hidden" id="qImageUrlInput" />
+              <input type="file" id="qImageFileInput" accept="image/*" class="d-none" />
+
+              <div id="qImageDropzone" class="p-3 border border-secondary border-dashed rounded text-center transition-all" style="background: rgba(255,255,255,0.03); cursor: pointer; border-style: dashed !important;">
+                <div id="qImageUploadPrompt">
+                  <i class="bi bi-cloud-arrow-up text-warning display-6 mb-2 d-block"></i>
+                  <div class="fw-semibold text-light mb-1">Nhấn để tải ảnh thật từ máy tính</div>
+                  <div class="text-muted small">hoặc kéo thả file ảnh vào đây (JPG, PNG, WEBP)</div>
+                  <button type="button" class="btn btn-sm btn-outline-warning mt-2" id="qImageBrowseBtn">
+                    <i class="bi bi-upload me-1"></i>Chọn file ảnh
+                  </button>
+                </div>
+                <div id="qImagePreviewContainer" class="d-none mt-1">
+                  <div class="position-relative d-inline-block">
+                    <img id="qImagePreview" src="" alt="Ảnh miêu tả" style="max-height: 220px; max-width: 100%; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);" />
+                    <button class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1 rounded-circle" type="button" id="qImageClearBtn" title="Xóa ảnh" style="width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                  </div>
+                  <div class="text-success small mt-2">
+                    <i class="bi bi-check2-circle me-1"></i>Đã nạp ảnh thật thành công. AI sẽ tự động phân tích thị giác bức ảnh này.
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -608,7 +623,7 @@
                 <i class="bi bi-file-earmark-text me-1 text-info"></i>Tài liệu thông tin cho sẵn *
               </label>
               <textarea class="form-control" id="qReferenceInput" rows="3" placeholder="Nhập tài liệu, lịch trình hoặc thông báo cho sẵn..."></textarea>
-              <div class="form-text smaller text-info" id="qReferenceHint">
+              <div class="form-text text-muted small" id="qReferenceHint">
                 Thông tin này sẽ được hiển thị trên màn hình làm bài của học viên.
               </div>
             </div>
@@ -1392,7 +1407,7 @@
 
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script type="module" src="js/dashboard.js?v=19"></script>
+  <script type="module" src="js/dashboard.js?v=22"></script>
 </body>
 
 </html>

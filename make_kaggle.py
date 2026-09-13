@@ -361,7 +361,7 @@ run_cells.append(code_cell([
     "    'numpy>=1.24.0', 'soundfile>=0.12.1', 'nltk>=3.8.1',\n",
     "    'python-dotenv>=1.0.0', 'deepfilternet', 'addict', 'modelscope',\n",
     "    'speechbrain>=1.0.0', 'huggingface_hub>=0.23.0',\n",
-    "    'accelerate>=0.26.0', 'fastapi', 'uvicorn', 'python-multipart',\n",
+    "    'accelerate>=0.26.0', 'fastapi', 'uvicorn', 'python-multipart', 'nest-asyncio',\n",
     "]\n",
     "subprocess.run([sys.executable, '-m', 'pip', 'install', '-q'] + pkgs, check=True)\n",
     "subprocess.run([sys.executable, '-m', 'pip', 'install', '-U', '-q', f'numpy=={np_ver}'], check=True)\n",
