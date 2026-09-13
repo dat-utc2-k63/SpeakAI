@@ -633,6 +633,8 @@ class SpeakingPipeline:
         feedback: Optional[bool] = None,
         lang: Optional[str] = None,
         role: str = "student",
+        reference_text: Optional[str] = None,
+        task_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Chấm điểm phát âm trực tiếp cho 1 người nói (Luyện tập / Thi thử) KHÔNG cần tách giọng Diarization."""
         fb = self.enable_feedback if feedback is None else feedback
@@ -668,6 +670,79 @@ class SpeakingPipeline:
                     }
         except Exception as vad_e:
             print(f"[{role}] VAD check warning: {vad_e}", flush=True)
+
+        # Trường hợp Read Aloud: đã có sẵn văn bản bài đọc chuẩn (reference_text)
+        # KHÔNG CẦN DÙNG WHISPER để nhận dạng đoán chữ! Đưa thẳng văn bản bài đọc vào assess_track
+        # để WavLM + SpeechOcean762 + L2-MDD so khớp âm vị học (forced-alignment).
+        if task_type == "read_aloud" and reference_text and reference_text.strip():
+            clean_ref = reference_text.strip()
+            print(f"[{role}] Read Aloud Mode: Bỏ qua Whisper ASR, sử dụng trực tiếp văn bản đề bài làm target text: {clean_ref[:60]}...", flush=True)
+            try:
+                track = self.assess_track(
+                    audio,
+                    clean_ref,
+                    feedback=fb,
+                    lang=lang,
+                    feedback_mode=self.feedback_mode,
+                )
+                sentence_item = {
+                    "index": 0,
+                    "start_sec": 0.0,
+                    "end_sec": 0.0,
+                    "duration_sec": 0.0,
+                    "audio": str(audio),
+                    "turn_index": 0,
+                    "transcript": clean_ref,
+                    "role": role,
+                    "scored": True,
+                    "scores": track["scores"],
+                    "errors": track["errors"],
+                    "words_detail": track.get("words_detail", []),
+                    "l2_scan": track.get("l2_scan"),
+                    "feedback": track.get("feedback"),
+                    "target_text_source": "provided_passage",
+                }
+                sentences = [sentence_item]
+                summary = _build_summary(
+                    sentences,
+                    pipeline=self,
+                    feedback=fb,
+                    lang=lang,
+                    speaker="Student",
+                    filtered_vi=0,
+                )
+                student_data = {
+                    "role": role,
+                    "scored": True,
+                    "sentences": sentences,
+                    **summary,
+                }
+                return {
+                    "role": role,
+                    "audio": str(audio),
+                    "student": student_data,
+                    "dialogue": {
+                        "turns": [
+                            {
+                                "role": "student",
+                                "scored": True,
+                                "start_sec": 0.0,
+                                "end_sec": 0.0,
+                                "duration_sec": 0.0,
+                                "audio": str(audio),
+                                "transcript": clean_ref,
+                                "scores": track["scores"],
+                                "errors": track["errors"],
+                                "words_detail": track.get("words_detail", []),
+                                "feedback": track.get("feedback"),
+                            }
+                        ],
+                        "has_l2_mdd": self.l2_mdd is not None,
+                    },
+                    "has_l2_mdd": self.l2_mdd is not None,
+                }
+            except Exception as e:
+                print(f"[{role}] Read Aloud direct scoring warning: {e}. Fallback to segment-based assessment.", flush=True)
 
         base_dir = Path(output_dir or audio.parent / f"{audio.stem}_single_split")
         sent_dir = base_dir / "sentences"

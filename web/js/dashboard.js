@@ -12,7 +12,7 @@ import { supabase } from './supabase.js';
           fetchQuestionSets, createQuestionSet, updateQuestionSet, deleteQuestionSet,
           togglePublishSet, fetchQuestions, addQuestion, updateQuestion, deleteQuestion,
           updateQuestionSetPermissions, fetchTeachersList,
-          TASK_TYPES
+          TASK_TYPES, getAvailableTaskTypes
         } from './question_sets.js';
         import {
           fetchPublishedSets, fetchSetWithQuestions, startSession, saveAnswer,
@@ -40,6 +40,133 @@ import { supabase } from './supabase.js';
           }
           if (u.voice_sample_url && typeof u.voice_sample_url === 'string' && u.voice_sample_url.trim() !== '') return true;
           return false;
+        }
+
+        function escapeHtml(str) {
+          if (!str) return '';
+          return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+        }
+
+        function buildTaskQuestionCardContent(q) {
+          const taskType = q.task_type || 'short_qa';
+          const qText = escapeHtml(q.question_text || '');
+          const refText = (q.reference_text || '').trim();
+          const imgUrl = (q.image_url || '').trim();
+
+          if (taskType === 'read_aloud') {
+            return `
+              <div class="read-aloud-box mb-3">
+                <div class="read-aloud-header">
+                  <i class="bi bi-volume-up-fill me-1"></i>VĂN BẢN CẦN ĐỌC TO (READING PASSAGE)
+                </div>
+                <div class="read-aloud-text">${qText}</div>
+              </div>
+              <div class="text-muted small fst-italic">
+                <i class="bi bi-info-circle me-1"></i>Yêu cầu: Phát âm chuẩn xác, ngữ điệu tự nhiên, ngắt nghỉ đúng câu.
+              </div>
+            `;
+          }
+
+          if (taskType === 'picture_description') {
+            return `
+              <div class="question-text mb-3">${qText}</div>
+              ${imgUrl ? `
+                <div class="question-image-box mb-3">
+                  <img src="${escapeHtml(imgUrl)}" alt="Đề thi hình ảnh" class="question-image img-fluid" loading="lazy" />
+                </div>
+              ` : ''}
+              <div class="text-muted small fst-italic">
+                <i class="bi bi-eye me-1"></i>Hãy quan sát bức tranh và miêu tả chi tiết về con người, bối cảnh và hành động đang diễn ra.
+              </div>
+            `;
+          }
+
+          if (taskType === 'information_qa') {
+            return `
+              ${refText ? `
+                <div class="info-doc-box mb-3">
+                  <div class="info-doc-header">
+                    <i class="bi bi-file-earmark-text-fill me-2"></i>TÀI LIỆU DỮ LIỆU CHO SẴN (REFERENCE DOCUMENT)
+                  </div>
+                  <div class="info-doc-content">${escapeHtml(refText)}</div>
+                </div>
+              ` : ''}
+              <div class="info-qa-prompt mt-2">
+                <div class="text-warning small fw-bold text-uppercase mb-1">
+                  <i class="bi bi-question-circle me-1"></i>Câu hỏi truy vấn thông tin:
+                </div>
+                <div class="question-text">${qText}</div>
+              </div>
+            `;
+          }
+
+          if (taskType === 'long_turn') {
+            const bulletItems = refText ? refText.split('\n').filter(line => line.trim()) : [];
+            return `
+              <div class="cue-card-box mb-3">
+                <div class="cue-card-badge">
+                  <i class="bi bi-card-checklist me-1"></i>CUE CARD TOPIC • 1-2 PHÚT NÓI
+                </div>
+                <div class="cue-card-topic">${qText}</div>
+                ${bulletItems.length > 0 ? `
+                  <div class="cue-card-subheading">You should say:</div>
+                  <ul class="cue-card-bullet-list">
+                    ${bulletItems.map(item => `
+                      <li class="cue-card-bullet-item">${escapeHtml(item.replace(/^[-*•]\s*/, ''))}</li>
+                    `).join('')}
+                  </ul>
+                ` : ''}
+                <div class="mt-3 small text-muted fst-italic">
+                  <i class="bi bi-pencil-square me-1"></i>Hãy tận dụng thời gian chuẩn bị để vạch ra các ý chính trước khi trình bày.
+                </div>
+              </div>
+            `;
+          }
+
+          if (taskType === 'problem_solution') {
+            const options = refText ? refText.split('\n').filter(line => line.trim()) : [];
+            return `
+              <div class="problem-solution-box mb-3">
+                <div class="problem-solution-header">
+                  <i class="bi bi-exclamation-diamond me-1"></i>TÌNH HUỐNG (SITUATION / PROBLEM)
+                </div>
+                <div class="problem-situation-text fs-5 mb-3">${qText}</div>
+                ${options.length > 0 ? `
+                  <div class="text-warning small fw-bold mb-2">
+                    <i class="bi bi-lightbulb me-1"></i>Các phương án / giải pháp gợi ý:
+                  </div>
+                  <div class="problem-options-list">
+                    ${options.map(opt => `
+                      <div class="problem-option-card">
+                        <i class="bi bi-check2-circle me-2 text-warning"></i>${escapeHtml(opt.replace(/^[-*•]\s*/, ''))}
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }
+
+          // Default: short_qa, description, experience_future, opinion, discussion
+          return `
+            <div class="question-text mb-3">${qText}</div>
+            ${imgUrl ? `
+              <div class="question-image-box mb-3">
+                <img src="${escapeHtml(imgUrl)}" alt="Question Image" class="question-image img-fluid" loading="lazy" />
+              </div>
+            ` : ''}
+            ${refText ? `
+              <div class="info-doc-box mb-3">
+                <div class="info-doc-header"><i class="bi bi-info-circle me-1"></i>Thông tin bổ sung</div>
+                <div class="info-doc-content">${escapeHtml(refText)}</div>
+              </div>
+            ` : ''}
+          `;
         }
 
         (async () => {
@@ -1587,6 +1714,102 @@ import { supabase } from './supabase.js';
         let currentEditSetIsOwner = true;
         let availableTeachersForPerm = [];
 
+        function updateQuestionImagePreview(url) {
+          const container = document.getElementById('qImagePreviewContainer');
+          const previewImg = document.getElementById('qImagePreview');
+          if (!container || !previewImg) return;
+          const cleanUrl = (url || '').trim();
+          if (cleanUrl) {
+            previewImg.src = cleanUrl;
+            previewImg.onerror = () => { container.classList.add('d-none'); };
+            previewImg.onload = () => { container.classList.remove('d-none'); };
+          } else {
+            previewImg.src = '';
+            container.classList.add('d-none');
+          }
+        }
+
+        function configureQuestionModalForTaskType(taskType) {
+          const t = TASK_TYPES[taskType] || TASK_TYPES['short_qa'];
+          const hintEl = document.getElementById('qTaskTypeHint');
+          if (hintEl && t) {
+            hintEl.innerHTML = `<i class="bi bi-info-circle me-1"></i>Bao gồm: <b>${t.includes}</b>`;
+          }
+
+          const imgArea = document.getElementById('qImageArea');
+          const refArea = document.getElementById('qReferenceArea');
+          const refLabel = document.getElementById('qReferenceLabel');
+          const refInput = document.getElementById('qReferenceInput');
+          const refHint = document.getElementById('qReferenceHint');
+          const textLabel = document.getElementById('qTextLabel');
+          const textInput = document.getElementById('qTextInput');
+
+          if (taskType === 'read_aloud') {
+            if (imgArea) imgArea.classList.add('d-none');
+            if (refArea) refArea.classList.add('d-none');
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-volume-up me-1 text-info"></i>Đoạn văn bản cần đọc to (Reading Passage) *';
+            if (textInput) textInput.placeholder = 'Nhập đoạn văn bản tiếng Anh cần đọc to (khoảng 40-70 từ)...';
+          } else if (taskType === 'picture_description') {
+            if (imgArea) imgArea.classList.remove('d-none');
+            if (refArea) refArea.classList.add('d-none');
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-chat-square-text me-1 text-primary"></i>Câu lệnh hướng dẫn (Instruction) *';
+            if (textInput) {
+              if (!textInput.value.trim()) {
+                textInput.value = 'Describe what you see in the picture in as much detail as possible.';
+              }
+              textInput.placeholder = 'VD: Describe what you see in the picture in as much detail as possible.';
+            }
+          } else if (taskType === 'information_qa') {
+            if (imgArea) imgArea.classList.add('d-none');
+            if (refArea) refArea.classList.remove('d-none');
+            if (refLabel) refLabel.innerHTML = '<i class="bi bi-file-earmark-text me-1 text-info"></i>Tài liệu thông tin / Lịch trình / Bảng biểu cho sẵn *';
+            if (refInput) refInput.placeholder = 'VD: Hội thảo quốc tế diễn ra lúc 9:00 AM tại Hội trường B; Diễn giả chính: Dr. Smith...';
+            if (refHint) refHint.innerHTML = 'Thí sinh sẽ quan sát tài liệu này và nghe/đọc câu hỏi để tìm câu trả lời chính xác.';
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-question-circle me-1 text-warning"></i>Câu hỏi truy vấn dựa trên tài liệu trên *';
+            if (textInput) textInput.placeholder = 'VD: What time does the seminar begin, and where will it be held?';
+          } else if (taskType === 'long_turn') {
+            if (imgArea) imgArea.classList.add('d-none');
+            if (refArea) refArea.classList.remove('d-none');
+            if (refLabel) refLabel.innerHTML = '<i class="bi bi-card-checklist me-1 text-warning"></i>Các gợi ý cần nói (Cue Bullet Points: You should say - Mỗi dòng 1 ý) *';
+            if (refInput) refInput.placeholder = '- Who this person is\n- What he/she does\n- How you first met\n- And explain why you admire this person.';
+            if (refHint) refHint.innerHTML = 'Mỗi dòng sẽ được hiển thị như một gạch đầu dòng trong Thẻ Cue Card cho thí sinh.';
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-journal-text me-1 text-primary"></i>Chủ đề thuyết trình chính (Cue Card Topic) *';
+            if (textInput) textInput.placeholder = 'VD: Describe an influential person you admire.';
+          } else if (taskType === 'problem_solution') {
+            if (imgArea) imgArea.classList.add('d-none');
+            if (refArea) refArea.classList.remove('d-none');
+            if (refLabel) refLabel.innerHTML = '<i class="bi bi-lightbulb me-1 text-success"></i>Các phương án / giải pháp gợi ý (Tùy chọn, mỗi dòng 1 phương án)';
+            if (refInput) refInput.placeholder = '- Option A: Organize a virtual online event\n- Option B: Postpone the event until next month\n- Option C: Find an indoor alternative venue';
+            if (refHint) refHint.innerHTML = 'Các phương án này sẽ hiển thị dưới dạng thẻ gợi ý để học viên phân tích và lựa chọn.';
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-exclamation-triangle me-1 text-danger"></i>Tình huống cần xử lý (Situation / Problem) *';
+            if (textInput) textInput.placeholder = 'VD: You are organizing an outdoor festival, but the weather forecast predicts heavy rain tomorrow...';
+          } else {
+            if (imgArea) imgArea.classList.add('d-none');
+            if (refArea) refArea.classList.add('d-none');
+            if (textLabel) textLabel.innerHTML = 'Nội dung câu hỏi / Đề bài *';
+            if (textInput) textInput.placeholder = 'VD: What do you usually do in your free time?';
+          }
+        }
+
+        function populateTaskTypeSelect(examType, selectedTaskType = 'short_qa') {
+          const taskSel = document.getElementById('qTaskTypeSelect');
+          if (!taskSel) return;
+          const taskData = getAvailableTaskTypes(examType || 'general');
+          const availableTypes = Array.isArray(taskData)
+            ? taskData
+            : [...(taskData.primary || []), ...(taskData.supplementary || [])];
+          const validKeys = availableTypes.map(t => t.key);
+          if (!validKeys.includes(selectedTaskType)) {
+            selectedTaskType = validKeys[0] || 'short_qa';
+          }
+          taskSel.innerHTML = availableTypes.map(t => {
+            const isSelected = t.key === selectedTaskType ? 'selected' : '';
+            const statusIcon = (t.status === 'primary' || t.status === 'supported') ? '✅' : '⚠️';
+            return `<option value="${t.key}" ${isSelected}>${statusIcon} ${t.label} (${t.title})</option>`;
+          }).join('');
+          configureQuestionModalForTaskType(selectedTaskType);
+        }
+
         function initQuestionSetsUI() {
           document.getElementById('createQSetBtn').addEventListener('click', async () => {
             try {
@@ -1602,145 +1825,172 @@ import { supabase } from './supabase.js';
           });
 
           document.getElementById('backToQSetsBtn').addEventListener('click', () => {
-            navigateTo('questionsets');
+            document.getElementById('qsetEditorView').classList.add('d-none');
+            document.getElementById('qsetsMainView').classList.remove('d-none');
+            currentEditSetId = null;
+            currentEditSetData = null;
+            renderQuestionSets();
           });
 
+          // Save set info
           document.getElementById('saveQSetInfoBtn').addEventListener('click', async () => {
-            if (!currentEditSetId) return;
-            if (!currentEditSetCanEdit) { alert('Bạn không có quyền sửa thông tin bộ đề này!'); return; }
+            if (!currentEditSetCanEdit) { alert('Bạn không có quyền chỉnh sửa thông tin bộ đề này!'); return; }
             const title = document.getElementById('qsetTitleInput').value.trim();
-            if (!title) { alert('Vui lòng nhập tiêu đề!'); return; }
+            if (!title) { alert('Vui lòng nhập tên bộ đề!'); return; }
+            const desc = document.getElementById('qsetDescInput').value.trim();
+            const level = document.getElementById('qsetLevelSelect').value;
+            const examType = document.getElementById('qsetExamTypeSelect').value;
+
             try {
-              await updateQuestionSet(currentEditSetId, {
-                title,
-                description: document.getElementById('qsetDescInput').value.trim(),
-                level: document.getElementById('qsetLevelSelect').value,
-                exam_type: document.getElementById('qsetExamTypeSelect').value || 'general',
-              });
+              await updateQuestionSet(currentEditSetId, { title, description: desc, level, exam_type: examType });
               document.getElementById('qsetEditorTitle').textContent = title;
+              if (currentEditSetData) currentEditSetData.exam_type = examType;
               showToast('Đã lưu thông tin bộ đề!', 'success');
             } catch (e) {
               alert('Lỗi: ' + e.message);
             }
           });
 
+          // Toggle publish
           document.getElementById('togglePublishBtn').addEventListener('click', async () => {
-            if (!currentEditSetId) return;
-            if (!currentEditSetCanEdit) { alert('Bạn không có quyền publish bộ đề này!'); return; }
+            if (!currentEditSetCanEdit) { alert('Bạn không có quyền thay đổi trạng thái xuất bản bộ đề này!'); return; }
             try {
-              const newState = !currentEditSetPublished;
-              await togglePublishSet(currentEditSetId, newState);
-              currentEditSetPublished = newState;
+              const updated = await togglePublishSet(currentEditSetId, !currentEditSetPublished);
+              currentEditSetPublished = updated.is_published;
               updatePublishBtnUI();
-              showToast(newState ? 'Đã publish bộ đề!' : 'Đã gỡ publish!', 'success');
+              showToast(currentEditSetPublished ? 'Đã xuất bản bộ đề!' : 'Đã chuyển về bản nháp!', 'info');
             } catch (e) {
               alert('Lỗi: ' + e.message);
             }
           });
 
+          // Delete set
           document.getElementById('deleteQSetBtn').addEventListener('click', async () => {
-            if (!currentEditSetId) return;
             if (!currentEditSetCanEdit) { alert('Bạn không có quyền xóa bộ đề này!'); return; }
-            if (!confirm('Bạn có chắc muốn xóa bộ đề này?')) return;
+            if (!confirm('Bạn có chắc muốn xóa toàn bộ bộ đề này cùng các câu hỏi?')) return;
             try {
               await deleteQuestionSet(currentEditSetId);
               showToast('Đã xóa bộ đề!', 'success');
-              navigateTo('questionsets');
+              document.getElementById('qsetEditorView').classList.add('d-none');
+              document.getElementById('qsetsMainView').classList.remove('d-none');
+              currentEditSetId = null;
+              currentEditSetData = null;
+              renderQuestionSets();
             } catch (e) {
               alert('Lỗi: ' + e.message);
             }
           });
 
-          // Nút mở Modal Phân quyền
-          document.getElementById('shareQSetBtn')?.addEventListener('click', async () => {
-            if (!currentEditSetId || !currentEditSetData) return;
-            const modalEl = document.getElementById('qsetPermissionsModal');
-            const subtitleEl = document.getElementById('permModalSubtitle');
-            const listEl = document.getElementById('permTeachersList');
-            const searchInput = document.getElementById('permSearchInput');
-            if (searchInput) searchInput.value = '';
+          // Mở modal Phân quyền bộ đề
+          const shareBtn = document.getElementById('shareQSetBtn');
+          if (shareBtn) {
+            shareBtn.addEventListener('click', async () => {
+              if (!currentEditSetId || !currentEditSetData) return;
+              if (!currentEditSetIsOwner) {
+                alert('Chỉ người tạo bộ đề (hoặc Quản trị viên) mới có quyền phân quyền!');
+                return;
+              }
 
-            subtitleEl.innerHTML = `Phân quyền sửa/xóa cho bộ đề: <b class="text-white">${currentEditSetData.title || ''}</b>`;
-            listEl.innerHTML = `
-              <div class="text-center py-4 text-muted">
-                <span class="spinner-border spinner-border-sm me-2"></span>Đang tải danh sách giáo viên...
-              </div>`;
-            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+              const subtitleEl = document.getElementById('permModalSubtitle');
+              if (subtitleEl) {
+                subtitleEl.innerHTML = `Phân quyền sửa/xóa cho bộ đề: <b class="text-white">${currentEditSetData.title || ''}</b>`;
+              }
 
-            try {
-              availableTeachersForPerm = await fetchTeachersList(currentUser.id);
-              renderPermissionsTeacherList();
-            } catch (err) {
-              listEl.innerHTML = `<div class="alert alert-danger mb-0">Lỗi tải danh sách giáo viên: ${err.message}</div>`;
-            }
-          });
+              const searchInput = document.getElementById('searchPermTeacherInput');
+              if (searchInput) searchInput.value = '';
+
+              const listEl = document.getElementById('permTeachersList');
+              listEl.innerHTML = `
+                <div class="text-center py-4 text-muted">
+                  <span class="spinner-border spinner-border-sm me-2"></span>Đang tải danh sách giáo viên...
+                </div>`;
+
+              bootstrap.Modal.getOrCreateInstance(document.getElementById('qsetPermissionsModal')).show();
+
+              try {
+                availableTeachersForPerm = await fetchTeachersList(currentUser.id);
+                renderPermissionsTeacherList();
+              } catch (err) {
+                listEl.innerHTML = `<div class="text-danger p-3">Lỗi tải danh sách giáo viên: ${err.message}</div>`;
+              }
+            });
+          }
 
           // Tìm kiếm giáo viên trong modal phân quyền
-          document.getElementById('permSearchInput')?.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase().trim();
-            document.querySelectorAll('.permission-teacher-item').forEach(item => {
-              const name = item.getAttribute('data-name') || '';
-              const email = item.getAttribute('data-email') || '';
-              if (!query || name.includes(query) || email.includes(query)) {
-                item.classList.remove('d-none');
-              } else {
-                item.classList.add('d-none');
-              }
+          const searchPermInput = document.getElementById('searchPermTeacherInput');
+          if (searchPermInput) {
+            searchPermInput.addEventListener('input', (e) => {
+              const query = e.target.value.toLowerCase().trim();
+              const items = document.querySelectorAll('.perm-teacher-item');
+              items.forEach(item => {
+                const name = item.getAttribute('data-name') || '';
+                const email = item.getAttribute('data-email') || '';
+                if (name.includes(query) || email.includes(query)) {
+                  item.classList.remove('d-none');
+                } else {
+                  item.classList.add('d-none');
+                }
+              });
             });
-          });
-
-          // Chọn tất cả
-          document.getElementById('permSelectAllBtn')?.addEventListener('click', () => {
-            document.querySelectorAll('.permission-teacher-item:not(.d-none) .perm-teacher-checkbox').forEach(cb => {
-              cb.checked = true;
-            });
-          });
-
-          // Bỏ chọn tất cả
-          document.getElementById('permDeselectAllBtn')?.addEventListener('click', () => {
-            document.querySelectorAll('.permission-teacher-item:not(.d-none) .perm-teacher-checkbox').forEach(cb => {
-              cb.checked = false;
-            });
-          });
+          }
 
           // Lưu phân quyền
-          document.getElementById('savePermissionsBtn')?.addEventListener('click', async () => {
-            if (!currentEditSetId) return;
-            const btn = document.getElementById('savePermissionsBtn');
-            const originalText = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Đang lưu...';
+          const savePermBtn = document.getElementById('savePermBtn');
+          if (savePermBtn) {
+            savePermBtn.addEventListener('click', async () => {
+              if (!currentEditSetId) return;
+              const btn = savePermBtn;
+              const originalText = btn.innerHTML;
+              btn.disabled = true;
+              btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang lưu...';
 
-            try {
-              const checkedCheckboxes = document.querySelectorAll('.perm-teacher-checkbox:checked');
-              const allowedTeacherIds = Array.from(checkedCheckboxes).map(cb => cb.value);
+              try {
+                const checkedCheckboxes = document.querySelectorAll('.perm-teacher-checkbox:checked');
+                const allowedTeacherIds = Array.from(checkedCheckboxes).map(cb => cb.value);
 
-              await updateQuestionSetPermissions(currentEditSetId, allowedTeacherIds);
-              if (currentEditSetData) {
-                currentEditSetData.allowed_teacher_ids = allowedTeacherIds;
+                await updateQuestionSetPermissions(currentEditSetId, allowedTeacherIds);
+                if (currentEditSetData) {
+                  currentEditSetData.allowed_teacher_ids = allowedTeacherIds;
+                }
+
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('qsetPermissionsModal')).hide();
+                showToast(`Đã lưu phân quyền cho ${allowedTeacherIds.length} giáo viên!`, 'success');
+              } catch (err) {
+                alert('Lỗi lưu phân quyền: ' + err.message);
+              } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
               }
-
-              bootstrap.Modal.getOrCreateInstance(document.getElementById('qsetPermissionsModal')).hide();
-              showToast(`Đã lưu phân quyền cho ${allowedTeacherIds.length} giáo viên!`, 'success');
-            } catch (err) {
-              alert('Lỗi lưu phân quyền: ' + err.message);
-            } finally {
-              btn.disabled = false;
-              btn.innerHTML = originalText;
-            }
-          });
+            });
+          }
 
           // Sự kiện đổi dạng đề bài trong modal tạo/sửa câu hỏi
           const qTaskSelect = document.getElementById('qTaskTypeSelect');
           if (qTaskSelect) {
             qTaskSelect.addEventListener('change', (e) => {
-              const t = TASK_TYPES[e.target.value] || TASK_TYPES['short_qa'];
+              const val = e.target.value;
+              const t = TASK_TYPES[val] || TASK_TYPES['short_qa'];
               if (t) {
-                const hintEl = document.getElementById('qTaskTypeHint');
-                if (hintEl) hintEl.innerHTML = `<i class="bi bi-info-circle me-1"></i>Bao gồm: <b>${t.includes}</b>`;
                 document.getElementById('qPrepTimeInput').value = t.defaultPrep;
                 document.getElementById('qResponseTimeInput').value = t.defaultResponse;
               }
+              configureQuestionModalForTaskType(val);
+            });
+          }
+
+          // Sự kiện xem trước ảnh
+          const qImgInput = document.getElementById('qImageUrlInput');
+          if (qImgInput) {
+            qImgInput.addEventListener('input', (e) => {
+              updateQuestionImagePreview(e.target.value);
+            });
+          }
+
+          const qImgClearBtn = document.getElementById('qImageClearBtn');
+          if (qImgClearBtn) {
+            qImgClearBtn.addEventListener('click', () => {
+              if (qImgInput) qImgInput.value = '';
+              updateQuestionImagePreview('');
             });
           }
 
@@ -1748,15 +1998,20 @@ import { supabase } from './supabase.js';
             if (!currentEditSetCanEdit) { alert('Bạn không có quyền thêm câu hỏi vào bộ đề này!'); return; }
             document.getElementById('editQuestionId').value = '';
             document.getElementById('qPartTitleInput').value = '';
-            const taskSel = document.getElementById('qTaskTypeSelect');
-            if (taskSel) {
-              taskSel.value = 'short_qa';
-              const hintEl = document.getElementById('qTaskTypeHint');
-              if (hintEl) hintEl.innerHTML = `<i class="bi bi-info-circle me-1"></i>Bao gồm: <b>${TASK_TYPES['short_qa'].includes}</b>`;
-            }
-            document.getElementById('qPrepTimeInput').value = '15';
-            document.getElementById('qResponseTimeInput').value = '30';
             document.getElementById('qTextInput').value = '';
+            if (qImgInput) qImgInput.value = '';
+            updateQuestionImagePreview('');
+            const refInput = document.getElementById('qReferenceInput');
+            if (refInput) refInput.value = '';
+
+            const currentExam = currentEditSetData?.exam_type || 'general';
+            populateTaskTypeSelect(currentExam, 'short_qa');
+
+            const currentTask = document.getElementById('qTaskTypeSelect')?.value || 'short_qa';
+            const t = TASK_TYPES[currentTask] || TASK_TYPES['short_qa'];
+            document.getElementById('qPrepTimeInput').value = t.defaultPrep;
+            document.getElementById('qResponseTimeInput').value = t.defaultResponse;
+
             document.getElementById('questionModalTitle').innerHTML =
               '<i class="bi bi-chat-square-text me-2 text-primary"></i>Thêm câu hỏi';
             bootstrap.Modal.getOrCreateInstance(document.getElementById('questionModal')).show();
@@ -1765,18 +2020,21 @@ import { supabase } from './supabase.js';
           document.getElementById('saveQuestionBtn').addEventListener('click', async () => {
             if (!currentEditSetCanEdit) { alert('Bạn không có quyền lưu câu hỏi vào bộ đề này!'); return; }
             const qText = document.getElementById('qTextInput').value.trim();
-            if (!qText) { alert('Vui lòng nhập câu hỏi!'); return; }
+            if (!qText) { alert('Vui lòng nhập câu hỏi / nội dung bài!'); return; }
             const editId = document.getElementById('editQuestionId').value;
             const taskType = document.getElementById('qTaskTypeSelect')?.value || 'short_qa';
             const partTitle = document.getElementById('qPartTitleInput').value.trim() || null;
             const prepTime = parseInt(document.getElementById('qPrepTimeInput').value) || 15;
             const responseTime = parseInt(document.getElementById('qResponseTimeInput').value) || 30;
+            const imageUrl = document.getElementById('qImageUrlInput')?.value.trim() || null;
+            const refText = document.getElementById('qReferenceInput')?.value.trim() || null;
 
             try {
               if (editId) {
                 await updateQuestion(editId, {
                   question_text: qText,
-                  reference_text: null,
+                  reference_text: refText,
+                  image_url: imageUrl,
                   hint: null,
                   part_title: partTitle,
                   task_type: taskType,
@@ -1787,7 +2045,8 @@ import { supabase } from './supabase.js';
                 const existingQs = await fetchQuestions(currentEditSetId);
                 await addQuestion(currentEditSetId, {
                   question_text: qText,
-                  reference_text: null,
+                  reference_text: refText,
+                  image_url: imageUrl,
                   hint: null,
                   order_num: existingQs.length + 1,
                   part_title: partTitle,
@@ -2072,7 +2331,15 @@ import { supabase } from './supabase.js';
                         </span>
                       ` : ''}
                     </div>
-                    <div class="fw-semibold mb-2">${q.question_text || ''}</div>
+                    <div class="fw-semibold mb-2">${escapeHtml(q.question_text || '')}</div>
+                    ${q.image_url ? `
+                      <div class="mb-2">
+                        <img src="${escapeHtml(q.image_url)}" alt="Hình ảnh câu hỏi" style="max-height: 90px; max-width: 160px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15);" />
+                      </div>
+                    ` : ''}
+                    ${q.reference_text ? `
+                      <div class="small text-muted mb-2 p-2 rounded" style="background: rgba(255,255,255,0.03); border-left: 3px solid var(--accent, #6366f1); font-family: monospace; white-space: pre-wrap; max-height: 80px; overflow-y: auto;">${escapeHtml(q.reference_text)}</div>
+                    ` : ''}
                     <div class="d-flex gap-2 mt-1">
                       <span class="badge bg-secondary-subtle text-secondary small"><i class="bi bi-hourglass-split me-1"></i>Chuẩn bị: ${q.prep_time || 15}s</span>
                       <span class="badge bg-secondary-subtle text-secondary small"><i class="bi bi-mic me-1"></i>Trả lời: ${q.response_time || 45}s</span>
@@ -2106,16 +2373,22 @@ import { supabase } from './supabase.js';
           const qPrep = (prepTime !== undefined && !isNaN(Number(prepTime)) && Number(prepTime) !== 15) ? Number(prepTime) : (found?.prep_time || 15);
           const qResp = (responseTime !== undefined && !isNaN(Number(responseTime)) && Number(responseTime) !== 45) ? Number(responseTime) : (found?.response_time || 45);
           const qTask = found?.task_type || 'short_qa';
+          const qImg = found?.image_url || '';
+          const qRef = found?.reference_text || '';
 
           document.getElementById('editQuestionId').value = id || '';
           document.getElementById('qPartTitleInput').value = qPart;
-          const taskSelect = document.getElementById('qTaskTypeSelect');
-          if (taskSelect) {
-            taskSelect.value = qTask;
-            const t = TASK_TYPES[qTask] || TASK_TYPES['short_qa'];
-            const hintEl = document.getElementById('qTaskTypeHint');
-            if (hintEl && t) hintEl.innerHTML = `<i class="bi bi-info-circle me-1"></i>Bao gồm: <b>${t.includes}</b>`;
-          }
+          
+          const currentExam = currentEditSetData?.exam_type || 'general';
+          populateTaskTypeSelect(currentExam, qTask);
+
+          const imgInput = document.getElementById('qImageUrlInput');
+          if (imgInput) imgInput.value = qImg;
+          updateQuestionImagePreview(qImg);
+
+          const refInput = document.getElementById('qReferenceInput');
+          if (refInput) refInput.value = qRef;
+
           document.getElementById('qPrepTimeInput').value = qPrep;
           document.getElementById('qResponseTimeInput').value = qResp;
           document.getElementById('qTextInput').value = qText;
@@ -2589,14 +2862,16 @@ import { supabase } from './supabase.js';
               </span>
             </div>` : '';
 
+          const cardContentHtml = buildTaskQuestionCardContent(q);
+
           if (currentSessionMode === 'exam') {
-            // EXAM MODE: No hints, no reference text!
+            // EXAM MODE
             area.innerHTML = `
               <div class="practice-question-card">
                 ${taskBadgeHtml}
                 ${q.part_title ? `<div class="text-primary small fw-semibold mb-1"><i class="bi bi-bookmark me-1"></i>${q.part_title}</div>` : ''}
                 <div class="question-number">Câu hỏi ${num} / ${total}</div>
-                <div class="question-text">${q.question_text}</div>
+                ${cardContentHtml}
                 <div class="text-muted small fst-italic mt-3">
                   <i class="bi bi-shield-lock me-1"></i>Chế độ thi: Hãy suy nghĩ trong thời gian chuẩn bị và trả lời rõ ràng vào micro khi có tín hiệu Beep.
                 </div>
@@ -2617,7 +2892,7 @@ import { supabase } from './supabase.js';
                 ${taskBadgeHtml}
                 ${q.part_title ? `<div class="text-primary small fw-semibold mb-1"><i class="bi bi-bookmark me-1"></i>${q.part_title}</div>` : ''}
                 <div class="question-number">Câu hỏi ${num} / ${total}</div>
-                <div class="question-text">${q.question_text}</div>
+                ${cardContentHtml}
               </div>`;
 
             document.getElementById('examPrepArea').classList.add('d-none');
@@ -2812,31 +3087,47 @@ import { supabase } from './supabase.js';
               let result = null;
 
               if (apiUrl) {
-                result = await assessSingleAnswer(apiUrl, audioBlob, sEmb || []);
+                const targetRefText = q.task_type === 'read_aloud' ? (q.question_text || '') : (q.reference_text || '');
+                result = await assessSingleAnswer(apiUrl, audioBlob, sEmb || [], {
+                  taskType: q.task_type || 'short_qa',
+                  referenceText: targetRefText
+                });
                 const studentData = result.student || {};
-                const sentences = studentData.sentences || [];
-                if (sentences.length > 0) {
-                  let count = 0;
-                  for (const s of sentences) {
-                    if (s.scores) {
-                      scores.total += s.scores.total || 0;
-                      scores.accuracy += s.scores.accuracy || 0;
-                      scores.fluency += s.scores.fluency || 0;
-                      scores.prosodic += s.scores.prosodic || 0;
-                      count++;
+                if (studentData.scores && studentData.scores.total != null) {
+                  scores.total = Number(studentData.scores.total) || 0;
+                  scores.accuracy = Number(studentData.scores.accuracy) || 0;
+                  scores.fluency = Number(studentData.scores.fluency) || 0;
+                  scores.prosodic = Number(studentData.scores.prosodic) || 0;
+                  transcript = studentData.transcript || '';
+                } else {
+                  const sentences = studentData.sentences || [];
+                  if (sentences.length > 0) {
+                    let count = 0;
+                    for (const s of sentences) {
+                      if (s.scores) {
+                        scores.total += s.scores.total || 0;
+                        scores.accuracy += s.scores.accuracy || 0;
+                        scores.fluency += s.scores.fluency || 0;
+                        scores.prosodic += s.scores.prosodic || 0;
+                        count++;
+                      }
+                      if (s.transcript) transcript += (transcript ? ' ' : '') + s.transcript;
                     }
-                    if (s.transcript) transcript += (transcript ? ' ' : '') + s.transcript;
-                  }
-                  if (count > 0) {
-                    scores.total /= count;
-                    scores.accuracy /= count;
-                    scores.fluency /= count;
-                    scores.prosodic /= count;
+                    if (count > 0) {
+                      scores.total /= count;
+                      scores.accuracy /= count;
+                      scores.fluency /= count;
+                      scores.prosodic /= count;
+                    }
                   }
                 }
               }
 
-              // Gọi Gemini 3.7 Flash đánh giá Ngữ pháp & Ngữ cảnh và hiệu chuẩn điểm tổng thể
+              if (q.task_type === 'read_aloud' && !transcript) {
+                transcript = q.question_text || '';
+              }
+
+              // Gọi Gemini đánh giá Ngữ pháp & Ngữ cảnh và hiệu chuẩn điểm tổng thể
               let geminiEval = null;
               try {
                 geminiEval = await evaluateAnswerWithGemini({
@@ -2844,13 +3135,21 @@ import { supabase } from './supabase.js';
                   partTitle: q.part_title || '',
                   examType: currentSetData?.exam_type || 'general',
                   taskType: q.task_type || 'short_qa',
+                  referenceText: q.task_type === 'read_aloud' ? (q.question_text || '') : (q.reference_text || ''),
                   transcript: transcript,
                   pronunciationScores: scores
                 });
                 if (geminiEval && geminiEval.score_total != null) {
-                  scores.total = geminiEval.score_total;
-                  scores.grammar = geminiEval.score_grammar;
-                  scores.context = geminiEval.score_context;
+                  if (q.task_type === 'read_aloud') {
+                    // Dạng Read Aloud: Hoàn toàn không chấm ngữ pháp và ngữ cảnh, chỉ giữ 100% điểm phát âm âm học
+                    scores.grammar = null;
+                    scores.context = null;
+                    scores.total = scores.total;
+                  } else {
+                    scores.total = geminiEval.score_total;
+                    scores.grammar = geminiEval.score_grammar;
+                    scores.context = geminiEval.score_context;
+                  }
                 }
               } catch (gErr) {
                 console.warn('Lỗi gọi Gemini Eval khi thi thử:', gErr);
@@ -2970,30 +3269,46 @@ import { supabase } from './supabase.js';
             const audioUrl = await uploadPracticeAudio(currentUser.id, audioBlob, `q${practiceCurrentIdx + 1}.webm`);
 
             document.getElementById('practiceScoringStep').textContent = 'Đang phân tích phát âm âm học...';
-            const result = await assessSingleAnswer(apiUrl, audioBlob, sEmb || []);
+            const targetRefText = q.task_type === 'read_aloud' ? (q.question_text || '') : (q.reference_text || '');
+            const result = await assessSingleAnswer(apiUrl, audioBlob, sEmb || [], {
+              taskType: q.task_type || 'short_qa',
+              referenceText: targetRefText
+            });
 
             let scores = { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
             let transcript = '';
             const studentData = result.student || {};
-            const sentences = studentData.sentences || [];
-            if (sentences.length > 0) {
-              let count = 0;
-              for (const s of sentences) {
-                if (s.scores) {
-                  scores.total += s.scores.total || 0;
-                  scores.accuracy += s.scores.accuracy || 0;
-                  scores.fluency += s.scores.fluency || 0;
-                  scores.prosodic += s.scores.prosodic || 0;
-                  count++;
+            if (studentData.scores && studentData.scores.total != null) {
+              scores.total = Number(studentData.scores.total) || 0;
+              scores.accuracy = Number(studentData.scores.accuracy) || 0;
+              scores.fluency = Number(studentData.scores.fluency) || 0;
+              scores.prosodic = Number(studentData.scores.prosodic) || 0;
+              transcript = studentData.transcript || '';
+            } else {
+              const sentences = studentData.sentences || [];
+              if (sentences.length > 0) {
+                let count = 0;
+                for (const s of sentences) {
+                  if (s.scores) {
+                    scores.total += s.scores.total || 0;
+                    scores.accuracy += s.scores.accuracy || 0;
+                    scores.fluency += s.scores.fluency || 0;
+                    scores.prosodic += s.scores.prosodic || 0;
+                    count++;
+                  }
+                  if (s.transcript) transcript += (transcript ? ' ' : '') + s.transcript;
                 }
-                if (s.transcript) transcript += (transcript ? ' ' : '') + s.transcript;
+                if (count > 0) {
+                  scores.total /= count;
+                  scores.accuracy /= count;
+                  scores.fluency /= count;
+                  scores.prosodic /= count;
+                }
               }
-              if (count > 0) {
-                scores.total /= count;
-                scores.accuracy /= count;
-                scores.fluency /= count;
-                scores.prosodic /= count;
-              }
+            }
+
+            if (q.task_type === 'read_aloud' && !transcript) {
+              transcript = q.question_text || '';
             }
 
             // Gọi AI Evaluator chấm điểm Ngữ pháp, Ngữ cảnh & Điểm tổng thể (Non-linear)
@@ -3005,13 +3320,21 @@ import { supabase } from './supabase.js';
                 partTitle: q.part_title || '',
                 examType: currentSetData?.exam_type || 'general',
                 taskType: q.task_type || 'short_qa',
+                referenceText: q.task_type === 'read_aloud' ? (q.question_text || '') : (q.reference_text || ''),
                 transcript: transcript,
                 pronunciationScores: scores
               });
               if (geminiEval && geminiEval.score_total != null) {
-                scores.total = geminiEval.score_total;
-                scores.grammar = geminiEval.score_grammar;
-                scores.context = geminiEval.score_context;
+                if (q.task_type === 'read_aloud') {
+                  // Dạng Read Aloud: Hoàn toàn không chấm ngữ pháp và ngữ cảnh, chỉ giữ 100% điểm phát âm âm học
+                  scores.grammar = null;
+                  scores.context = null;
+                  scores.total = scores.total;
+                } else {
+                  scores.total = geminiEval.score_total;
+                  scores.grammar = geminiEval.score_grammar;
+                  scores.context = geminiEval.score_context;
+                }
               }
             } catch (gErr) {
               console.warn('Lỗi gọi Gemini Eval:', gErr);
@@ -3060,7 +3383,7 @@ import { supabase } from './supabase.js';
             'too_short': { label: 'Quá cộc lốc / Ngắn', cls: 'badge-relevance-poor' },
             'irrelevant': { label: 'Lạc đề hoàn toàn', cls: 'badge-relevance-poor' },
           };
-          const relInfo = gemini?.relevance_level ? (relevanceMap[gemini.relevance_level] || { label: gemini.relevance_level, cls: 'bg-secondary' }) : null;
+          const relInfo = (q.task_type !== 'read_aloud' && gemini?.relevance_level) ? (relevanceMap[gemini.relevance_level] || { label: gemini.relevance_level, cls: 'bg-secondary' }) : null;
 
           const errors = gemini?.grammar_errors || [];
 
@@ -3083,8 +3406,9 @@ import { supabase } from './supabase.js';
                 <div class="result-score-item highlight-total">
                   <div class="score-label">Điểm Tổng Thể</div>
                   <div class="score-val ${valClass(s.total)}">${s.total.toFixed(1)}</div>
-                  <div class="score-subtext">Khảo thí kết hợp</div>
+                  <div class="score-subtext">${q.task_type === 'read_aloud' ? 'Phát âm âm học' : 'Khảo thí kết hợp'}</div>
                 </div>
+                ${q.task_type !== 'read_aloud' ? `
                 <div class="result-score-item">
                   <div class="score-label">Ngữ Pháp (Grammar)</div>
                   <div class="score-val ${valClass(s.grammar ?? gemini?.score_grammar ?? 0)}">${(s.grammar ?? gemini?.score_grammar ?? 0).toFixed(1)}</div>
@@ -3095,6 +3419,7 @@ import { supabase } from './supabase.js';
                   <div class="score-val ${valClass(s.context ?? gemini?.score_context ?? 0)}">${(s.context ?? gemini?.score_context ?? 0).toFixed(1)}</div>
                   <div class="score-subtext">Độ dài & Đáp ứng đề</div>
                 </div>
+                ` : ''}
                 <div class="result-score-item">
                   <div class="score-label">Accuracy</div>
                   <div class="score-val ${valClass(s.accuracy)}">${s.accuracy.toFixed(1)}</div>
@@ -3305,8 +3630,14 @@ import { supabase } from './supabase.js';
                       <div class="fw-semibold small">Câu ${idx + 1}: ${q.question_text}</div>
                       ${answer.transcript ? `<div class="text-muted smaller">"${answer.transcript}"</div>` : ''}
                       <div class="d-flex gap-2 mt-1 flex-wrap">
-                        ${gramScore != null ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle">Grammar: ${Number(gramScore).toFixed(1)}</span>` : ''}
-                        ${ctxScore != null ? `<span class="badge bg-info-subtle text-info border border-info-subtle">Context: ${Number(ctxScore).toFixed(1)}</span>` : ''}
+                        ${(q.task_type !== 'read_aloud' && gramScore != null)
+                          ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle">Grammar: ${Number(gramScore).toFixed(1)}</span>`
+                          : ''
+                        }
+                        ${(q.task_type !== 'read_aloud' && ctxScore != null)
+                          ? `<span class="badge bg-info-subtle text-info border border-info-subtle">Context: ${Number(ctxScore).toFixed(1)}</span>`
+                          : ''
+                        }
                         <span class="badge bg-secondary">Acc: ${answer.scores.accuracy.toFixed(1)}</span>
                         <span class="badge bg-secondary">Flu: ${answer.scores.fluency.toFixed(1)}</span>
                         <span class="badge bg-secondary">Pro: ${answer.scores.prosodic.toFixed(1)}</span>

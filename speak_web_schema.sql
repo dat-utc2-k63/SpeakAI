@@ -102,12 +102,14 @@ create table if not exists public.questions (
   prep_time integer default 15,
   response_time integer default 45,
   task_type text default 'short_qa',
+  image_url text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table public.questions add column if not exists part_title text;
 alter table public.questions add column if not exists prep_time integer default 15;
 alter table public.questions add column if not exists response_time integer default 45;
 alter table public.questions add column if not exists task_type text default 'short_qa';
+alter table public.questions add column if not exists image_url text;
 
 -- 2.6. TABLE: practice_sessions
 -- Phiên luyện tập (Practice) hoặc thi thử (Exam) của Học viên

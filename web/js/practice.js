@@ -540,7 +540,7 @@ export async function detectVoiceActivity(audioBlob, options = {}) {
 /**
  * Gọi API backend để chấm điểm phát âm 1 câu
  */
-export async function assessSingleAnswer(apiUrl, audioBlob, studentEmbeddings) {
+export async function assessSingleAnswer(apiUrl, audioBlob, studentEmbeddings, options = {}) {
   const formData = new FormData();
   formData.append('audio', audioBlob, 'practice_answer.webm');
   formData.append('teacher_embeddings_json', JSON.stringify(studentEmbeddings || []));
@@ -548,6 +548,12 @@ export async function assessSingleAnswer(apiUrl, audioBlob, studentEmbeddings) {
   formData.append('score_teacher', 'false');
   formData.append('skip_feedback', 'true');
   formData.append('diarize', 'false');
+  if (options.taskType) {
+    formData.append('task_type', options.taskType);
+  }
+  if (options.referenceText) {
+    formData.append('reference_text', options.referenceText);
+  }
 
   const startRes = await fetch(`${apiUrl.replace(/\/$/, '')}/assess_start`, {
     method: 'POST',

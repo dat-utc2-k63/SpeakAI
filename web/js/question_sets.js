@@ -268,6 +268,63 @@ export const TASK_TYPES = {
   },
 };
 
+// =========================================================
+// MA TRẬN PHÂN LOẠI DẠNG ĐỀ THEO KỲ THI (TOEIC, VSTEP, IELTS, GENERAL)
+// =========================================================
+export const EXAM_TASK_MATRIX = {
+  toeic: {
+    name: 'TOEIC Speaking',
+    primary: ['read_aloud', 'picture_description', 'short_qa', 'information_qa', 'opinion'], // ✅ Chuẩn TOEIC
+    supplementary: ['description', 'experience_future', 'problem_solution', 'discussion'],   // ⚠️ Bổ trợ
+    forbidden: ['long_turn'],                                                               // ❌ TOEIC không có Cue Card 1-2 phút
+  },
+  vstep: {
+    name: 'VSTEP Speaking',
+    primary: ['short_qa', 'description', 'experience_future', 'opinion', 'problem_solution', 'long_turn', 'discussion'], // ✅ Chuẩn VSTEP Part 1, 2, 3
+    supplementary: [],
+    forbidden: ['read_aloud', 'picture_description', 'information_qa'],                     // ❌ VSTEP không có đọc văn bản, tả tranh hay đọc bảng biểu
+  },
+  ielts: {
+    name: 'IELTS Speaking',
+    primary: ['short_qa', 'description', 'experience_future', 'opinion', 'problem_solution', 'long_turn', 'discussion'], // ✅ Chuẩn IELTS Part 1, 2, 3
+    supplementary: [],
+    forbidden: ['read_aloud', 'picture_description', 'information_qa'],                     // ❌ IELTS không có đọc văn bản, tả tranh hay đọc bảng biểu
+  },
+  general: {
+    name: 'Luyện tập chung',
+    primary: ['short_qa', 'read_aloud', 'picture_description', 'information_qa', 'description', 'experience_future', 'opinion', 'problem_solution', 'long_turn', 'discussion'],
+    supplementary: [],
+    forbidden: [],
+  }
+};
+
+/**
+ * Trả về danh sách dạng bài được phép và bổ trợ theo kỳ thi
+ */
+export function getAvailableTaskTypes(examType = 'general') {
+  const norm = (examType || 'general').toLowerCase();
+  const rule = EXAM_TASK_MATRIX[norm] || EXAM_TASK_MATRIX.general;
+  const primaryList = [];
+  const suppList = [];
+
+  for (const [key, item] of Object.entries(TASK_TYPES)) {
+    if (rule.forbidden.includes(key)) continue; // Loại bỏ ❌
+    if (rule.primary.includes(key)) {
+      primaryList.push({ ...item, status: 'primary' });
+    } else if (rule.supplementary.includes(key)) {
+      suppList.push({ ...item, status: 'supplementary' });
+    } else {
+      primaryList.push({ ...item, status: 'primary' });
+    }
+  }
+
+  return {
+    primary: primaryList,
+    supplementary: suppList,
+    forbidden: rule.forbidden,
+  };
+}
+
 /**
  * Lấy danh sách câu hỏi trong bộ đề
  */
@@ -281,6 +338,8 @@ export async function fetchQuestions(setId) {
   return (data || []).map(q => ({
     ...q,
     task_type: q.task_type || 'short_qa',
+    image_url: q.image_url || null,
+    reference_text: q.reference_text || null,
     prep_time: q.prep_time !== undefined && q.prep_time !== null ? q.prep_time : 15,
     response_time: q.response_time !== undefined && q.response_time !== null ? q.response_time : 45,
   }));
@@ -289,12 +348,13 @@ export async function fetchQuestions(setId) {
 /**
  * Thêm câu hỏi mới vào bộ đề
  */
-export async function addQuestion(setId, { question_text, order_num, part_title, prep_time, response_time, task_type }) {
+export async function addQuestion(setId, { question_text, order_num, part_title, prep_time, response_time, task_type, image_url, reference_text, hint }) {
   const payload = {
     set_id: setId,
     question_text,
-    reference_text: null,
-    hint: null,
+    reference_text: reference_text || null,
+    image_url: image_url || null,
+    hint: hint || null,
     order_num: order_num || 1,
     part_title: part_title || null,
     prep_time: prep_time !== undefined ? parseInt(prep_time) : 15,
@@ -309,21 +369,23 @@ export async function addQuestion(setId, { question_text, order_num, part_title,
       .select()
       .single();
     if (!error) return data;
-    // Fallback nếu database Supabase chưa chạy migration cột task_type
-    if (error && (error.message?.includes('task_type') || error.code === '42703' || error.code === 'PGRST204')) {
-      console.warn('Cột task_type chưa có trong DB Supabase, fallback bỏ task_type:', error.message);
-      delete payload.task_type;
+    // Fallback nếu database Supabase chưa chạy migration cột task_type hoặc image_url
+    if (error && (error.message?.includes('image_url') || error.message?.includes('task_type') || error.code === '42703' || error.code === 'PGRST204')) {
+      console.warn('Cột image_url hoặc task_type chưa có trong DB Supabase, fallback:', error.message);
+      if (error.message?.includes('image_url')) delete payload.image_url;
+      if (error.message?.includes('task_type')) delete payload.task_type;
       const { data: retryData, error: retryError } = await supabase
         .from('questions')
         .insert(payload)
         .select()
         .single();
       if (retryError) throw retryError;
-      return { ...retryData, task_type: task_type || 'short_qa' };
+      return { ...retryData, task_type: task_type || 'short_qa', image_url: image_url || null };
     }
     throw error;
   } catch (err) {
-    if (err.message?.includes('task_type')) {
+    if (err.message?.includes('image_url') || err.message?.includes('task_type')) {
+      delete payload.image_url;
       delete payload.task_type;
       const { data: retryData, error: retryError } = await supabase
         .from('questions')
@@ -331,7 +393,7 @@ export async function addQuestion(setId, { question_text, order_num, part_title,
         .select()
         .single();
       if (retryError) throw retryError;
-      return { ...retryData, task_type: task_type || 'short_qa' };
+      return { ...retryData, task_type: task_type || 'short_qa', image_url: image_url || null };
     }
     throw err;
   }
@@ -347,9 +409,11 @@ export async function updateQuestion(questionId, updates) {
       .update(updates)
       .eq('id', questionId);
     if (!error) return;
-    // Fallback nếu database Supabase chưa có cột task_type
-    if (error && (error.message?.includes('task_type') || error.code === '42703' || error.code === 'PGRST204')) {
-      const { task_type, ...safeUpdates } = updates;
+    // Fallback nếu database Supabase chưa có cột task_type hoặc image_url
+    if (error && (error.message?.includes('image_url') || error.message?.includes('task_type') || error.code === '42703' || error.code === 'PGRST204')) {
+      const safeUpdates = { ...updates };
+      if (error.message?.includes('image_url')) delete safeUpdates.image_url;
+      if (error.message?.includes('task_type')) delete safeUpdates.task_type;
       const { error: retryErr } = await supabase
         .from('questions')
         .update(safeUpdates)
@@ -359,8 +423,10 @@ export async function updateQuestion(questionId, updates) {
     }
     throw error;
   } catch (err) {
-    if (err.message?.includes('task_type')) {
-      const { task_type, ...safeUpdates } = updates;
+    if (err.message?.includes('image_url') || err.message?.includes('task_type')) {
+      const safeUpdates = { ...updates };
+      delete safeUpdates.image_url;
+      delete safeUpdates.task_type;
       const { error: retryErr } = await supabase
         .from('questions')
         .update(safeUpdates)

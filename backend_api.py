@@ -1,3 +1,4 @@
+from typing import Optional, Union, List, Dict
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
 import uuid
 from fastapi.middleware.cors import CORSMiddleware
@@ -119,6 +120,8 @@ def assess_start_api(
     score_teacher: bool = Form(False),
     skip_feedback: bool = Form(False),
     diarize: str = Form("true"),
+    reference_text: Optional[str] = Form(None),
+    task_type: Optional[str] = Form(None),
 ):
     try:
         task_id = str(uuid.uuid4())
@@ -141,6 +144,8 @@ def assess_start_api(
             score_teacher,
             skip_feedback,
             is_diarize,
+            reference_text,
+            task_type,
         )
         return JSONResponse({'success': True, 'task_id': task_id})
     except Exception as e:
@@ -151,6 +156,8 @@ def assess_practice_api(
     background_tasks: BackgroundTasks,
     audio: UploadFile = File(...),
     skip_feedback: bool = Form(True),
+    reference_text: Optional[str] = Form(None),
+    task_type: Optional[str] = Form(None),
 ):
     try:
         task_id = str(uuid.uuid4())
@@ -172,16 +179,25 @@ def assess_practice_api(
             False,
             skip_feedback,
             False,
+            reference_text,
+            task_type,
         )
         return JSONResponse({'success': True, 'task_id': task_id})
     except Exception as e:
         return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
 
-def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embeddings_json, score_teacher, skip_feedback, diarize=True):
+def process_assessment(task_id, conv_path, teacher_embeddings_json, student_embeddings_json, score_teacher, skip_feedback, diarize=True, reference_text=None, task_type=None):
     try:
         if not diarize:
-            tasks[task_id]['step'] = 'Đang phân tích phát âm trực tiếp (Single Speaker, không Diarization)...'
-            raw_result = pipeline.assess_single_speaker(conv_path)
+            if task_type == 'read_aloud' and reference_text:
+                tasks[task_id]['step'] = 'Đang chấm điểm Read Aloud trực tiếp bằng văn bản mẫu (Không dùng Whisper ASR)...'
+            else:
+                tasks[task_id]['step'] = 'Đang phân tích phát âm trực tiếp (Single Speaker, không Diarization)...'
+            raw_result = pipeline.assess_single_speaker(
+                conv_path,
+                reference_text=reference_text,
+                task_type=task_type,
+            )
         else:
             tasks[task_id]['step'] = 'Đang phân tích embeddings...'
             
@@ -304,7 +320,5 @@ def assess_status(task_id: str):
         return JSONResponse({'success': False, 'error': 'Task not found'}, status_code=404)
     return JSONResponse({'success': True, 'data': jsonable_encoder(tasks[task_id])})
 
-# Khởi chạy Uvicorn
-config = uvicorn.Config(app, host='0.0.0.0', port=8000)
-server = uvicorn.Server(config)
-await server.serve()
+if __name__ == '__main__':
+    uvicorn.run(app, host='0.0.0.0', port=8000)
