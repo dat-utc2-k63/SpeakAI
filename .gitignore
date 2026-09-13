@@ -10,6 +10,8 @@ logs/
 sample_audio/
 transformer_models/*.pt
 web/uploads/
+web/models/
+*.onnx
 
 # Secrets
 .env

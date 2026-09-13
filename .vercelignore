@@ -1,0 +1,38 @@
+# =========================================================
+# Vercel Ignore Configuration
+# Chặn toàn bộ các file nặng, AI models, Python Backend & Data
+# để dung lượng deploy của Vercel chỉ còn ~450KB
+# =========================================================
+
+# Machine Learning & AI Models (Đã chạy trên Kaggle GPU)
+web/models/
+transformer_models/
+speaker-diarize/
+ecapa-diarize/
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.onnx
+*.tar*
+
+# Python Backend & Scripts
+*.py
+*.ipynb
+venv/
+.venv/
+venv_dfn/
+__pycache__/
+*.pyc
+
+# Tài liệu & Dữ liệu
+docs/
+data/
+sample_audio/
+scripts/
+*.docx
+*.pdf
+
+# Git
+.git/
+.github/
