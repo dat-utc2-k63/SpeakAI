@@ -1729,11 +1729,43 @@ import { supabase } from './supabase.js';
           }
         }
 
-        function configureQuestionModalForTaskType(taskType) {
+        function getExamTypeName(examType = 'general') {
+          const map = {
+            toeic: 'TOEIC Speaking',
+            vstep: 'VSTEP Speaking',
+            ielts: 'IELTS Speaking',
+            general: 'Luyện tập chung'
+          };
+          return map[(examType || 'general').toLowerCase()] || 'Luyện tập chung';
+        }
+
+        function updateExamTypeSummaryBadge(examType = 'general') {
+          const hintEl = document.getElementById('qsetExamTypeHint');
+          if (!hintEl) return;
+          const norm = (examType || 'general').toLowerCase();
+          if (norm === 'toeic') {
+            hintEl.innerHTML = '<i class="bi bi-info-circle me-1"></i><b>Chuẩn TOEIC Speaking (5 dạng):</b> Đọc to đoạn văn (Read Aloud), Miêu tả tranh, Hỏi đáp cá nhân, Hỏi đáp theo tài liệu/lịch trình, Bày tỏ quan điểm.';
+          } else if (norm === 'vstep') {
+            hintEl.innerHTML = '<i class="bi bi-info-circle me-1"></i><b>Chuẩn VSTEP Speaking (Part 1-2-3):</b> Hỏi đáp cá nhân, Miêu tả, Trải nghiệm/kế hoạch, Thảo luận giải pháp (3 phương án), Thuyết trình dài (Cue Card), Quan điểm, Thảo luận.';
+          } else if (norm === 'ielts') {
+            hintEl.innerHTML = '<i class="bi bi-info-circle me-1"></i><b>Chuẩn IELTS Speaking (Part 1-2-3):</b> Hỏi đáp phỏng vấn, Miêu tả, Trải nghiệm, Cue Card (Long Turn 1-2 phút), Thảo luận chuyên sâu 2 chiều, Quan điểm, Giải pháp.';
+          } else {
+            hintEl.innerHTML = '<i class="bi bi-info-circle me-1"></i><b>Luyện tập chung:</b> Hỗ trợ đầy đủ cả 10 dạng bài nói tiếng Anh.';
+          }
+        }
+
+        function configureQuestionModalForTaskType(taskType, isInitialOrTypeChange = false) {
           const t = TASK_TYPES[taskType] || TASK_TYPES['short_qa'];
           const hintEl = document.getElementById('qTaskTypeHint');
           if (hintEl && t) {
             hintEl.innerHTML = `<i class="bi bi-info-circle me-1"></i>Bao gồm: <b>${t.includes}</b>`;
+          }
+
+          if (isInitialOrTypeChange && t) {
+            const prepInput = document.getElementById('qPrepTimeInput');
+            const respInput = document.getElementById('qResponseTimeInput');
+            if (prepInput) prepInput.value = t.defaultPrep;
+            if (respInput) respInput.value = t.defaultResponse;
           }
 
           const imgArea = document.getElementById('qImageArea');
@@ -1747,14 +1779,18 @@ import { supabase } from './supabase.js';
           if (taskType === 'read_aloud') {
             if (imgArea) imgArea.classList.add('d-none');
             if (refArea) refArea.classList.add('d-none');
-            if (textLabel) textLabel.innerHTML = '<i class="bi bi-volume-up me-1 text-info"></i>Đoạn văn bản cần đọc to (Reading Passage) *';
-            if (textInput) textInput.placeholder = 'Nhập đoạn văn bản tiếng Anh cần đọc to (khoảng 40-70 từ)...';
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-megaphone-fill me-1 text-primary"></i>Đoạn văn bản cần đọc to (Reading Passage) *';
+            if (textInput) {
+              textInput.rows = 4;
+              textInput.placeholder = 'Nhập đoạn văn bản tiếng Anh cần đọc to (khoảng 40-70 từ)...';
+            }
           } else if (taskType === 'picture_description') {
             if (imgArea) imgArea.classList.remove('d-none');
             if (refArea) refArea.classList.add('d-none');
-            if (textLabel) textLabel.innerHTML = '<i class="bi bi-chat-square-text me-1 text-primary"></i>Câu lệnh hướng dẫn (Instruction) *';
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-chat-left-text-fill me-1 text-primary"></i>Câu lệnh / Hướng dẫn miêu tả tranh (Instruction) *';
             if (textInput) {
-              if (!textInput.value.trim()) {
+              textInput.rows = 2;
+              if (isInitialOrTypeChange && !textInput.value.trim()) {
                 textInput.value = 'Describe what you see in the picture in as much detail as possible.';
               }
               textInput.placeholder = 'VD: Describe what you see in the picture in as much detail as possible.';
@@ -1762,52 +1798,98 @@ import { supabase } from './supabase.js';
           } else if (taskType === 'information_qa') {
             if (imgArea) imgArea.classList.add('d-none');
             if (refArea) refArea.classList.remove('d-none');
-            if (refLabel) refLabel.innerHTML = '<i class="bi bi-file-earmark-text me-1 text-info"></i>Tài liệu thông tin / Lịch trình / Bảng biểu cho sẵn *';
-            if (refInput) refInput.placeholder = 'VD: Hội thảo quốc tế diễn ra lúc 9:00 AM tại Hội trường B; Diễn giả chính: Dr. Smith...';
-            if (refHint) refHint.innerHTML = 'Thí sinh sẽ quan sát tài liệu này và nghe/đọc câu hỏi để tìm câu trả lời chính xác.';
-            if (textLabel) textLabel.innerHTML = '<i class="bi bi-question-circle me-1 text-warning"></i>Câu hỏi truy vấn dựa trên tài liệu trên *';
-            if (textInput) textInput.placeholder = 'VD: What time does the seminar begin, and where will it be held?';
+            if (refLabel) refLabel.innerHTML = '<i class="bi bi-file-earmark-spreadsheet-fill me-1 text-info"></i>Bảng thông tin / Lịch trình / Bảng biểu cho sẵn (Schedule / Agenda) *';
+            if (refInput) refInput.placeholder = 'Nhập bảng thông tin, lịch trình hoặc thông báo cho sẵn...\nVí dụ:\nCONFERENCE SCHEDULE\n- 09:00 AM: Keynote Speech by Dr. John Smith (Room A)\n- 10:30 AM: Coffee Break\n- 11:00 AM: Workshop on AI (Room B)';
+            if (refHint) refHint.innerHTML = 'Thí sinh sẽ quan sát bảng dữ liệu này trong suốt quá trình chuẩn bị và trả lời câu hỏi.';
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-question-circle-fill me-1 text-warning"></i>Câu hỏi truy vấn dựa trên thông tin cho sẵn *';
+            if (textInput) {
+              textInput.rows = 2;
+              textInput.placeholder = 'VD: What time does the conference begin, and where will it be held?';
+            }
           } else if (taskType === 'long_turn') {
             if (imgArea) imgArea.classList.add('d-none');
             if (refArea) refArea.classList.remove('d-none');
-            if (refLabel) refLabel.innerHTML = '<i class="bi bi-card-checklist me-1 text-warning"></i>Các gợi ý cần nói (Cue Bullet Points: You should say - Mỗi dòng 1 ý) *';
-            if (refInput) refInput.placeholder = '- Who this person is\n- What he/she does\n- How you first met\n- And explain why you admire this person.';
-            if (refHint) refHint.innerHTML = 'Mỗi dòng sẽ được hiển thị như một gạch đầu dòng trong Thẻ Cue Card cho thí sinh.';
+            if (refLabel) refLabel.innerHTML = '<i class="bi bi-card-checklist me-1 text-warning"></i>Các gợi ý triển khai ý (Cue Card Points: You should say - Mỗi dòng 1 ý) *';
+            if (refInput) refInput.placeholder = 'You should say:\n- Who this person is\n- What they do\n- How you know them\n- And explain why you admire or respect this person.';
+            if (refHint) refHint.innerHTML = 'Mỗi dòng sẽ được hiển thị như một gạch đầu dòng trong Thẻ Cue Card hướng dẫn thí sinh.';
             if (textLabel) textLabel.innerHTML = '<i class="bi bi-journal-text me-1 text-primary"></i>Chủ đề thuyết trình chính (Cue Card Topic) *';
-            if (textInput) textInput.placeholder = 'VD: Describe an influential person you admire.';
+            if (textInput) {
+              textInput.rows = 2;
+              textInput.placeholder = 'VD: Describe an influential person you admire.';
+            }
           } else if (taskType === 'problem_solution') {
             if (imgArea) imgArea.classList.add('d-none');
             if (refArea) refArea.classList.remove('d-none');
-            if (refLabel) refLabel.innerHTML = '<i class="bi bi-lightbulb me-1 text-success"></i>Các phương án / giải pháp gợi ý (Tùy chọn, mỗi dòng 1 phương án)';
-            if (refInput) refInput.placeholder = '- Option A: Organize a virtual online event\n- Option B: Postpone the event until next month\n- Option C: Find an indoor alternative venue';
+            if (refLabel) refLabel.innerHTML = '<i class="bi bi-lightbulb-fill me-1 text-success"></i>Các phương án lựa chọn gợi ý (Options - Mỗi dòng 1 phương án, tùy chọn)';
+            if (refInput) refInput.placeholder = '- Option 1: Organize an outdoor team-building trip\n- Option 2: Rent an indoor cinema / amusement hall\n- Option 3: Host a virtual celebration online';
             if (refHint) refHint.innerHTML = 'Các phương án này sẽ hiển thị dưới dạng thẻ gợi ý để học viên phân tích và lựa chọn.';
-            if (textLabel) textLabel.innerHTML = '<i class="bi bi-exclamation-triangle me-1 text-danger"></i>Tình huống cần xử lý (Situation / Problem) *';
-            if (textInput) textInput.placeholder = 'VD: You are organizing an outdoor festival, but the weather forecast predicts heavy rain tomorrow...';
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1 text-danger"></i>Tình huống / Vấn đề cần giải quyết (Situation / Problem) *';
+            if (textInput) {
+              textInput.rows = 3;
+              textInput.placeholder = 'VD: Your company is organizing an annual trip, but the budget has been cut by 30%. You need to choose the best travel plan...';
+            }
+          } else if (taskType === 'opinion') {
+            if (imgArea) imgArea.classList.add('d-none');
+            if (refArea) refArea.classList.add('d-none');
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-chat-left-quote-fill me-1 text-primary"></i>Chủ đề bày tỏ quan điểm & Lập luận (Opinion Topic) *';
+            if (textInput) {
+              textInput.rows = 3;
+              textInput.placeholder = 'VD: Do you agree or disagree with the statement: "Working remotely is more effective than working in an office"? Give reasons and examples.';
+            }
+          } else if (taskType === 'description') {
+            if (imgArea) imgArea.classList.add('d-none');
+            if (refArea) refArea.classList.add('d-none');
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-card-text me-1 text-info"></i>Yêu cầu miêu tả chi tiết (Description Prompt) *';
+            if (textInput) {
+              textInput.rows = 2;
+              textInput.placeholder = 'VD: Describe a special place in your city that tourists often visit.';
+            }
+          } else if (taskType === 'experience_future') {
+            if (imgArea) imgArea.classList.add('d-none');
+            if (refArea) refArea.classList.add('d-none');
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-compass-fill me-1 text-info"></i>Câu hỏi về Trải nghiệm / Kế hoạch tương lai *';
+            if (textInput) {
+              textInput.rows = 2;
+              textInput.placeholder = 'VD: Talk about a memorable trip you took in the past. Where did you go and what did you do?';
+            }
+          } else if (taskType === 'discussion') {
+            if (imgArea) imgArea.classList.add('d-none');
+            if (refArea) refArea.classList.add('d-none');
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-people-fill me-1 text-primary"></i>Chủ đề thảo luận chuyên sâu / Trừu tượng (Discussion Topic) *';
+            if (textInput) {
+              textInput.rows = 3;
+              textInput.placeholder = 'VD: In your opinion, how might artificial intelligence affect employment opportunities in the future?';
+            }
           } else {
             if (imgArea) imgArea.classList.add('d-none');
             if (refArea) refArea.classList.add('d-none');
-            if (textLabel) textLabel.innerHTML = 'Nội dung câu hỏi / Đề bài *';
-            if (textInput) textInput.placeholder = 'VD: What do you usually do in your free time?';
+            if (textLabel) textLabel.innerHTML = '<i class="bi bi-chat-dots-fill me-1 text-info"></i>Câu hỏi giao tiếp / Hỏi đáp cá nhân *';
+            if (textInput) {
+              textInput.rows = 2;
+              textInput.placeholder = 'VD: What kind of sports do you enjoy playing or watching? Why?';
+            }
           }
         }
 
-        function populateTaskTypeSelect(examType, selectedTaskType = 'short_qa') {
+        function populateTaskTypeSelect(examType, selectedTaskType = null) {
           const taskSel = document.getElementById('qTaskTypeSelect');
           if (!taskSel) return;
-          const taskData = getAvailableTaskTypes(examType || 'general');
-          const availableTypes = Array.isArray(taskData)
-            ? taskData
-            : [...(taskData.primary || []), ...(taskData.supplementary || [])];
-          const validKeys = availableTypes.map(t => t.key);
-          if (!validKeys.includes(selectedTaskType)) {
-            selectedTaskType = validKeys[0] || 'short_qa';
+          const currentExam = (examType || 'general').toLowerCase();
+          const availableTypes = getAvailableTaskTypes(currentExam);
+
+          const validIds = availableTypes.map(t => t.id || t.key);
+          if (!selectedTaskType || !validIds.includes(selectedTaskType)) {
+            selectedTaskType = validIds[0] || 'short_qa';
           }
+
           taskSel.innerHTML = availableTypes.map(t => {
-            const isSelected = t.key === selectedTaskType ? 'selected' : '';
-            const statusIcon = (t.status === 'primary' || t.status === 'supported') ? '✅' : '⚠️';
-            return `<option value="${t.key}" ${isSelected}>${statusIcon} ${t.label} (${t.title})</option>`;
+            const taskId = t.id || t.key;
+            const isSelected = taskId === selectedTaskType ? 'selected' : '';
+            return `<option value="${taskId}" ${isSelected}>${t.label} – ${t.title}</option>`;
           }).join('');
-          configureQuestionModalForTaskType(selectedTaskType);
+
+          taskSel.value = selectedTaskType;
+          configureQuestionModalForTaskType(selectedTaskType, true);
         }
 
         function initQuestionSetsUI() {
@@ -1832,6 +1914,26 @@ import { supabase } from './supabase.js';
             renderQuestionSets();
           });
 
+          // Lắng nghe thay đổi loại đề thi / chuẩn ngay lập tức
+          const examTypeSelect = document.getElementById('qsetExamTypeSelect');
+          if (examTypeSelect) {
+            examTypeSelect.addEventListener('change', async (e) => {
+              const newExam = e.target.value;
+              if (currentEditSetData) {
+                currentEditSetData.exam_type = newExam;
+              }
+              updateExamTypeSummaryBadge(newExam);
+              if (currentEditSetId && currentEditSetCanEdit) {
+                try {
+                  await updateQuestionSet(currentEditSetId, { exam_type: newExam });
+                  showToast(`Đã chuyển chuẩn đề thi sang ${getExamTypeName(newExam)}`, 'info');
+                } catch (err) {
+                  console.warn('Lỗi lưu ngầm exam_type:', err);
+                }
+              }
+            });
+          }
+
           // Save set info
           document.getElementById('saveQSetInfoBtn').addEventListener('click', async () => {
             if (!currentEditSetCanEdit) { alert('Bạn không có quyền chỉnh sửa thông tin bộ đề này!'); return; }
@@ -1845,6 +1947,7 @@ import { supabase } from './supabase.js';
               await updateQuestionSet(currentEditSetId, { title, description: desc, level, exam_type: examType });
               document.getElementById('qsetEditorTitle').textContent = title;
               if (currentEditSetData) currentEditSetData.exam_type = examType;
+              updateExamTypeSummaryBadge(examType);
               showToast('Đã lưu thông tin bộ đề!', 'success');
             } catch (e) {
               alert('Lỗi: ' + e.message);
@@ -1969,12 +2072,7 @@ import { supabase } from './supabase.js';
           if (qTaskSelect) {
             qTaskSelect.addEventListener('change', (e) => {
               const val = e.target.value;
-              const t = TASK_TYPES[val] || TASK_TYPES['short_qa'];
-              if (t) {
-                document.getElementById('qPrepTimeInput').value = t.defaultPrep;
-                document.getElementById('qResponseTimeInput').value = t.defaultResponse;
-              }
-              configureQuestionModalForTaskType(val);
+              configureQuestionModalForTaskType(val, true);
             });
           }
 
@@ -2004,16 +2102,12 @@ import { supabase } from './supabase.js';
             const refInput = document.getElementById('qReferenceInput');
             if (refInput) refInput.value = '';
 
-            const currentExam = currentEditSetData?.exam_type || 'general';
-            populateTaskTypeSelect(currentExam, 'short_qa');
+            const currentExam = document.getElementById('qsetExamTypeSelect')?.value || currentEditSetData?.exam_type || 'general';
+            populateTaskTypeSelect(currentExam);
 
-            const currentTask = document.getElementById('qTaskTypeSelect')?.value || 'short_qa';
-            const t = TASK_TYPES[currentTask] || TASK_TYPES['short_qa'];
-            document.getElementById('qPrepTimeInput').value = t.defaultPrep;
-            document.getElementById('qResponseTimeInput').value = t.defaultResponse;
-
+            const examLabel = getExamTypeName(currentExam);
             document.getElementById('questionModalTitle').innerHTML =
-              '<i class="bi bi-chat-square-text me-2 text-primary"></i>Thêm câu hỏi';
+              `<i class="bi bi-plus-circle me-2 text-primary"></i>Thêm câu hỏi <span class="badge bg-primary-subtle text-primary border border-primary-subtle fs-6 ms-2">${examLabel}</span>`;
             bootstrap.Modal.getOrCreateInstance(document.getElementById('questionModal')).show();
           });
 
@@ -2232,6 +2326,7 @@ import { supabase } from './supabase.js';
             document.getElementById('qsetDescInput').value = setData.description || '';
             document.getElementById('qsetLevelSelect').value = setData.level;
             document.getElementById('qsetExamTypeSelect').value = setData.exam_type || 'general';
+            updateExamTypeSummaryBadge(setData.exam_type || 'general');
             document.getElementById('qsetEditorTitle').textContent = setData.title;
 
             // Bật/tắt chế độ Read-only theo quyền hạn
@@ -2379,7 +2474,7 @@ import { supabase } from './supabase.js';
           document.getElementById('editQuestionId').value = id || '';
           document.getElementById('qPartTitleInput').value = qPart;
           
-          const currentExam = currentEditSetData?.exam_type || 'general';
+          const currentExam = document.getElementById('qsetExamTypeSelect')?.value || currentEditSetData?.exam_type || 'general';
           populateTaskTypeSelect(currentExam, qTask);
 
           const imgInput = document.getElementById('qImageUrlInput');
@@ -2392,8 +2487,10 @@ import { supabase } from './supabase.js';
           document.getElementById('qPrepTimeInput').value = qPrep;
           document.getElementById('qResponseTimeInput').value = qResp;
           document.getElementById('qTextInput').value = qText;
+          
+          const examLabel = getExamTypeName(currentExam);
           document.getElementById('questionModalTitle').innerHTML =
-            '<i class="bi bi-pencil me-2 text-primary"></i>Sửa câu hỏi';
+            `<i class="bi bi-pencil me-2 text-primary"></i>Sửa câu hỏi <span class="badge bg-primary-subtle text-primary border border-primary-subtle fs-6 ms-2">${examLabel}</span>`;
           const modalEl = document.getElementById('questionModal');
           bootstrap.Modal.getOrCreateInstance(modalEl).show();
         };

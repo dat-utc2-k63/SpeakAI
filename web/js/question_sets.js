@@ -274,55 +274,55 @@ export const TASK_TYPES = {
 export const EXAM_TASK_MATRIX = {
   toeic: {
     name: 'TOEIC Speaking',
-    primary: ['read_aloud', 'picture_description', 'short_qa', 'information_qa', 'opinion'], // ✅ Chuẩn TOEIC
-    supplementary: ['description', 'experience_future', 'problem_solution', 'discussion'],   // ⚠️ Bổ trợ
-    forbidden: ['long_turn'],                                                               // ❌ TOEIC không có Cue Card 1-2 phút
+    primary: ['read_aloud', 'picture_description', 'short_qa', 'information_qa', 'opinion'], // 5 phần thi chuẩn TOEIC
+    supplementary: [],
+    forbidden: ['description', 'experience_future', 'problem_solution', 'long_turn', 'discussion'],
   },
   vstep: {
     name: 'VSTEP Speaking',
-    primary: ['short_qa', 'description', 'experience_future', 'opinion', 'problem_solution', 'long_turn', 'discussion'], // ✅ Chuẩn VSTEP Part 1, 2, 3
+    primary: ['short_qa', 'description', 'experience_future', 'problem_solution', 'long_turn', 'opinion', 'discussion'], // Chuẩn VSTEP Part 1, 2, 3
     supplementary: [],
-    forbidden: ['read_aloud', 'picture_description', 'information_qa'],                     // ❌ VSTEP không có đọc văn bản, tả tranh hay đọc bảng biểu
+    forbidden: ['read_aloud', 'picture_description', 'information_qa'],
   },
   ielts: {
     name: 'IELTS Speaking',
-    primary: ['short_qa', 'description', 'experience_future', 'opinion', 'problem_solution', 'long_turn', 'discussion'], // ✅ Chuẩn IELTS Part 1, 2, 3
+    primary: ['short_qa', 'description', 'experience_future', 'long_turn', 'discussion', 'opinion', 'problem_solution'], // Chuẩn IELTS Part 1, 2, 3
     supplementary: [],
-    forbidden: ['read_aloud', 'picture_description', 'information_qa'],                     // ❌ IELTS không có đọc văn bản, tả tranh hay đọc bảng biểu
+    forbidden: ['read_aloud', 'picture_description', 'information_qa'],
   },
   general: {
     name: 'Luyện tập chung',
-    primary: ['short_qa', 'read_aloud', 'picture_description', 'information_qa', 'description', 'experience_future', 'opinion', 'problem_solution', 'long_turn', 'discussion'],
+    primary: ['read_aloud', 'picture_description', 'short_qa', 'information_qa', 'description', 'experience_future', 'opinion', 'problem_solution', 'long_turn', 'discussion'],
     supplementary: [],
     forbidden: [],
   }
 };
 
 /**
- * Trả về danh sách dạng bài được phép và bổ trợ theo kỳ thi
+ * Trả về danh sách dạng bài hợp lệ theo từng kỳ thi (Loại bỏ hoàn toàn định dạng phụ)
  */
 export function getAvailableTaskTypes(examType = 'general') {
   const norm = (examType || 'general').toLowerCase();
   const rule = EXAM_TASK_MATRIX[norm] || EXAM_TASK_MATRIX.general;
-  const primaryList = [];
-  const suppList = [];
+  const list = [];
 
-  for (const [key, item] of Object.entries(TASK_TYPES)) {
-    if (rule.forbidden.includes(key)) continue; // Loại bỏ ❌
-    if (rule.primary.includes(key)) {
-      primaryList.push({ ...item, status: 'primary' });
-    } else if (rule.supplementary.includes(key)) {
-      suppList.push({ ...item, status: 'supplementary' });
-    } else {
-      primaryList.push({ ...item, status: 'primary' });
+  for (const taskId of rule.primary) {
+    const item = TASK_TYPES[taskId];
+    if (item) {
+      list.push({
+        ...item,
+        id: taskId,
+        key: taskId,
+        status: 'primary',
+      });
     }
   }
 
-  return {
-    primary: primaryList,
-    supplementary: suppList,
-    forbidden: rule.forbidden,
-  };
+  // Tương thích ngược nếu nơi nào vẫn truy cập .primary
+  list.primary = list;
+  list.supplementary = [];
+  list.forbidden = rule.forbidden || [];
+  return list;
 }
 
 /**
