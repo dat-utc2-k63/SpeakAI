@@ -82,10 +82,12 @@ create table if not exists public.question_sets (
   exam_type text check (exam_type in ('general', 'vstep', 'toeic', 'ielts')) default 'general',
   time_limit integer default 0,
   is_published boolean default false,
+  allowed_teacher_ids uuid[] default '{}',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table public.question_sets add column if not exists exam_type text check (exam_type in ('general', 'vstep', 'toeic', 'ielts')) default 'general';
 alter table public.question_sets add column if not exists time_limit integer default 0;
+alter table public.question_sets add column if not exists allowed_teacher_ids uuid[] default '{}';
 
 -- 2.5. TABLE: questions
 -- Câu hỏi speaking chi tiết kèm thời gian chuẩn bị & thời gian trả lời

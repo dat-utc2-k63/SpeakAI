@@ -11,6 +11,7 @@ import { supabase } from './supabase.js';
         import {
           fetchQuestionSets, createQuestionSet, updateQuestionSet, deleteQuestionSet,
           togglePublishSet, fetchQuestions, addQuestion, updateQuestion, deleteQuestion,
+          updateQuestionSetPermissions, fetchTeachersList,
           TASK_TYPES
         } from './question_sets.js';
         import {
@@ -1581,6 +1582,10 @@ import { supabase } from './supabase.js';
         let currentEditSetId = null;
         let currentEditSetPublished = false;
         let currentEditingQuestions = [];
+        let currentEditSetData = null;
+        let currentEditSetCanEdit = true;
+        let currentEditSetIsOwner = true;
+        let availableTeachersForPerm = [];
 
         function initQuestionSetsUI() {
           document.getElementById('createQSetBtn').addEventListener('click', async () => {
@@ -1602,6 +1607,7 @@ import { supabase } from './supabase.js';
 
           document.getElementById('saveQSetInfoBtn').addEventListener('click', async () => {
             if (!currentEditSetId) return;
+            if (!currentEditSetCanEdit) { alert('Bạn không có quyền sửa thông tin bộ đề này!'); return; }
             const title = document.getElementById('qsetTitleInput').value.trim();
             if (!title) { alert('Vui lòng nhập tiêu đề!'); return; }
             try {
@@ -1620,6 +1626,7 @@ import { supabase } from './supabase.js';
 
           document.getElementById('togglePublishBtn').addEventListener('click', async () => {
             if (!currentEditSetId) return;
+            if (!currentEditSetCanEdit) { alert('Bạn không có quyền publish bộ đề này!'); return; }
             try {
               const newState = !currentEditSetPublished;
               await togglePublishSet(currentEditSetId, newState);
@@ -1633,6 +1640,7 @@ import { supabase } from './supabase.js';
 
           document.getElementById('deleteQSetBtn').addEventListener('click', async () => {
             if (!currentEditSetId) return;
+            if (!currentEditSetCanEdit) { alert('Bạn không có quyền xóa bộ đề này!'); return; }
             if (!confirm('Bạn có chắc muốn xóa bộ đề này?')) return;
             try {
               await deleteQuestionSet(currentEditSetId);
@@ -1640,6 +1648,85 @@ import { supabase } from './supabase.js';
               navigateTo('questionsets');
             } catch (e) {
               alert('Lỗi: ' + e.message);
+            }
+          });
+
+          // Nút mở Modal Phân quyền
+          document.getElementById('shareQSetBtn')?.addEventListener('click', async () => {
+            if (!currentEditSetId || !currentEditSetData) return;
+            const modalEl = document.getElementById('qsetPermissionsModal');
+            const subtitleEl = document.getElementById('permModalSubtitle');
+            const listEl = document.getElementById('permTeachersList');
+            const searchInput = document.getElementById('permSearchInput');
+            if (searchInput) searchInput.value = '';
+
+            subtitleEl.innerHTML = `Phân quyền sửa/xóa cho bộ đề: <b class="text-white">${currentEditSetData.title || ''}</b>`;
+            listEl.innerHTML = `
+              <div class="text-center py-4 text-muted">
+                <span class="spinner-border spinner-border-sm me-2"></span>Đang tải danh sách giáo viên...
+              </div>`;
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+
+            try {
+              availableTeachersForPerm = await fetchTeachersList(currentUser.id);
+              renderPermissionsTeacherList();
+            } catch (err) {
+              listEl.innerHTML = `<div class="alert alert-danger mb-0">Lỗi tải danh sách giáo viên: ${err.message}</div>`;
+            }
+          });
+
+          // Tìm kiếm giáo viên trong modal phân quyền
+          document.getElementById('permSearchInput')?.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            document.querySelectorAll('.permission-teacher-item').forEach(item => {
+              const name = item.getAttribute('data-name') || '';
+              const email = item.getAttribute('data-email') || '';
+              if (!query || name.includes(query) || email.includes(query)) {
+                item.classList.remove('d-none');
+              } else {
+                item.classList.add('d-none');
+              }
+            });
+          });
+
+          // Chọn tất cả
+          document.getElementById('permSelectAllBtn')?.addEventListener('click', () => {
+            document.querySelectorAll('.permission-teacher-item:not(.d-none) .perm-teacher-checkbox').forEach(cb => {
+              cb.checked = true;
+            });
+          });
+
+          // Bỏ chọn tất cả
+          document.getElementById('permDeselectAllBtn')?.addEventListener('click', () => {
+            document.querySelectorAll('.permission-teacher-item:not(.d-none) .perm-teacher-checkbox').forEach(cb => {
+              cb.checked = false;
+            });
+          });
+
+          // Lưu phân quyền
+          document.getElementById('savePermissionsBtn')?.addEventListener('click', async () => {
+            if (!currentEditSetId) return;
+            const btn = document.getElementById('savePermissionsBtn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Đang lưu...';
+
+            try {
+              const checkedCheckboxes = document.querySelectorAll('.perm-teacher-checkbox:checked');
+              const allowedTeacherIds = Array.from(checkedCheckboxes).map(cb => cb.value);
+
+              await updateQuestionSetPermissions(currentEditSetId, allowedTeacherIds);
+              if (currentEditSetData) {
+                currentEditSetData.allowed_teacher_ids = allowedTeacherIds;
+              }
+
+              bootstrap.Modal.getOrCreateInstance(document.getElementById('qsetPermissionsModal')).hide();
+              showToast(`Đã lưu phân quyền cho ${allowedTeacherIds.length} giáo viên!`, 'success');
+            } catch (err) {
+              alert('Lỗi lưu phân quyền: ' + err.message);
+            } finally {
+              btn.disabled = false;
+              btn.innerHTML = originalText;
             }
           });
 
@@ -1658,6 +1745,7 @@ import { supabase } from './supabase.js';
           }
 
           document.getElementById('addQuestionBtn').addEventListener('click', () => {
+            if (!currentEditSetCanEdit) { alert('Bạn không có quyền thêm câu hỏi vào bộ đề này!'); return; }
             document.getElementById('editQuestionId').value = '';
             document.getElementById('qPartTitleInput').value = '';
             const taskSel = document.getElementById('qTaskTypeSelect');
@@ -1675,6 +1763,7 @@ import { supabase } from './supabase.js';
           });
 
           document.getElementById('saveQuestionBtn').addEventListener('click', async () => {
+            if (!currentEditSetCanEdit) { alert('Bạn không có quyền lưu câu hỏi vào bộ đề này!'); return; }
             const qText = document.getElementById('qTextInput').value.trim();
             if (!qText) { alert('Vui lòng nhập câu hỏi!'); return; }
             const editId = document.getElementById('editQuestionId').value;
@@ -1721,6 +1810,46 @@ import { supabase } from './supabase.js';
           document.getElementById('qsetFilterAuthor')?.addEventListener('change', renderQuestionSets);
         }
 
+        function renderPermissionsTeacherList() {
+          const listEl = document.getElementById('permTeachersList');
+          if (!availableTeachersForPerm || availableTeachersForPerm.length === 0) {
+            listEl.innerHTML = `
+              <div class="text-center py-4 text-muted">
+                <i class="bi bi-people fs-2 d-block mb-2"></i>
+                Không tìm thấy giáo viên đồng nghiệp nào khác trong hệ thống.
+              </div>`;
+            return;
+          }
+
+          const currentAllowed = currentEditSetData?.allowed_teacher_ids || [];
+
+          listEl.innerHTML = availableTeachersForPerm.map(t => {
+            const isChecked = Array.isArray(currentAllowed) && currentAllowed.includes(t.id);
+            const initial = (t.full_name || t.email || 'T').charAt(0).toUpperCase();
+            const roleBadge = t.role === 'admin' 
+              ? `<span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-2" style="font-size:0.65rem;">Admin</span>`
+              : `<span class="badge bg-info-subtle text-info border border-info-subtle ms-2" style="font-size:0.65rem;">Giáo viên</span>`;
+
+            return `
+              <div class="permission-teacher-item" data-name="${(t.full_name || '').toLowerCase()}" data-email="${(t.email || '').toLowerCase()}">
+                <div class="d-flex align-items-center gap-3">
+                  <div class="permission-teacher-avatar">${initial}</div>
+                  <div>
+                    <div class="fw-semibold text-white d-flex align-items-center">
+                      ${t.full_name || 'Chưa cập nhật tên'}
+                      ${roleBadge}
+                    </div>
+                    <div class="text-muted smaller">${t.email || 'Không có email'}</div>
+                  </div>
+                </div>
+                <div class="form-check form-switch m-0">
+                  <input class="form-check-input perm-teacher-checkbox" type="checkbox" value="${t.id}" id="perm_teacher_${t.id}" ${isChecked ? 'checked' : ''} style="cursor:pointer; width:2.5em; height:1.3em;">
+                  <label class="form-check-label visually-hidden" for="perm_teacher_${t.id}">Cấp quyền</label>
+                </div>
+              </div>`;
+          }).join('');
+        }
+
         function updatePublishBtnUI() {
           const btn = document.getElementById('togglePublishBtn');
           const text = document.getElementById('publishBtnText');
@@ -1745,7 +1874,12 @@ import { supabase } from './supabase.js';
             if (filterStatus === 'published') sets = sets.filter(s => s.is_published);
             if (filterStatus === 'draft') sets = sets.filter(s => !s.is_published);
             if (filterAuthor === 'mine') sets = sets.filter(s => s.teacher_id === currentUser.id);
-            if (filterAuthor === 'others') sets = sets.filter(s => s.teacher_id !== currentUser.id);
+            if (filterAuthor === 'shared_with_me') {
+              sets = sets.filter(s => s.teacher_id !== currentUser.id && Array.isArray(s.allowed_teacher_ids) && s.allowed_teacher_ids.includes(currentUser.id));
+            }
+            if (filterAuthor === 'others') {
+              sets = sets.filter(s => s.teacher_id !== currentUser.id && (!Array.isArray(s.allowed_teacher_ids) || !s.allowed_teacher_ids.includes(currentUser.id)));
+            }
 
             if (!sets.length) {
               grid.innerHTML = `
@@ -1763,10 +1897,18 @@ import { supabase } from './supabase.js';
               const levelLabels = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
               const examTypeLabels = { general: 'General', vstep: 'VSTEP', toeic: 'TOEIC', ielts: 'IELTS' };
               const examType = s.exam_type || 'general';
-              const isMine = s.teacher_id === currentUser.id;
-              const creatorBadge = isMine
-                ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size:0.7rem;">Của bạn</span>`
-                : `<span class="badge bg-secondary-subtle text-light border border-secondary" style="font-size:0.7rem;"><i class="bi bi-people me-1"></i>Đồng nghiệp</span>`;
+              const isOwner = (s.teacher_id === currentUser.id) || (currentProfile?.role === 'admin');
+              const isCollab = Array.isArray(s.allowed_teacher_ids) && s.allowed_teacher_ids.includes(currentUser.id);
+              const canEdit = isOwner || isCollab;
+
+              let permBadge = '';
+              if (s.teacher_id === currentUser.id) {
+                permBadge = `<span class="badge-perm badge-perm-owner" title="Bạn là chủ sở hữu bộ đề"><i class="bi bi-person-fill me-1"></i>Chủ sở hữu</span>`;
+              } else if (isCollab) {
+                permBadge = `<span class="badge-perm badge-perm-collab" title="Bạn được cấp quyền sửa và xóa"><i class="bi bi-pencil-square me-1"></i>Được sửa/xóa</span>`;
+              } else {
+                permBadge = `<span class="badge-perm badge-perm-readonly" title="Chế độ chỉ xem"><i class="bi bi-eye me-1"></i>Chỉ xem</span>`;
+              }
 
               return `
                 <div class="col-md-6 col-lg-4 d-flex">
@@ -1786,7 +1928,7 @@ import { supabase } from './supabase.js';
                         <span class="text-truncate" title="Người tạo: ${s.creator_name || 'Giáo viên'}">
                           <i class="bi bi-person-fill me-1"></i>Tạo bởi: <b>${s.creator_name || 'Giáo viên'}</b>
                         </span>
-                        ${creatorBadge}
+                        ${permBadge}
                       </div>
                       <div class="text-muted smaller mb-2">${new Date(s.created_at).toLocaleDateString('vi-VN')}</div>
                       <button class="btn btn-sm btn-outline-info w-100 fw-semibold" onclick="event.stopPropagation(); openTeacherSetSubmissions('${s.id}', '${encodeURIComponent(s.title)}')">
@@ -1819,16 +1961,75 @@ import { supabase } from './supabase.js';
               .single();
             if (error) throw error;
 
+            currentEditSetData = setData;
+            const isOwner = (setData.teacher_id === currentUser.id) || (currentProfile?.role === 'admin');
+            const isCollab = Array.isArray(setData.allowed_teacher_ids) && setData.allowed_teacher_ids.includes(currentUser.id);
+            const canEdit = isOwner || isCollab;
+
+            currentEditSetIsOwner = isOwner;
+            currentEditSetCanEdit = canEdit;
+
             document.getElementById('qsetTitleInput').value = setData.title;
             document.getElementById('qsetDescInput').value = setData.description || '';
             document.getElementById('qsetLevelSelect').value = setData.level;
             document.getElementById('qsetExamTypeSelect').value = setData.exam_type || 'general';
             document.getElementById('qsetEditorTitle').textContent = setData.title;
 
+            // Bật/tắt chế độ Read-only theo quyền hạn
+            document.getElementById('qsetTitleInput').disabled = !canEdit;
+            document.getElementById('qsetDescInput').disabled = !canEdit;
+            document.getElementById('qsetLevelSelect').disabled = !canEdit;
+            document.getElementById('qsetExamTypeSelect').disabled = !canEdit;
+
+            const readOnlyBanner = document.getElementById('qsetReadOnlyBanner');
+            if (readOnlyBanner) {
+              if (canEdit) readOnlyBanner.classList.add('d-none');
+              else readOnlyBanner.classList.remove('d-none');
+            }
+
+            const saveInfoBtn = document.getElementById('saveQSetInfoBtn');
+            if (saveInfoBtn) {
+              if (canEdit) saveInfoBtn.classList.remove('d-none');
+              else saveInfoBtn.classList.add('d-none');
+            }
+
+            const togglePubBtn = document.getElementById('togglePublishBtn');
+            if (togglePubBtn) {
+              if (canEdit) togglePubBtn.classList.remove('d-none');
+              else togglePubBtn.classList.add('d-none');
+            }
+
+            const delSetBtn = document.getElementById('deleteQSetBtn');
+            if (delSetBtn) {
+              if (canEdit) delSetBtn.classList.remove('d-none');
+              else delSetBtn.classList.add('d-none');
+            }
+
+            const addQBtn = document.getElementById('addQuestionBtn');
+            if (addQBtn) {
+              if (canEdit) addQBtn.classList.remove('d-none');
+              else addQBtn.classList.add('d-none');
+            }
+
+            // Nút Phân quyền: chỉ Owner (hoặc admin) mới có quyền phân quyền
+            const shareBtn = document.getElementById('shareQSetBtn');
+            if (shareBtn) {
+              if (isOwner) shareBtn.classList.remove('d-none');
+              else shareBtn.classList.add('d-none');
+            }
+
             const creatorName = setData.creator?.full_name || 'Giáo viên';
-            const isMine = setData.teacher_id === currentUser.id;
+            let permRoleText = '';
+            if (isOwner) {
+              permRoleText = `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">Bạn là Chủ sở hữu</span>`;
+            } else if (isCollab) {
+              permRoleText = `<span class="badge bg-success-subtle text-success border border-success-subtle ms-1">Được cấp quyền Sửa/Xóa</span>`;
+            } else {
+              permRoleText = `<span class="badge bg-warning-subtle text-warning border border-warning-subtle ms-1">Chế độ Chỉ xem</span>`;
+            }
+
             document.getElementById('qsetEditorSubtitle').innerHTML =
-              `<span class="text-info"><i class="bi bi-person-fill me-1"></i>Người tạo: <b>${creatorName}</b> ${isMine ? '(Bạn)' : ''}</span> • Ngày ${new Date(setData.created_at).toLocaleDateString('vi-VN')}`;
+              `<span class="text-info"><i class="bi bi-person-fill me-1"></i>Người tạo: <b>${creatorName}</b></span> ${permRoleText} • Ngày ${new Date(setData.created_at).toLocaleDateString('vi-VN')}`;
 
             currentEditSetPublished = setData.is_published;
             updatePublishBtnUI();
@@ -1877,6 +2078,7 @@ import { supabase } from './supabase.js';
                       <span class="badge bg-secondary-subtle text-secondary small"><i class="bi bi-mic me-1"></i>Trả lời: ${q.response_time || 45}s</span>
                     </div>
                   </div>
+                  ${currentEditSetCanEdit ? `
                   <div class="d-flex gap-1 flex-shrink-0">
                     <button class="btn btn-sm btn-outline-primary" onclick="editQuestionItem('${q.id}')" title="Sửa câu hỏi">
                       <i class="bi bi-pencil"></i>
@@ -1884,7 +2086,7 @@ import { supabase } from './supabase.js';
                     <button class="btn btn-sm btn-outline-danger" onclick="deleteQuestionItem('${q.id}')" title="Xóa câu hỏi">
                       <i class="bi bi-trash"></i>
                     </button>
-                  </div>
+                  </div>` : ''}
                 </div>
               </div>
             `;}).join('');
@@ -1894,6 +2096,10 @@ import { supabase } from './supabase.js';
         }
 
         window.editQuestionItem = function (id, text, partTitle = '', prepTime = 15, responseTime = 45) {
+          if (!currentEditSetCanEdit) {
+            alert('Bạn không có quyền chỉnh sửa bộ đề này!');
+            return;
+          }
           const found = currentEditingQuestions.find(item => item.id === id);
           const qText = (text !== undefined && typeof text === 'string') ? text : (found?.question_text || '');
           const qPart = (partTitle !== undefined && typeof partTitle === 'string' && partTitle !== '') ? partTitle : (found?.part_title || '');
@@ -1920,6 +2126,10 @@ import { supabase } from './supabase.js';
         };
 
         window.deleteQuestionItem = async function (id) {
+          if (!currentEditSetCanEdit) {
+            alert('Bạn không có quyền xóa câu hỏi của bộ đề này!');
+            return;
+          }
           if (!confirm('Xóa câu hỏi này?')) return;
           try {
             await deleteQuestion(id);

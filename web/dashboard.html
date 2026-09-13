@@ -444,9 +444,10 @@
           <option value="published">Đã publish</option>
           <option value="draft">Bản nháp</option>
         </select>
-        <select class="form-select form-select-sm" style="max-width:180px;" id="qsetFilterAuthor">
+        <select class="form-select form-select-sm" style="max-width:200px;" id="qsetFilterAuthor">
           <option value="">Tất cả giáo viên</option>
           <option value="mine">Bộ đề của tôi</option>
+          <option value="shared_with_me">Được chia sẻ quyền sửa/xóa</option>
           <option value="others">Của giáo viên khác</option>
         </select>
       </div>
@@ -467,6 +468,9 @@
           </div>
         </div>
         <div class="d-flex gap-2">
+          <button class="btn btn-outline-info btn-sm d-none" id="shareQSetBtn">
+            <i class="bi bi-person-gear me-1"></i>Phân quyền
+          </button>
           <button class="btn btn-outline-secondary btn-sm" id="togglePublishBtn">
             <i class="bi bi-globe me-1"></i><span id="publishBtnText">Publish</span>
           </button>
@@ -474,6 +478,16 @@
             <i class="bi bi-trash me-1"></i>Xóa
           </button>
         </div>
+      </div>
+
+      <!-- Read-only Banner (chỉ hiển thị khi giáo viên không có quyền sửa/xóa) -->
+      <div id="qsetReadOnlyBanner" class="readonly-banner d-none">
+        <i class="bi bi-shield-lock-fill fs-4 text-warning flex-shrink-0"></i>
+        <div class="flex-grow-1">
+          <div class="fw-bold">Chế độ chỉ xem (Read-only)</div>
+          <div class="small opacity-90">Bạn không được người tạo cấp quyền sửa/xóa bộ đề này. Toàn bộ nội dung, câu hỏi và thiết lập chỉ dùng để tham khảo.</div>
+        </div>
+        <span class="badge bg-warning text-dark px-2 py-1 small fw-semibold">Chỉ xem</span>
       </div>
 
       <!-- Set info form -->
@@ -583,6 +597,50 @@
             <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
             <button class="btn btn-primary" id="saveQuestionBtn">
               <i class="bi bi-check-circle me-2"></i>Lưu câu hỏi
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Phân quyền Giáo viên cho Bộ đề -->
+    <div class="modal fade" id="qsetPermissionsModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content glass-modal">
+          <div class="modal-header border-0 pb-0">
+            <div>
+              <h5 class="modal-title fw-bold">
+                <i class="bi bi-person-gear me-2 text-info"></i>Phân quyền Quản lý Bộ đề
+              </h5>
+              <p class="text-muted smaller mb-0 mt-1" id="permModalSubtitle">
+                Chọn những giáo viên được phép Sửa & Xóa bộ đề này. Giáo viên không được chọn chỉ có quyền Xem.
+              </p>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body pt-3">
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+              <div class="input-group input-group-sm flex-grow-1" style="max-width: 340px;">
+                <span class="input-group-text bg-dark-subtle border-secondary"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control bg-dark-subtle border-secondary" id="permSearchInput" placeholder="Tìm theo tên hoặc email giáo viên..." />
+              </div>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="permSelectAllBtn">Chọn tất cả</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="permDeselectAllBtn">Bỏ chọn tất cả</button>
+              </div>
+            </div>
+
+            <!-- Danh sách giáo viên -->
+            <div id="permTeachersList" style="max-height: 380px; overflow-y: auto; padding-right: 4px;">
+              <div class="text-center py-4 text-muted">
+                <span class="spinner-border spinner-border-sm me-2"></span>Đang tải danh sách giáo viên...
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
+            <button class="btn btn-primary btn-glow" id="savePermissionsBtn">
+              <i class="bi bi-check2-circle me-2"></i>Lưu phân quyền
             </button>
           </div>
         </div>
@@ -1308,7 +1366,7 @@
 
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script type="module" src="js/dashboard.js?v=11"></script>
+  <script type="module" src="js/dashboard.js?v=12"></script>
 </body>
 
 </html>

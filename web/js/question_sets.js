@@ -9,30 +9,64 @@ import { supabase } from './supabase.js';
  * Lấy danh sách bộ đề của teacher
  */
 export async function fetchQuestionSets(teacherId = null) {
-  let query = supabase
-    .from('question_sets')
-    .select(`
-      id, teacher_id, title, description, level, exam_type, time_limit, is_published, created_at,
-      creator:profiles!teacher_id(id, full_name, email),
-      questions(id)
-    `)
-    .order('created_at', { ascending: false });
+  try {
+    let query = supabase
+      .from('question_sets')
+      .select(`
+        id, teacher_id, title, description, level, exam_type, time_limit, is_published, created_at,
+        allowed_teacher_ids,
+        creator:profiles!teacher_id(id, full_name, email),
+        questions(id)
+      `)
+      .order('created_at', { ascending: false });
 
-  if (teacherId) {
-    query = query.eq('teacher_id', teacherId);
+    if (teacherId) {
+      query = query.eq('teacher_id', teacherId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    // Attach question count and creator info
+    return (data || []).map(qs => ({
+      ...qs,
+      allowed_teacher_ids: Array.isArray(qs.allowed_teacher_ids) ? qs.allowed_teacher_ids : [],
+      exam_type: qs.exam_type || 'general',
+      time_limit: qs.time_limit || 0,
+      creator_name: qs.creator?.full_name || 'Giáo viên',
+      creator_email: qs.creator?.email || '',
+      question_count: qs.questions ? qs.questions.length : 0,
+    }));
+  } catch (err) {
+    // Fallback nếu database Supabase chưa có cột allowed_teacher_ids
+    if (err.message?.includes('allowed_teacher_ids') || err.code === '42703' || err.code === 'PGRST204') {
+      console.warn('Cột allowed_teacher_ids chưa có trong DB Supabase, fallback query thông thường:', err.message);
+      let query = supabase
+        .from('question_sets')
+        .select(`
+          id, teacher_id, title, description, level, exam_type, time_limit, is_published, created_at,
+          creator:profiles!teacher_id(id, full_name, email),
+          questions(id)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (teacherId) {
+        query = query.eq('teacher_id', teacherId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []).map(qs => ({
+        ...qs,
+        allowed_teacher_ids: [],
+        exam_type: qs.exam_type || 'general',
+        time_limit: qs.time_limit || 0,
+        creator_name: qs.creator?.full_name || 'Giáo viên',
+        creator_email: qs.creator?.email || '',
+        question_count: qs.questions ? qs.questions.length : 0,
+      }));
+    }
+    throw err;
   }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  // Attach question count and creator info
-  return (data || []).map(qs => ({
-    ...qs,
-    exam_type: qs.exam_type || 'general',
-    time_limit: qs.time_limit || 0,
-    creator_name: qs.creator?.full_name || 'Giáo viên',
-    creator_email: qs.creator?.email || '',
-    question_count: qs.questions ? qs.questions.length : 0,
-  }));
 }
 
 /**
@@ -48,6 +82,7 @@ export async function createQuestionSet(teacherId, { title, description, level, 
       level: level || 'intermediate',
       exam_type: exam_type || 'general',
       time_limit: time_limit ? parseInt(time_limit) : 0,
+      allowed_teacher_ids: [],
     })
     .select()
     .single();
@@ -66,6 +101,43 @@ export async function updateQuestionSet(setId, updates) {
     .update(safeUpdates)
     .eq('id', setId);
   if (error) throw error;
+}
+
+/**
+ * Cập nhật danh sách giáo viên được cấp quyền sửa/xóa bộ đề
+ */
+export async function updateQuestionSetPermissions(setId, allowedTeacherIds = []) {
+  try {
+    const { error } = await supabase
+      .from('question_sets')
+      .update({ allowed_teacher_ids: allowedTeacherIds })
+      .eq('id', setId);
+    if (error) throw error;
+  } catch (err) {
+    if (err.message?.includes('allowed_teacher_ids') || err.code === '42703' || err.code === 'PGRST204') {
+      throw new Error('Database Supabase chưa có cột allowed_teacher_ids. Vui lòng chạy lệnh SQL migration trong speak_web_schema.sql!');
+    }
+    throw err;
+  }
+}
+
+/**
+ * Lấy danh sách giáo viên & admin trong hệ thống để chọn phân quyền
+ */
+export async function fetchTeachersList(excludeUserId = null) {
+  let query = supabase
+    .from('profiles')
+    .select('id, full_name, email, role')
+    .in('role', ['teacher', 'admin'])
+    .order('full_name');
+
+  if (excludeUserId) {
+    query = query.neq('id', excludeUserId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
 }
 
 /**
