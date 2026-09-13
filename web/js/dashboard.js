@@ -1739,27 +1739,8 @@ import { supabase } from './supabase.js';
           return map[(examType || 'general').toLowerCase()] || 'Luyện tập chung';
         }
 
-        function updateExamTypeSummaryBadge(examType = 'general') {
-          const hintEl = document.getElementById('qsetExamTypeHint');
-          if (!hintEl) return;
-          const norm = (examType || 'general').toLowerCase();
-          if (norm === 'toeic') {
-            hintEl.innerHTML = '<i class="bi bi-info-circle me-1"></i><b>Chuẩn TOEIC Speaking (5 dạng):</b> Đọc to đoạn văn (Read Aloud), Miêu tả tranh, Hỏi đáp cá nhân, Hỏi đáp theo tài liệu/lịch trình, Bày tỏ quan điểm.';
-          } else if (norm === 'vstep') {
-            hintEl.innerHTML = '<i class="bi bi-info-circle me-1"></i><b>Chuẩn VSTEP Speaking (Part 1-2-3):</b> Hỏi đáp cá nhân, Miêu tả, Trải nghiệm/kế hoạch, Thảo luận giải pháp (3 phương án), Thuyết trình dài (Cue Card), Quan điểm, Thảo luận.';
-          } else if (norm === 'ielts') {
-            hintEl.innerHTML = '<i class="bi bi-info-circle me-1"></i><b>Chuẩn IELTS Speaking (Part 1-2-3):</b> Hỏi đáp phỏng vấn, Miêu tả, Trải nghiệm, Cue Card (Long Turn 1-2 phút), Thảo luận chuyên sâu 2 chiều, Quan điểm, Giải pháp.';
-          } else {
-            hintEl.innerHTML = '<i class="bi bi-info-circle me-1"></i><b>Luyện tập chung:</b> Hỗ trợ đầy đủ cả 10 dạng bài nói tiếng Anh.';
-          }
-        }
-
         function configureQuestionModalForTaskType(taskType, isInitialOrTypeChange = false) {
           const t = TASK_TYPES[taskType] || TASK_TYPES['short_qa'];
-          const hintEl = document.getElementById('qTaskTypeHint');
-          if (hintEl && t) {
-            hintEl.innerHTML = `<i class="bi bi-info-circle me-1"></i>Bao gồm: <b>${t.includes}</b>`;
-          }
 
           if (isInitialOrTypeChange && t) {
             const prepInput = document.getElementById('qPrepTimeInput');
@@ -1922,7 +1903,6 @@ import { supabase } from './supabase.js';
               if (currentEditSetData) {
                 currentEditSetData.exam_type = newExam;
               }
-              updateExamTypeSummaryBadge(newExam);
               if (currentEditSetId && currentEditSetCanEdit) {
                 try {
                   await updateQuestionSet(currentEditSetId, { exam_type: newExam });
@@ -1947,7 +1927,6 @@ import { supabase } from './supabase.js';
               await updateQuestionSet(currentEditSetId, { title, description: desc, level, exam_type: examType });
               document.getElementById('qsetEditorTitle').textContent = title;
               if (currentEditSetData) currentEditSetData.exam_type = examType;
-              updateExamTypeSummaryBadge(examType);
               showToast('Đã lưu thông tin bộ đề!', 'success');
             } catch (e) {
               alert('Lỗi: ' + e.message);
@@ -2326,7 +2305,6 @@ import { supabase } from './supabase.js';
             document.getElementById('qsetDescInput').value = setData.description || '';
             document.getElementById('qsetLevelSelect').value = setData.level;
             document.getElementById('qsetExamTypeSelect').value = setData.exam_type || 'general';
-            updateExamTypeSummaryBadge(setData.exam_type || 'general');
             document.getElementById('qsetEditorTitle').textContent = setData.title;
 
             // Bật/tắt chế độ Read-only theo quyền hạn
