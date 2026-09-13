@@ -3103,7 +3103,7 @@ import { supabase } from './supabase.js';
             const existing = practiceAnswers[q.id];
             const resultArea = document.getElementById('practiceAnswerResult');
             if (existing && existing.scores) {
-              renderAnswerResult(existing);
+              renderAnswerResult(existing, q);
               resultArea.classList.remove('d-none');
             } else {
               resultArea.classList.add('d-none');
@@ -3562,7 +3562,7 @@ import { supabase } from './supabase.js';
             scoringOverlay.classList.add('d-none');
             document.getElementById('practiceRecordingArea').classList.remove('d-none');
             statusEl.textContent = 'Nhấn để ghi âm lại';
-            renderAnswerResult(practiceAnswers[q.id]);
+            renderAnswerResult(practiceAnswers[q.id], q);
             document.getElementById('practiceAnswerResult').classList.remove('d-none');
 
           } catch (e) {
@@ -3573,9 +3573,13 @@ import { supabase } from './supabase.js';
           }
         }
 
-        function renderAnswerResult(answer) {
-          const s = answer.scores;
+        function renderAnswerResult(answer, targetQ = null) {
+          if (!answer) return;
+          const currentQ = targetQ || practiceQuestions[practiceCurrentIdx] || {};
+          const isReadAloud = currentQ.task_type === 'read_aloud';
+          const s = answer.scores || {};
           const resultArea = document.getElementById('practiceAnswerResult');
+          if (!resultArea) return;
           const valClass = (v) => v >= 8 ? 'excellent' : v >= 6 ? 'good' : v >= 4 ? 'average' : 'poor';
           const gemini = answer.geminiEval || answer.result?.gemini_eval;
 
@@ -3586,7 +3590,7 @@ import { supabase } from './supabase.js';
             'too_short': { label: 'Quá cộc lốc / Ngắn', cls: 'badge-relevance-poor' },
             'irrelevant': { label: 'Lạc đề hoàn toàn', cls: 'badge-relevance-poor' },
           };
-          const relInfo = (q.task_type !== 'read_aloud' && gemini?.relevance_level) ? (relevanceMap[gemini.relevance_level] || { label: gemini.relevance_level, cls: 'bg-secondary' }) : null;
+          const relInfo = (!isReadAloud && gemini?.relevance_level) ? (relevanceMap[gemini.relevance_level] || { label: gemini.relevance_level, cls: 'bg-secondary' }) : null;
 
           const errors = gemini?.grammar_errors || [];
 
@@ -3608,10 +3612,10 @@ import { supabase } from './supabase.js';
               <div class="result-scores-grid">
                 <div class="result-score-item highlight-total">
                   <div class="score-label">Điểm Tổng Thể</div>
-                  <div class="score-val ${valClass(s.total)}">${s.total.toFixed(1)}</div>
-                  <div class="score-subtext">${q.task_type === 'read_aloud' ? 'Phát âm âm học' : 'Khảo thí kết hợp'}</div>
+                  <div class="score-val ${valClass(s.total || 0)}">${(s.total || 0).toFixed(1)}</div>
+                  <div class="score-subtext">${isReadAloud ? 'Phát âm âm học' : 'Khảo thí kết hợp'}</div>
                 </div>
-                ${q.task_type !== 'read_aloud' ? `
+                ${!isReadAloud ? `
                 <div class="result-score-item">
                   <div class="score-label">Ngữ Pháp (Grammar)</div>
                   <div class="score-val ${valClass(s.grammar ?? gemini?.score_grammar ?? 0)}">${(s.grammar ?? gemini?.score_grammar ?? 0).toFixed(1)}</div>
