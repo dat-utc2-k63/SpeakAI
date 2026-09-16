@@ -783,14 +783,25 @@ import { supabase } from './supabase.js';
             </div>` : '';
 
           if (isTeacher) {
+            const hasScores = turn.scored && turn.scores && turn.scores.total !== undefined;
+            const scorePills = hasScores ? `
+              <div class="d-flex align-items-center gap-2 flex-wrap mt-2 pt-2 border-top border-secondary border-opacity-25">
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Tổng: ${Number(sc.total).toFixed(1)}</span>
+                <span class="badge bg-info-subtle text-info border border-info-subtle">Chuẩn: ${Number(sc.accuracy).toFixed(1)}</span>
+                <span class="badge bg-success-subtle text-success border border-success-subtle">Lưu loát: ${Number(sc.fluency).toFixed(1)}</span>
+                <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Ngữ điệu: ${Number(sc.prosodic).toFixed(1)}</span>
+              </div>` : '';
+
             return `
       <div class="timeline-item timeline-teacher">
         <div class="timeline-dot teacher-dot"><i class="bi bi-person-video3"></i></div>
         <div class="speech-bubble-enhanced teacher-bubble-enhanced">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <div class="small text-muted fw-semibold"><i class="bi bi-person-badge me-1 text-primary"></i>Giáo viên</div>
+            ${hasScores ? '<span class="badge bg-success-subtle text-success border border-success-subtle smaller"><i class="bi bi-check2-circle me-1"></i>Đã chấm điểm</span>' : '<span class="badge bg-secondary-subtle text-muted border border-secondary-subtle smaller">Không chấm điểm</span>'}
           </div>
           <div class="teacher-transcript text-white-50">${turn.transcript}</div>
+          ${scorePills}
           ${audioHtml}
         </div>
       </div>`;

@@ -48,6 +48,12 @@ class WavLMEncoder(nn.Module):
         self._frozen = freeze and not use_lora
 
         if use_lora:
+            try:
+                import peft.import_utils
+                peft.import_utils.is_torchao_available = lambda: False
+            except Exception:
+                pass
+
             from peft import LoraConfig, get_peft_model
 
             target = lora_target_modules or ["q_proj", "v_proj"]

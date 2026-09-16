@@ -135,13 +135,14 @@ def assess_start_api(
         os.system(f'ffmpeg -y -i \"{raw_conv_path}\" -ar 16000 -ac 1 \"{conv_path}\" -loglevel quiet')
         
         is_diarize = str(diarize).strip().lower() not in ('false', '0', 'no', 'none', 'f')
+        is_score_teacher = str(score_teacher).strip().lower() in ('true', '1', 'yes', 't')
         background_tasks.add_task(
             process_assessment,
             task_id,
             conv_path,
             teacher_embeddings_json,
             student_embeddings_json,
-            score_teacher,
+            is_score_teacher,
             skip_feedback,
             is_diarize,
             reference_text,

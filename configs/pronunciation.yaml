@@ -97,7 +97,7 @@ sentence_split:
   min_silence_sec: 0.35
   silence_thresh_db: -40
   min_segment_sec: 0.2
-  max_segment_sec: null
+  max_segment_sec: 12.0
   padding_sec: 0.1
   trim_edges: false
   trim_min_sec: 0.05

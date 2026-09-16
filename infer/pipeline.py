@@ -386,10 +386,20 @@ class SpeakingPipeline:
                 )
                 l2_errors = l2_result.get("errors", {})
                 l2_scan = l2_result.get("scan_result")
-                l2_turn_feedback = PronunciationScorer.generate_l2_turn_feedback(l2_errors)
-                if l2_errors and l2_errors.get("phonemes") is not None:
+                # Hybrid error detection:
+                # 1. Use L2-MDD if it detected phonological errors (contains rich ASHA diagnostic tips)
+                # 2. If L2-MDD detected 0 errors but SpeechOcean detected acoustic errors, use SpeechOcean
+                l2_phones = l2_errors.get("phonemes") or []
+                so_phones = (pron_errors or {}).get("phonemes") or []
+                if l2_phones:
                     final_errors = l2_errors
-                words_detail = l2_result.get("words_detail") or []
+                    words_detail = l2_result.get("words_detail") or []
+                elif so_phones:
+                    final_errors = pron_errors
+                    words_detail = pron_result.get("words_detail") or []
+                else:
+                    final_errors = {"phonemes": [], "words": []}
+                    words_detail = l2_result.get("words_detail") or pron_result.get("words_detail") or []
             except Exception as e:
                 print(f"  [WARN] L2-MDD phoneme scan failed: {e}")
                 words_detail = pron_result.get("words_detail") or []

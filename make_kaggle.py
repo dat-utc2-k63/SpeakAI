@@ -144,7 +144,7 @@ sentence_split:
   min_silence_sec: 0.35
   silence_thresh_db: -40
   min_segment_sec: 0.2
-  max_segment_sec: null
+  max_segment_sec: 12.0
   padding_sec: 0.1
   trim_edges: false
   trim_min_sec: 0.05
@@ -369,6 +369,7 @@ run_cells.append(code_cell([
     "]\n",
     "subprocess.run([sys.executable, '-m', 'pip', 'install', '-q'] + pkgs, check=True)\n",
     "subprocess.run([sys.executable, '-m', 'pip', 'install', '-U', '-q', f'numpy=={np_ver}'], check=True)\n",
+    "subprocess.run([sys.executable, '-m', 'pip', 'uninstall', '-y', '-q', 'torchao'], check=False)\n",
     "print('Libraries installed!')\n",
     "if not os.path.exists('/usr/local/bin/cloudflared'):\n",
     "    print('Downloading cloudflared...')\n",
@@ -379,6 +380,10 @@ run_cells.append(code_cell([
 run_cells.append(md_cell(["---\n", "## Khởi tạo Pipeline từ Kaggle Input"]))
 run_cells.append(code_cell([
     "import sys, os\n",
+    "try:\n",
+    "    import peft.import_utils\n",
+    "    peft.import_utils.is_torchao_available = lambda: False\n",
+    "except Exception: pass\n",
     "SOURCE_DIR = None\n",
     "MODEL_DIR = None\n",
     "PRONUNCIATION_PATH = None\n",

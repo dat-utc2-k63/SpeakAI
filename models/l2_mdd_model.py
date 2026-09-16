@@ -224,16 +224,17 @@ class L2MDDModel(nn.Module):
             w_ctx = phone_to_word.get(i, {})
 
             # L2-MDD diagnostic trigger:
-            # Only trigger if the MDD head predicts an error with solid probability
-            # and p_correct is low (< 0.50)
+            # Uses sensitivity_threshold (default 0.25) to detect phonological errors.
+            # Triggers if any error class probability exceeds the threshold, or if error mass is significant.
+            thresh = float(sensitivity_threshold)
             is_suspicious = False
-            if pred_class_id == ERR_DEL and p_del >= 0.40:
+            if pred_class_id == ERR_DEL and p_del >= thresh:
                 is_suspicious = True
-            elif pred_class_id == ERR_ADD and p_add >= 0.45:
+            elif pred_class_id == ERR_ADD and p_add >= thresh:
                 is_suspicious = True
-            elif pred_class_id == ERR_SUB and p_sub >= 0.45 and p_correct < 0.50:
+            elif pred_class_id == ERR_SUB and p_sub >= thresh:
                 is_suspicious = True
-            elif err_prob >= 0.70 and p_correct < 0.30:
+            elif err_prob >= max(0.35, thresh * 1.3) and p_correct < 0.65:
                 is_suspicious = True
 
             actual_phone = target_phone

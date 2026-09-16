@@ -252,7 +252,7 @@ class L2MDDPredictor:
         self,
         audio: str,
         transcript: str,
-        sensitivity: float = 0.35,
+        sensitivity: float = 0.25,
         apply_preprocess: bool = True,
     ) -> Dict[str, Any]:
         """Scan all phonemes in the utterance using L2-MDD and generate ASHA diagnoses."""
