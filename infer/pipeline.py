@@ -268,8 +268,7 @@ class SpeakingPipeline:
         split_cfg = self.config.get("sentence_split") or {}
         track_preprocess = PreprocessConfig.from_dict(self.config.get("audio_preprocess"))
         track_preprocess.denoise = False
-        merge_gap = float(split_cfg.get("diarization_merge_gap_sec", 0.55))
-        pad_sec = float(split_cfg.get("diarization_pad_sec", 0.15))
+        merge_gap = float(split_cfg.get("diarization_merge_gap_sec", 0.2))
 
         segments = export_diarization_clips(
             source_audio,
@@ -278,7 +277,6 @@ class SpeakingPipeline:
             speaker,
             track_preprocess,
             merge_gap_sec=merge_gap,
-            pad_sec=pad_sec,
             min_duration_sec=float(split_cfg.get("min_segment_sec", 0.2)),
             prefix=f"{speaker.lower()}_turn",
         )

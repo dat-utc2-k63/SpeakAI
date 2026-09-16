@@ -96,41 +96,29 @@ class WhisperTranscriber:
         max_pos = getattr(getattr(self.model, "config", None), "max_target_positions", 448)
         max_tokens = min(getattr(self, "max_new_tokens", 440), max_pos - 8)
 
-        gen_kwargs = {
-            "max_new_tokens": max_tokens,
-            "condition_on_prev_tokens": False,
-            "temperature": 0.0,
-        }
-
         if name.endswith(".en"):
             # English-only checkpoints: no language/task prefix tokens
-            return self.model.generate(input_features, **gen_kwargs)
+            return self.model.generate(input_features, max_new_tokens=max_tokens)
 
         if "large-v3" in name or "large-v2" in name:
             return self.model.generate(
                 input_features,
+                max_new_tokens=max_tokens,
                 language=self.language,
                 task="transcribe",
-                **gen_kwargs,
             )
 
         # Multilingual (medium/small/tiny): forced_decoder_ids uses ~4 prefix tokens
         max_tokens = min(max_tokens, max_pos - 12)
-        gen_kwargs["max_new_tokens"] = max_tokens
         return self.model.generate(
             input_features,
+            max_new_tokens=max_tokens,
             forced_decoder_ids=self.processor.get_decoder_prompt_ids(
                 language=self.language, task="transcribe"
             ),
-            **gen_kwargs,
         )
 
     def _transcribe_waveform(self, wav: torch.Tensor) -> str:
-        # Whisper encoder performs best with at least ~0.5s of audio; pad short speech to avoid dropping words
-        if wav.shape[0] < int(WHISPER_SR * 0.5):
-            pad_zeros = torch.zeros(int(WHISPER_SR * 0.5) - wav.shape[0], dtype=wav.dtype)
-            wav = torch.cat([wav, pad_zeros])
-
         inputs = self.processor(wav.numpy(), sampling_rate=WHISPER_SR, return_tensors="pt")
         input_features = inputs.input_features.to(self.device)
         if self.device.type == "cuda" and input_features.dtype == torch.float32:
@@ -150,7 +138,7 @@ class WhisperTranscriber:
             raise ValueError("File audio rỗng")
         peak_amp = float(wav.abs().max())
         rms = float(torch.sqrt(torch.mean(wav ** 2)))
-        if peak_amp < 0.006 or rms < 0.001:
+        if peak_amp < 0.015 or rms < 0.003:
             raise ValueError(f"Không phát hiện tiếng người trong audio (VAD: peak={peak_amp:.4f}, rms={rms:.4f})")
 
         chunk_samples = int(WHISPER_CHUNK_SEC * WHISPER_SR)
