@@ -93,7 +93,8 @@ class WhisperTranscriber:
 
     def _generate(self, input_features: torch.Tensor) -> torch.Tensor:
         name = self.model_name.lower()
-        max_tokens = getattr(self, "max_new_tokens", 448)
+        max_pos = getattr(getattr(self.model, "config", None), "max_target_positions", 448)
+        max_tokens = min(getattr(self, "max_new_tokens", 440), max_pos - 8)
 
         if name.endswith(".en"):
             # English-only checkpoints: no language/task prefix tokens
@@ -108,7 +109,7 @@ class WhisperTranscriber:
             )
 
         # Multilingual (medium/small/tiny): forced_decoder_ids uses ~4 prefix tokens
-        max_tokens = min(max_tokens, 444)
+        max_tokens = min(max_tokens, max_pos - 12)
         return self.model.generate(
             input_features,
             max_new_tokens=max_tokens,

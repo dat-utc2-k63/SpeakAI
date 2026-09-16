@@ -223,75 +223,93 @@ class L2MDDModel(nn.Module):
             sp = spans[i] if i < len(spans) else None
             w_ctx = phone_to_word.get(i, {})
 
-            # L2-MDD diagnostic trigger:
-            # Uses sensitivity_threshold (default 0.25) to detect phonological errors.
-            # Triggers if any error class probability exceeds the threshold, or if error mass is significant.
-            thresh = float(sensitivity_threshold)
-            is_suspicious = False
-            if pred_class_id == ERR_DEL and p_del >= thresh:
-                is_suspicious = True
-            elif pred_class_id == ERR_ADD and p_add >= thresh:
-                is_suspicious = True
-            elif pred_class_id == ERR_SUB and p_sub >= thresh:
-                is_suspicious = True
-            elif err_prob >= max(0.35, thresh * 1.3) and p_correct < 0.65:
-                is_suspicious = True
+            # ── Acoustic CTC & L2-MDD Sensitive Diagnosis ──
+            # Whisper normalizes transcript to standard English, masking speech errors.
+            # We directly evaluate acoustic CTC logits over the phoneme span [sf, ef]
+            # to verify what the speaker actually pronounced vs the reference target.
+            target_base = target_phone.rstrip("012")
+            target_feat = get_features(target_phone)
+            target_is_vowel = target_feat.is_vowel if target_feat else False
+            typs = TYPICAL_SUBSTITUTIONS.get(target_base, [])
 
             actual_phone = target_phone
-            actual_confidence = p_correct
+            is_suspicious = False
+            best_cand = None
+            cand_margin = 0.0
 
-            if is_suspicious:
-                if pred_class_name == "deletion" or (pred_class_id == ERR_DEL and p_del >= 0.40):
+            if sp and sp.end_frame >= sp.start_frame:
+                sf = max(0, sp.start_frame)
+                ef = min(ctc_logits.shape[0] - 1, sp.end_frame)
+                if ef >= sf:
+                    span_ctc = ctc_logits[sf : ef + 1].max(0).values.clone()
+                    blank_logit = span_ctc[0].item() if len(span_ctc) > 0 else -100.0
+                    span_ctc[:3] = -1e9  # mask <pad>, <unk>, |
+
+                    target_id = self.ctc_aligner.token2id.get(target_phone)
+                    target_logit = span_ctc[target_id].item() if (target_id is not None and target_id < len(span_ctc)) else -100.0
+
+                    # 1. Acoustic Deletion Check: Dropped coda consonant in word-final position
+                    if w_ctx.get("is_last", False) and not target_is_vowel:
+                        if target_logit < -9.2 and (blank_logit > target_logit + 3.0 or p_del >= 0.035):
+                            actual_phone = "[DELETION]"
+                            pred_class_name = "deletion"
+                            is_suspicious = True
+                            err_prob = max(err_prob, 0.75)
+
+                    # 2. Acoustic Substitution Check: Compare top candidates against target
+                    if not is_suspicious:
+                        top_indices = torch.topk(span_ctc, k=min(12, span_ctc.shape[0])).indices.cpu().tolist()
+                        for tid in top_indices:
+                            cand_phone = vocab[tid] if tid < len(vocab) else ""
+                            if not cand_phone or cand_phone in ("<pad>", "<unk>", "|"):
+                                continue
+                            cand_feat = get_features(cand_phone)
+                            cand_is_vowel = cand_feat.is_vowel if cand_feat else False
+                            # Consonants must never be substituted by vowels and vice-versa
+                            if cand_is_vowel != target_is_vowel:
+                                continue
+                            cand_base = cand_phone.rstrip("012")
+                            if cand_base == target_base:
+                                best_cand = target_phone
+                                break
+
+                            cand_logit = span_ctc[tid].item()
+                            margin = cand_logit - target_logit
+
+                            is_typ = cand_base in typs
+                            manner_match = (cand_feat and target_feat and cand_feat.manner == target_feat.manner)
+                            # Calibrated acoustic threshold:
+                            # Typical L2 transfer errors (CH->SH, TH->T/S, Z->S): margin >= 0.5
+                            # Same manner of articulation (e.g. stops/fricatives): margin >= 1.5
+                            # Dissimilar manner: margin >= 2.2
+                            thresh = 0.5 if is_typ else (1.5 if manner_match else 2.2)
+
+                            if margin >= thresh:
+                                best_cand = cand_phone
+                                cand_margin = margin
+                                break
+
+                        if best_cand and best_cand.rstrip("012") != target_base:
+                            actual_phone = best_cand
+                            pred_class_name = "substitution"
+                            is_suspicious = True
+                            err_prob = max(err_prob, min(0.90, 0.50 + cand_margin * 0.12))
+
+            # 3. Model Prior Fallback if no acoustic substitution triggered
+            if not is_suspicious:
+                thresh = float(sensitivity_threshold)
+                if pred_class_id == ERR_DEL and p_del >= max(0.08, thresh * 0.4):
                     actual_phone = "[DELETION]"
-                elif pred_class_name == "addition" or (pred_class_id == ERR_ADD and p_add >= 0.45):
+                    pred_class_name = "deletion"
+                    is_suspicious = True
+                elif pred_class_id == ERR_ADD and p_add >= max(0.10, thresh * 0.45):
                     actual_phone = "[ADDITION]"
-                else:
-                    # Substitution case
-                    target_base = target_phone.rstrip("012")
-                    target_feat = get_features(target_phone)
-                    target_is_vowel = target_feat.is_vowel if target_feat else False
-
-                    best_cand = None
-                    if sp and sp.end_frame >= sp.start_frame:
-                        sf = max(0, sp.start_frame)
-                        ef = min(ctc_logits.shape[0] - 1, sp.end_frame)
-                        if ef >= sf:
-                            span_ctc = ctc_logits[sf : ef + 1].max(0).values.clone()
-                            span_ctc[:3] = -1e9  # mask <pad>, <unk>, |
-                            target_id = self.ctc_aligner.token2id.get(target_phone)
-                            target_logit = span_ctc[target_id].item() if (target_id is not None and target_id < len(span_ctc)) else -100.0
-
-                            # Evaluate top acoustic candidates
-                            top_indices = torch.topk(span_ctc, k=min(15, span_ctc.shape[0])).indices.cpu().tolist()
-                            for tid in top_indices:
-                                cand_phone = vocab[tid] if tid < len(vocab) else ""
-                                if not cand_phone or cand_phone in ("<pad>", "<unk>", "|"):
-                                    continue
-                                cand_feat = get_features(cand_phone)
-                                cand_is_vowel = cand_feat.is_vowel if cand_feat else False
-                                # Consonants must never be substituted by vowels and vice-versa
-                                if cand_is_vowel != target_is_vowel:
-                                    continue
-                                cand_base = cand_phone.rstrip("012")
-                                if cand_base == target_base:
-                                    best_cand = target_phone
-                                    break
-                                cand_logit = span_ctc[tid].item()
-                                # Only accept candidate if acoustic peak significantly exceeds target logit
-                                if cand_logit > target_logit + 3.0:
-                                    best_cand = cand_phone
-                                    break
-
-                    if best_cand and best_cand != target_phone:
-                        actual_phone = best_cand
-                    else:
-                        typs = TYPICAL_SUBSTITUTIONS.get(target_base, [])
-                        if typs and p_sub >= 0.65:
-                            actual_phone = typs[0]
-                        else:
-                            # Not enough acoustic proof of substitution -> retain target
-                            actual_phone = target_phone
-                            is_suspicious = False
+                    pred_class_name = "addition"
+                    is_suspicious = True
+                elif (pred_class_id == ERR_SUB or p_sub >= 0.08) and typs:
+                    actual_phone = typs[0]
+                    pred_class_name = "substitution"
+                    is_suspicious = True
 
             # If target phone equals actual phone, it is NOT an error
             if actual_phone.rstrip("012") == target_phone.rstrip("012") and pred_class_name not in ("deletion", "addition"):

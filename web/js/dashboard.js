@@ -598,32 +598,40 @@ import { supabase } from './supabase.js';
           currentApiResult = { ...resultObj, llm_feedback: llmFeedback };
 
           // Trích xuất điểm trung bình của học viên từ resultObj.student
-          let total = 0, acc = 0, flu = 0, pro = 0;
-          const sentences = resultObj.student?.sentences || [];
-          if (sentences.length > 0) {
-            let count = 0;
-            for (const s of sentences) {
-              if (s.scores) {
-                total += s.scores.total || 0;
-                acc += s.scores.accuracy || 0;
-                flu += s.scores.fluency || 0;
-                pro += s.scores.prosodic || 0;
-                count++;
-              }
-            }
-            if (count > 0) {
-              total /= count; acc /= count; flu /= count; pro /= count;
+          let sTotal = 0, sAcc = 0, sFlu = 0, sPro = 0;
+          const sSentences = resultObj.student?.sentences || [];
+          let sCount = 0;
+          for (const s of sSentences) {
+            if (s.scores) {
+              sTotal += s.scores.total || 0;
+              sAcc += s.scores.accuracy || 0;
+              sFlu += s.scores.fluency || 0;
+              sPro += s.scores.prosodic || 0;
+              sCount++;
             }
           }
+          if (sCount > 0) {
+            sTotal /= sCount; sAcc /= sCount; sFlu /= sCount; sPro /= sCount;
+          }
 
-          document.getElementById('resTotal').textContent = total.toFixed(1);
-          document.getElementById('resAcc').textContent = acc.toFixed(1);
-          document.getElementById('resFlu').textContent = flu.toFixed(1);
-          document.getElementById('resPro').textContent = pro.toFixed(1);
-          if (document.getElementById('resGrammar')) document.getElementById('resGrammar').textContent = '--';
-          if (document.getElementById('resContext')) document.getElementById('resContext').textContent = '--';
+          // Trích xuất điểm trung bình của giáo viên từ resultObj.teacher
+          let tTotal = 0, tAcc = 0, tFlu = 0, tPro = 0;
+          const tSentences = resultObj.teacher?.sentences || [];
+          let tCount = 0;
+          for (const s of tSentences) {
+            if (s.scores) {
+              tTotal += s.scores.total || 0;
+              tAcc += s.scores.accuracy || 0;
+              tFlu += s.scores.fluency || 0;
+              tPro += s.scores.prosodic || 0;
+              tCount++;
+            }
+          }
+          if (tCount > 0) {
+            tTotal /= tCount; tAcc /= tCount; tFlu /= tCount; tPro /= tCount;
+          }
 
-          // Level badge
+          // Level badge helper
           function updateLevelBadge(score) {
             const levelBadge = document.getElementById('resLevelBadge');
             if (!levelBadge) return;
@@ -633,7 +641,45 @@ import { supabase } from './supabase.js';
             levelBadge.textContent = levelLabels[level] || level;
             levelBadge.className = `badge fs-6 ${levelColors[level] || 'bg-secondary'}`;
           }
-          updateLevelBadge(total);
+
+          function renderSummaryScores(total, acc, flu, pro) {
+            document.getElementById('resTotal').textContent = total.toFixed(1);
+            document.getElementById('resAcc').textContent = acc.toFixed(1);
+            document.getElementById('resFlu').textContent = flu.toFixed(1);
+            document.getElementById('resPro').textContent = pro.toFixed(1);
+            updateLevelBadge(total);
+          }
+
+          renderSummaryScores(sTotal, sAcc, sFlu, sPro);
+          if (document.getElementById('resGrammar')) document.getElementById('resGrammar').textContent = '--';
+          if (document.getElementById('resContext')) document.getElementById('resContext').textContent = '--';
+
+          // Quản lý nút chuyển đổi điểm Học viên / Giáo viên
+          const switcher = document.getElementById('scoreRoleSwitcher');
+          const btnStu = document.getElementById('btnScoreStudent');
+          const btnTea = document.getElementById('btnScoreTeacher');
+          if (switcher && btnStu && btnTea) {
+            if (tCount > 0) {
+              switcher.classList.remove('d-none');
+              btnStu.innerHTML = `<i class="bi bi-mortarboard me-1"></i>Học viên (${sTotal.toFixed(1)})`;
+              btnTea.innerHTML = `<i class="bi bi-person-video3 me-1"></i>Giáo viên (${tTotal.toFixed(1)})`;
+              btnStu.classList.add('active');
+              btnTea.classList.remove('active');
+
+              btnStu.onclick = () => {
+                btnStu.classList.add('active');
+                btnTea.classList.remove('active');
+                renderSummaryScores(sTotal, sAcc, sFlu, sPro);
+              };
+              btnTea.onclick = () => {
+                btnTea.classList.add('active');
+                btnStu.classList.remove('active');
+                renderSummaryScores(tTotal, tAcc, tFlu, tPro);
+              };
+            } else {
+              switcher.classList.add('d-none');
+            }
+          }
 
           // Hide model comparison table (SpeechOcean762 is sole scoring model)
           const comparisonInfo = document.getElementById('modelComparisonInfo');
@@ -782,30 +828,15 @@ import { supabase } from './supabase.js';
               <audio controls src="${turn.audio}"></audio>
             </div>` : '';
 
-          if (isTeacher) {
-            const hasScores = turn.scored && turn.scores && turn.scores.total !== undefined;
-            const scorePills = hasScores ? `
-              <div class="d-flex align-items-center gap-2 flex-wrap mt-2 pt-2 border-top border-secondary border-opacity-25">
-                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Tổng: ${Number(sc.total).toFixed(1)}</span>
-                <span class="badge bg-info-subtle text-info border border-info-subtle">Chuẩn: ${Number(sc.accuracy).toFixed(1)}</span>
-                <span class="badge bg-success-subtle text-success border border-success-subtle">Lưu loát: ${Number(sc.fluency).toFixed(1)}</span>
-                <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Ngữ điệu: ${Number(sc.prosodic).toFixed(1)}</span>
-              </div>` : '';
-
-            return `
-      <div class="timeline-item timeline-teacher">
-        <div class="timeline-dot teacher-dot"><i class="bi bi-person-video3"></i></div>
-        <div class="speech-bubble-enhanced teacher-bubble-enhanced">
-          <div class="d-flex justify-content-between align-items-center mb-1">
-            <div class="small text-muted fw-semibold"><i class="bi bi-person-badge me-1 text-primary"></i>Giáo viên</div>
-            ${hasScores ? '<span class="badge bg-success-subtle text-success border border-success-subtle smaller"><i class="bi bi-check2-circle me-1"></i>Đã chấm điểm</span>' : '<span class="badge bg-secondary-subtle text-muted border border-secondary-subtle smaller">Không chấm điểm</span>'}
-          </div>
-          <div class="teacher-transcript text-white-50">${turn.transcript}</div>
-          ${scorePills}
-          ${audioHtml}
-        </div>
-      </div>`;
-          }
+          const hasScores = turn.scored && turn.scores && turn.scores.total !== undefined;
+          const scorePillsHtml = hasScores ? `
+            <div class="score-pill-group">
+              <span class="score-pill-total">Total: ${(sc.total || 0).toFixed(1)}</span>
+              <span class="score-pill-sub">Acc: ${(sc.accuracy || 0).toFixed(1)}</span>
+              <span class="score-pill-sub">Flu: ${(sc.fluency || 0).toFixed(1)}</span>
+              <span class="score-pill-sub">Pro: ${(sc.prosodic || 0).toFixed(1)}</span>
+            </div>` : `
+            <span class="badge bg-secondary-subtle text-muted border border-secondary-subtle smaller">Không chấm điểm</span>`;
 
           // 1. Build Clean Correction Box & Collect words that actually have feedback
           const wordsWithFeedback = new Map(); // word_clean -> severity ('bad' or 'warning')
@@ -877,32 +908,51 @@ import { supabase } from './supabase.js';
             </div>`;
           }).join('');
 
-          return `
-    <div class="timeline-item timeline-student">
-      <div class="speech-bubble-enhanced student-bubble-enhanced">
-        <div class="d-flex justify-content-between align-items-center mb-1">
-          <div class="small text-muted fw-semibold"><i class="bi bi-mortarboard me-1 text-teal"></i>Học viên</div>
-          <div class="score-pill-group">
-            <span class="score-pill-total">Total: ${(sc.total || 0).toFixed(1)}</span>
-            <span class="score-pill-sub">Acc: ${(sc.accuracy || 0).toFixed(1)}</span>
-            <span class="score-pill-sub">Flu: ${(sc.fluency || 0).toFixed(1)}</span>
-            <span class="score-pill-sub">Pro: ${(sc.prosodic || 0).toFixed(1)}</span>
+          if (isTeacher) {
+            return `
+      <div class="timeline-item timeline-teacher">
+        <div class="timeline-dot teacher-dot"><i class="bi bi-person-video3"></i></div>
+        <div class="speech-bubble-enhanced teacher-bubble-enhanced">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="small text-muted fw-semibold"><i class="bi bi-person-badge me-1 text-primary"></i>Giáo viên</div>
+            ${scorePillsHtml}
           </div>
+
+          <!-- Word-by-word interactive stream with IPA -->
+          <div class="word-token-stream">
+            ${wordTokensHtml}
+          </div>
+
+          <!-- Clean, unified correction box (if any) -->
+          ${feedbackBoxHtml}
+
+          <!-- Audio Player -->
+          ${audioHtml}
         </div>
+      </div>`;
+          }
 
-        <!-- Word-by-word interactive stream with IPA -->
-        <div class="word-token-stream">
-          ${wordTokensHtml}
+          return `
+      <div class="timeline-item timeline-student">
+        <div class="speech-bubble-enhanced student-bubble-enhanced">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="small text-muted fw-semibold"><i class="bi bi-mortarboard me-1 text-teal"></i>Học viên</div>
+            ${scorePillsHtml}
+          </div>
+
+          <!-- Word-by-word interactive stream with IPA -->
+          <div class="word-token-stream">
+            ${wordTokensHtml}
+          </div>
+
+          <!-- Clean, unified correction box (if any) -->
+          ${feedbackBoxHtml}
+
+          <!-- Audio Player -->
+          ${audioHtml}
         </div>
-
-        <!-- Clean, unified correction box (if any) -->
-        ${feedbackBoxHtml}
-
-        <!-- Audio Player -->
-        ${audioHtml}
-      </div>
-      <div class="timeline-dot student-dot"><i class="bi bi-mortarboard"></i></div>
-    </div>`;
+        <div class="timeline-dot student-dot"><i class="bi bi-mortarboard"></i></div>
+      </div>`;
         }
 
         async function doSaveAssessment() {
