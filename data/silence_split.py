@@ -226,11 +226,12 @@ def export_diarization_clips(
     speaker_key: str,
     preprocess: Optional[PreprocessConfig] = None,
     *,
-    merge_gap_sec: float = 0.35,
+    merge_gap_sec: float = 0.55,
     min_duration_sec: float = 0.2,
+    pad_sec: float = 0.15,
     prefix: str = "sent",
 ) -> List[Dict[str, Any]]:
-    """Cut clips from original audio using ECAPA diarization time spans."""
+    """Cut clips from original audio using ECAPA diarization time spans with safety padding."""
     label_map = {
         "A": "Speaker A",
         "B": "Speaker B",
@@ -283,8 +284,10 @@ def export_diarization_clips(
     exported: List[Dict[str, Any]] = []
 
     for start, end in merged:
-        s = max(0, int(start * sr))
-        e = min(mono.shape[0], int(end * sr))
+        padded_start = max(0.0, start - pad_sec)
+        padded_end = min(float(mono.shape[0]) / sr, end + pad_sec)
+        s = max(0, int(padded_start * sr))
+        e = min(mono.shape[0], int(padded_end * sr))
         clip = mono[s:e].contiguous()
         if clip.numel() < min_samples:
             continue

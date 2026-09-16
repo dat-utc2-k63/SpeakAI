@@ -487,19 +487,26 @@ QUY TẮC CHẤM ĐIỂM:
 1. Ngữ cảnh & Phản xạ (score_context 0-10 - Gatekeeper):
    - Đánh giá khả năng hiểu và phản hồi ăn khớp với câu hỏi của giáo viên.
    - Cộc lốc (1-2 từ) hoặc lạc đề (score_context < 4.5): score_total BẮT BUỘC <= 3.5 - 4.5. Điểm ngữ pháp KHÔNG ĐƯỢC can thiệp kéo điểm tổng lên.
-2. Ngữ pháp & Từ vựng (score_grammar 0-10): Đánh giá cấu trúc, chia thì. Nói vấp/từ đệm đầu lượt không bị trừ điểm.
+2. Ngữ pháp & Từ vựng (score_grammar 0-10):
+   - BẮT BUỘC kiểm tra chi tiết các câu của Học viên để phát hiện các điểm sai ngữ pháp, chia sai thì, trật tự từ, giới từ, mạo từ hay dùng sai từ.
+   - Luôn liệt kê chi tiết các lỗi trong "grammar_errors". Với mỗi lỗi:
+     + "turn_index": số thứ tự lượt của câu nói bị lỗi (int).
+     + "error_text": cụm từ học viên nói bị lỗi ngữ pháp.
+     + "fix": cách sửa lại chuẩn xác, tự nhiên theo văn phong bản xứ.
+     + "explanation": giải thích chi tiết lỗi bằng tiếng Việt (nêu rõ lý do sai và quy tắc ngữ pháp đúng).
+   - Nếu học viên nói chuẩn xác không mắc lỗi ngữ pháp nào, để "grammar_errors": [].
 3. Điểm tổng thể (score_total 0-10): Kết hợp Phát âm + Ngữ pháp + Ngữ cảnh theo trần trên.
 
 4. Phạm vi đánh giá:
    - Toàn bộ điểm số, nhận xét (conversation_summary), grammar_errors, tips và better_dialogue_expressions CHỈ dành riêng cho Học viên (Student).
-   - TUYỆT ĐỐI KHÔNG bắt lỗi, không sửa lỗi, không đưa lời khuyên hay nhận xét tiêu cực cho Giáo viên (Teacher).
+   - TUYỆT ĐỐI KHÔNG bắt lỗi, không sửa lỗi và không nhận xét tiêu cực về Giáo viên (Teacher).
 
 OUTPUT JSON FORMAT:
 {
   "score_total": <float 0-10>,
   "score_grammar": <float 0-10>,
   "score_context": <float 0-10>,
-  "conversation_summary": "<Nhận xét sư phạm 2-3 câu tiếng Việt dành riêng cho Học viên>",
+  "conversation_summary": "<Nhận xét sư phạm chi tiết 2-3 câu tiếng Việt dành riêng cho Học viên>",
   "grammar_errors": [{"turn_index": <int>, "error_text": "...", "fix": "...", "explanation": "..."}],
   "communication_tips": ["<lời khuyên 1>", "<lời khuyên 2>"],
   "better_dialogue_expressions": ["<1 câu mẫu nâng cao>"]
@@ -564,11 +571,11 @@ export async function evaluateConversationWithAi({
 ${conversationTranscript}
 
 ĐIỂM PHÁT ÂM HỌC VIÊN (SpeechOcean): Điểm tổng=${rawPronTotal.toFixed(1)}/10 [Chi tiết: Accuracy=${acc.toFixed(1)}, Fluency=${flu.toFixed(1)}, Prosody=${pro.toFixed(1)}]
-Đánh giá toàn diện năng lực hội thoại của Học viên (Student); kết hợp Điểm tổng phát âm với Ngữ pháp & Ngữ cảnh để chốt score_total (KHÔNG tự tính lại điểm âm học); dùng các chỉ số chi tiết để nhận xét sâu sắc. Trả về đúng JSON.`;
+Đánh giá toàn diện năng lực hội thoại của Học viên (Student); kiểm tra kỹ lưỡng các lỗi sai ngữ pháp của học viên để đưa vào grammar_errors; kết hợp Điểm tổng phát âm với Ngữ pháp & Ngữ cảnh để chốt score_total (KHÔNG tự tính lại điểm âm học). Trả về đúng JSON.`;
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -619,17 +626,8 @@ ${conversationTranscript}
       scoreTotal = Math.min(scoreTotal, Math.max(2.5, scoreContext + 0.6), 4.5);
     }
 
-    // Đảm bảo chỉ giữ lại lỗi ngữ pháp của Học viên
-    const rawGrammarErrors = Array.isArray(parsed.grammar_errors) ? parsed.grammar_errors : [];
-    const studentGrammarErrors = rawGrammarErrors.filter(ge => {
-      if (ge && ge.turn_index != null) {
-        const turn = dialogueTurns[ge.turn_index - 1] || dialogueTurns[ge.turn_index];
-        if (turn && (turn.role === 'teacher' || turn.speaker === 'Teacher')) {
-          return false;
-        }
-      }
-      return true;
-    });
+    // Giữ lại lỗi ngữ pháp do AI trả về
+    const studentGrammarErrors = Array.isArray(parsed.grammar_errors) ? parsed.grammar_errors : [];
 
     return {
       score_total: scoreTotal,
@@ -692,12 +690,43 @@ function fallbackConversationHeuristic({ studentTurns, studentFullText, pronunci
     total = Math.min(total, Math.max(2.5, ctx + 0.6), 4.5);
   }
 
+  const fallbackGrammarErrors = [];
+  const lowerText = studentFullText.toLowerCase();
+  if (/\bi is\b/.test(lowerText)) {
+    fallbackGrammarErrors.push({
+      error_text: "I is",
+      fix: "I am",
+      explanation: "Đại từ 'I' đi với động từ to be ở hiện tại là 'am', không dùng 'is'."
+    });
+  }
+  if (/\bi are\b/.test(lowerText)) {
+    fallbackGrammarErrors.push({
+      error_text: "I are",
+      fix: "I am",
+      explanation: "Đại từ 'I' đi với động từ to be ở hiện tại là 'am', không dùng 'are'."
+    });
+  }
+  if (/\b(he|she|it) don't\b/.test(lowerText)) {
+    fallbackGrammarErrors.push({
+      error_text: "don't (với He/She/It)",
+      fix: "doesn't",
+      explanation: "Chủ ngữ ngôi thứ 3 số ít đi với trợ động từ phủ định 'doesn't'."
+    });
+  }
+  if (/\bmany people is\b/.test(lowerText)) {
+    fallbackGrammarErrors.push({
+      error_text: "many people is",
+      fix: "many people are",
+      explanation: "'People' là danh từ số nhiều, đi với động từ to be 'are'."
+    });
+  }
+
   return {
     score_total: clampScore(total, 0, 10),
     score_grammar: clampScore(gram, 0, 10),
     score_context: clampScore(ctx, 0, 10),
     conversation_summary: summary,
-    grammar_errors: [],
+    grammar_errors: fallbackGrammarErrors,
     communication_tips: ['Nên sử dụng thêm các từ nối như "Because", "However", "In my experience" để kéo dài lượt nói tự nhiên.'],
     better_dialogue_expressions: [],
     is_fallback: true,

@@ -642,17 +642,20 @@ import { supabase } from './supabase.js';
             levelBadge.className = `badge fs-6 ${levelColors[level] || 'bg-secondary'}`;
           }
 
-          function renderSummaryScores(total, acc, flu, pro) {
+          let sGrammar = '--', sContext = '--';
+          let tGrammar = '--', tContext = '--';
+
+          function renderSummaryScores(total, acc, flu, pro, gram = '--', ctx = '--') {
             document.getElementById('resTotal').textContent = total.toFixed(1);
             document.getElementById('resAcc').textContent = acc.toFixed(1);
             document.getElementById('resFlu').textContent = flu.toFixed(1);
             document.getElementById('resPro').textContent = pro.toFixed(1);
+            if (document.getElementById('resGrammar')) document.getElementById('resGrammar').textContent = gram;
+            if (document.getElementById('resContext')) document.getElementById('resContext').textContent = ctx;
             updateLevelBadge(total);
           }
 
-          renderSummaryScores(sTotal, sAcc, sFlu, sPro);
-          if (document.getElementById('resGrammar')) document.getElementById('resGrammar').textContent = '--';
-          if (document.getElementById('resContext')) document.getElementById('resContext').textContent = '--';
+          renderSummaryScores(sTotal, sAcc, sFlu, sPro, sGrammar, sContext);
 
           // Quản lý nút chuyển đổi điểm Học viên / Giáo viên
           const switcher = document.getElementById('scoreRoleSwitcher');
@@ -669,12 +672,12 @@ import { supabase } from './supabase.js';
               btnStu.onclick = () => {
                 btnStu.classList.add('active');
                 btnTea.classList.remove('active');
-                renderSummaryScores(sTotal, sAcc, sFlu, sPro);
+                renderSummaryScores(sTotal, sAcc, sFlu, sPro, sGrammar, sContext);
               };
               btnTea.onclick = () => {
                 btnTea.classList.add('active');
                 btnStu.classList.remove('active');
-                renderSummaryScores(tTotal, tAcc, tFlu, tPro);
+                renderSummaryScores(tTotal, tAcc, tFlu, tPro, tGrammar, tContext);
               };
             } else {
               switcher.classList.add('d-none');
@@ -722,14 +725,11 @@ import { supabase } from './supabase.js';
 
             if (aiEval && aiEval.score_total != null) {
               sTotal = aiEval.score_total;
-              document.getElementById('resTotal').textContent = sTotal.toFixed(1);
-              if (document.getElementById('resGrammar')) {
-                document.getElementById('resGrammar').textContent = Number(aiEval.score_grammar || 0).toFixed(1);
+              sGrammar = Number(aiEval.score_grammar || 0).toFixed(1);
+              sContext = Number(aiEval.score_context || 0).toFixed(1);
+              if (!btnTea || !btnTea.classList.contains('active')) {
+                renderSummaryScores(sTotal, sAcc, sFlu, sPro, sGrammar, sContext);
               }
-              if (document.getElementById('resContext')) {
-                document.getElementById('resContext').textContent = Number(aiEval.score_context || 0).toFixed(1);
-              }
-              updateLevelBadge(sTotal);
 
               if (btnStu) {
                 btnStu.innerHTML = `<i class="bi bi-mortarboard me-1"></i>Học viên (${sTotal.toFixed(1)})`;
@@ -774,6 +774,11 @@ import { supabase } from './supabase.js';
                           </div>
                         `).join('')}
                       </div>
+                    </div>`;
+                } else {
+                  html += `
+                    <div class="mb-3 p-2 rounded bg-dark border border-secondary border-opacity-25 small text-success">
+                      <i class="bi bi-check-circle-fill me-1"></i>Ngữ pháp: Học viên phản xạ và diễn đạt các cấu trúc ngữ pháp đạt chuẩn trong lượt nói.
                     </div>`;
                 }
 
