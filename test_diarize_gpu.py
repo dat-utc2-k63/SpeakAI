@@ -36,6 +36,7 @@ def run_test(audio_path: str, teacher_ref: str = None, student_ref: str = None):
     splitter = TwoSpeakerSplitter(
         device=device,
         embedder=embedder,
+        vad_threshold_db=-42.0,
         cluster_window_sec=1.5,
         boundary_window_sec=0.5,
         min_speech_sec=0.25,

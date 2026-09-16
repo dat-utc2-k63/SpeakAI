@@ -210,14 +210,18 @@ class SpeakingPipeline:
         from speaker_diarize.pipeline import TwoSpeakerSplitter
         
         # ── Load TwoSpeakerSplitter on self.diarize_device (cuda:0) ──
+        diar_cfg = self.config.get("diarization") or {}
+        vad_thresh = float(diar_cfg.get("vad_threshold_db", -42.0))
+        consec_gap = float(diar_cfg.get("consecutive_merge_gap_sec", 2.5))
         self.diarizer = TwoSpeakerSplitter(
             device=self.diarize_device,
+            vad_threshold_db=vad_thresh,
             cluster_window_sec=1.5,
             boundary_window_sec=0.5,
             min_speech_sec=0.25,
             min_segment_sec=0.3,
             merge_gap_sec=0.5,
-            consecutive_merge_gap_sec=2.5,
+            consecutive_merge_gap_sec=consec_gap,
             step_sec=0.25,
             boundary_step_sec=0.05
         )

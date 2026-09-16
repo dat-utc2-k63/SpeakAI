@@ -189,11 +189,12 @@ class PronunciationScorer:
                 if duration_sec is not None and duration_sec < short_sec and raw < 8.2:
                     cal -= factor * (short_sec - duration_sec)
 
-                # Long duration adjustment (compensates for embedding dispersion on long clips > 6s):
-                long_sec = float(cal_cfg.get("long_duration_sec", 6.0))
-                long_factor = float(cal_cfg.get("long_duration_factor", 0.25))
+                # Long duration adjustment (compensates for embedding dispersion on long clips > 4.0s):
+                long_sec = float(cal_cfg.get("long_duration_sec", 4.0))
+                long_factor = float(cal_cfg.get("long_duration_factor", 0.28))
+                max_boost = float(cal_cfg.get("long_duration_max_boost", 2.5))
                 if duration_sec is not None and duration_sec > long_sec:
-                    cal += min(1.2, long_factor * (duration_sec - long_sec))
+                    cal += min(max_boost, long_factor * (duration_sec - long_sec))
                 raw = cal
 
         # Clamp to [0, 10] range
@@ -218,6 +219,30 @@ class PronunciationScorer:
                 result[aspect] = self.to_display_scale(
                     val, is_utterance=True, duration_sec=duration_sec
                 )
+
+        # Multi-granularity anchor for Accuracy on longer utterances:
+        # Prevents utterance pooling dispersion from degrading phoneme accuracy on long sentences.
+        if "phoneme_accuracy" in predictions:
+            pa = predictions["phoneme_accuracy"]
+            if isinstance(pa, torch.Tensor) and pa.numel() > 0:
+                pa_val = float(pa.mean().detach().cpu().item())
+                pa_disp = self.to_display_scale(pa_val, is_phone=True)
+                if "accuracy" in result:
+                    if duration_sec is not None and duration_sec > 4.5:
+                        w_pa = min(0.40, 0.15 + (duration_sec - 4.5) * 0.02)
+                    else:
+                        w_pa = 0.15
+                    result["accuracy"] = round(min(10.0, max(0.5, (1.0 - w_pa) * result["accuracy"] + w_pa * pa_disp)), 2)
+
+        # Multi-granularity anchor for Total score:
+        # Total is anchored with word_total and phoneme_accuracy via final_score.
+        calc_final = self.final_score(predictions, duration_sec=duration_sec)
+        if "total" in result:
+            w_final = min(0.60, 0.40 + (max(0.0, (duration_sec or 0.0) - 4.0) * 0.02))
+            result["total"] = round(min(10.0, max(0.5, (1.0 - w_final) * result["total"] + w_final * calc_final)), 2)
+        else:
+            result["total"] = calc_final
+
         return result
 
     def final_score(
@@ -231,25 +256,36 @@ class PronunciationScorer:
         parts = []
         w_sum = 0.0
 
+        w_utt = float(self.weights.get("utterance_total", 0.5))
+        w_word = float(self.weights.get("word_total", 0.25))
+        w_phone = float(self.weights.get("phoneme_accuracy", 0.25))
+
+        # Dynamically shift weight towards word and phoneme models on long clips:
+        if duration_sec is not None and duration_sec > 4.5:
+            shift = min(0.20, (duration_sec - 4.5) * 0.02)
+            w_utt = max(0.30, w_utt - shift)
+            w_word += shift / 2.0
+            w_phone += shift / 2.0
+
         if "utterance_total" in predictions:
             v = predictions["utterance_total"]
             v = float(v.detach().cpu().item()) if isinstance(v, torch.Tensor) else v
-            parts.append(self.weights["utterance_total"] * self.to_display_scale(v, is_utterance=True, duration_sec=duration_sec))
-            w_sum += self.weights["utterance_total"]
+            parts.append(w_utt * self.to_display_scale(v, is_utterance=True, duration_sec=duration_sec))
+            w_sum += w_utt
 
         if "word_total" in predictions:
             wt = predictions["word_total"]
             if isinstance(wt, torch.Tensor) and wt.numel() > 0:
                 v = float(wt.mean().detach().cpu().item())
-                parts.append(self.weights["word_total"] * self.to_display_scale(v, is_utterance=True, duration_sec=duration_sec))
-                w_sum += self.weights["word_total"]
+                parts.append(w_word * self.to_display_scale(v, is_utterance=True, duration_sec=duration_sec))
+                w_sum += w_word
 
         if "phoneme_accuracy" in predictions:
             pa = predictions["phoneme_accuracy"]
             if isinstance(pa, torch.Tensor) and pa.numel() > 0:
                 v = float(pa.mean().detach().cpu().item())
-                parts.append(self.weights["phoneme_accuracy"] * self.to_display_scale(v, is_utterance=True, duration_sec=duration_sec))
-                w_sum += self.weights["phoneme_accuracy"]
+                parts.append(w_phone * self.to_display_scale(v, is_phone=True))
+                w_sum += w_phone
 
         if w_sum == 0:
             return 0.0

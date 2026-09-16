@@ -135,8 +135,9 @@ scorer:
     offset: -3.20
     short_duration_sec: 3.5
     short_duration_factor: 0.75
-    long_duration_sec: 6.0
-    long_duration_factor: 0.25
+    long_duration_sec: 4.0
+    long_duration_factor: 0.28
+    long_duration_max_boost: 2.5
     phone_slope: 7.0
     phone_offset: -4.0
 
@@ -149,6 +150,10 @@ sentence_split:
   trim_edges: false
   trim_min_sec: 0.05
   diarization_merge_gap_sec: 0.2
+
+diarization:
+  vad_threshold_db: -42.0
+  consecutive_merge_gap_sec: 2.5
 """
 
 # models/__init__.py

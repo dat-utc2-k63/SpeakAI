@@ -214,9 +214,9 @@ class TwoSpeakerSplitter:
 
                 teacher_cluster = 0 if score_a >= score_b else 1
                 print(f"\n[Mapping Similarity]")
-                print(f"- Giáo viên (Teacher) so với Cluster 0: {sim_t0:.3f}, Cluster 1: {sim_t1:.3f}")
-                print(f"- Học sinh (Student)  so với Cluster 0: {sim_s0:.3f}, Cluster 1: {sim_s1:.3f}")
-                print(f"=> Quyết định: Gán Giáo viên = Cluster {teacher_cluster}, Học sinh = Cluster {1 - teacher_cluster}")
+                print(f"- Giao vien (Teacher) so voi Cluster 0: {sim_t0:.3f}, Cluster 1: {sim_t1:.3f}")
+                print(f"- Hoc sinh (Student)  so voi Cluster 0: {sim_s0:.3f}, Cluster 1: {sim_s1:.3f}")
+                print(f"=> Quyet dinh: Gan Giao vien = Cluster {teacher_cluster}, Hoc sinh = Cluster {1 - teacher_cluster}")
             else:
                 teacher_cluster = None
 
@@ -325,8 +325,8 @@ class TwoSpeakerSplitter:
                     # Quyết định role dựa trên so sánh độ tương đồng giọng thực tế
                     role = ROLE_TEACHER if t_score >= s_score else ROLE_STUDENT
                     
-                    # Lọc bỏ đoạn nhiễu/tạp âm không khớp với cả 2 người nói (< 0.35)
-                    if max(t_score, s_score) < 0.35:
+                    # Lọc bỏ đoạn nhiễu/tạp âm không khớp với cả 2 người nói (< 0.50)
+                    if max(t_score, s_score) < 0.50:
                         continue
                         
                 except ValueError:
