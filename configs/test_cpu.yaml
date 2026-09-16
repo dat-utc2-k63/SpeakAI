@@ -87,4 +87,7 @@ transformer:
 wavlm:
   freeze: true
   model_name: microsoft/wavlm-large
-  use_lora: false
+  use_lora: true
+  lora_r: 8
+  lora_alpha: 16
+  lora_target_modules: [q_proj, v_proj]

@@ -42,6 +42,24 @@ class Predictor:
         if load_progress is not None:
             load_progress.start(model_step, wavlm_name)
         try:
+            ckpt_candidate = checkpoint
+            if ckpt_candidate is None:
+                try:
+                    ckpt_candidate = resolve_checkpoint(self.config, model="pronunciation")
+                except Exception:
+                    ckpt_candidate = None
+
+            if ckpt_candidate and os.path.isfile(ckpt_candidate):
+                from models.checkpoint_utils import load_state_dict as _load_sd
+                sd_sample = _load_sd(ckpt_candidate, "cpu")
+                if any("lora" in k.lower() for k in sd_sample.keys()):
+                    if "wavlm" not in self.config:
+                        self.config["wavlm"] = {}
+                    self.config["wavlm"]["use_lora"] = True
+                    self.config["wavlm"].setdefault("lora_r", 8)
+                    self.config["wavlm"].setdefault("lora_alpha", 16)
+                    self.config["wavlm"].setdefault("lora_target_modules", ["q_proj", "v_proj"])
+
             self.model = PronunciationAssessmentModel(self.config).to(self.device)
             if load_progress is not None:
                 load_progress.finish(model_step)
@@ -180,19 +198,31 @@ class L2MDDPredictor:
                 wavlm_name = "microsoft/wavlm-large"
 
             from models.l2_mdd_model import L2MDDModel
-            self.model = L2MDDModel(wavlm_name=wavlm_name, ff_dim=2048).to(self.device)
+            from models.checkpoint_utils import load_state_dict as _load_sd
+
+            ckpt_path = None
+            sd = None
+            use_lora = False
+            try:
+                ckpt_path = resolve_checkpoint(self.config, model="l2_mdd", explicit=checkpoint)
+                if ckpt_path and os.path.isfile(ckpt_path):
+                    sd = _load_sd(ckpt_path, self.device)
+                    use_lora = any("lora" in k.lower() for k in sd.keys())
+            except FileNotFoundError as e:
+                print(f"Warning (L2-MDD): {e}")
+
+            self.model = L2MDDModel(wavlm_name=wavlm_name, ff_dim=2048, use_lora=use_lora).to(self.device)
 
             if load_progress is not None:
                 load_progress.finish(model_step)
                 load_progress.start(ckpt_step, "l2_mdd_best.pt")
-            try:
-                ckpt_path = resolve_checkpoint(self.config, model="l2_mdd", explicit=checkpoint)
-                from models.checkpoint_utils import load_state_dict as _load_sd
-                self.model.load_state_dict(_load_sd(ckpt_path, self.device), strict=False)
+
+            if sd is not None:
+                self.model.load_state_dict(sd, strict=False)
                 self._ckpt_path = ckpt_path
-            except FileNotFoundError as e:
-                print(f"Warning (L2-MDD): {e}")
+            else:
                 self._ckpt_path = None
+
             if load_progress is not None:
                 load_progress.finish(ckpt_step, str(self._ckpt_path or "không có checkpoint"))
         except Exception as exc:

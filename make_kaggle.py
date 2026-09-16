@@ -4,8 +4,9 @@ Script sinh SpeakAI-Colab.ipynb - standalone, audio đã upload, không L2-MDD, 
 """
 import json
 import os
+from pathlib import Path
 
-ROOT = "d:/SpeakAI-Eval"
+ROOT = str(Path(__file__).resolve().parent)
 
 INCLUDE_FILES = [
     "paths.py",
@@ -89,7 +90,10 @@ asr:
 wavlm:
   model_name: pretrained_models/wavlm-large
   freeze: true
-  use_lora: false
+  use_lora: true
+  lora_r: 8
+  lora_alpha: 16
+  lora_target_modules: [q_proj, v_proj]
 
 transformer:
   num_layers: 3

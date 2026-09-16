@@ -87,9 +87,20 @@ class L2MDDModel(nn.Module):
         graph_hidden: int = 256,
         num_heads: int = 4,
         num_classes: int = 4,
+        use_lora: bool = False,
+        lora_r: int = 8,
+        lora_alpha: int = 16,
+        lora_target_modules: Optional[List[str]] = None,
     ):
         super().__init__()
-        self.wavlm = WavLMEncoder(model_name=wavlm_name, freeze=True)
+        self.wavlm = WavLMEncoder(
+            model_name=wavlm_name,
+            freeze=True,
+            use_lora=use_lora,
+            lora_r=lora_r,
+            lora_alpha=lora_alpha,
+            lora_target_modules=lora_target_modules,
+        )
         d = self.wavlm.output_dim  # 1024
 
         self.task_transformer = TaskTransformerEncoder(

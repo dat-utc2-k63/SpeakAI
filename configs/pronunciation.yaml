@@ -41,9 +41,12 @@ asr:
     text_vi_regex: true
 
 wavlm:
-  model_name: /content/drive/MyDrive/SpeakAI-Eval/pretrained_models/wavlm-large
+  model_name: microsoft/wavlm-large
   freeze: true
-  use_lora: false
+  use_lora: true
+  lora_r: 8
+  lora_alpha: 16
+  lora_target_modules: [q_proj, v_proj]
 
 transformer:
   num_layers: 3
