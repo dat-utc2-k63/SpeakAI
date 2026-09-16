@@ -491,7 +491,7 @@ run_cells.append(code_cell([
     "    for s in teacher_sentences:\n",
     "        turns.append({\n",
     "            'role': 'teacher',\n",
-    "            'scored': 'scores' in s,\n",
+    "            'scored': bool(s.get('scored') and s.get('scores')),\n",
     "            'start_sec': s.get('start_sec'),\n",
     "            'end_sec': s.get('end_sec'),\n",
     "            'transcript': s.get('transcript', ''),\n",

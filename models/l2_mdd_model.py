@@ -37,11 +37,15 @@ TYPICAL_SUBSTITUTIONS: Dict[str, List[str]] = {
     "DH": ["D", "Z", "V"],
     "SH": ["S", "CH"],
     "ZH": ["Z", "JH"],
-    "CH": ["T", "S"],
-    "JH": ["Z", "D"],
+    "CH": ["SH", "T", "S"],
+    "JH": ["CH", "Z", "D"],
     "V":  ["B", "F"],
     "W":  ["V"],
     "Z":  ["S"],
+    "S":  ["SH", "Z"],
+    "F":  ["P", "V"],
+    "M":  ["N"],
+    "N":  ["L", "NG"],
     "NG": ["N"],
     "R":  ["L", "W"],
     "L":  ["R", "N"],
@@ -52,6 +56,7 @@ TYPICAL_SUBSTITUTIONS: Dict[str, List[str]] = {
     "D":  ["T"],
     "G":  ["K"],
     "AE": ["EH", "AA", "AH"],
+    "EH": ["AE", "AH"],
     "IY": ["IH"],
     "IH": ["IY", "EH"],
     "UW": ["UH"],
@@ -250,7 +255,7 @@ class L2MDDModel(nn.Module):
 
                     # 1. Acoustic Deletion Check: Dropped coda consonant in word-final position
                     if w_ctx.get("is_last", False) and not target_is_vowel:
-                        if target_logit < -9.2 and (blank_logit > target_logit + 3.0 or p_del >= 0.035):
+                        if target_logit < -10.5 and blank_logit > target_logit + 4.0 and (p_del >= 0.10 or ef - sf <= 1):
                             actual_phone = "[DELETION]"
                             pred_class_name = "deletion"
                             is_suspicious = True
@@ -278,16 +283,24 @@ class L2MDDModel(nn.Module):
 
                             is_typ = cand_base in typs
                             manner_match = (cand_feat and target_feat and cand_feat.manner == target_feat.manner)
-                            # Calibrated acoustic threshold:
-                            # Typical L2 transfer errors (CH->SH, TH->T/S, Z->S): margin >= 0.5
-                            # Same manner of articulation (e.g. stops/fricatives): margin >= 1.5
-                            # Dissimilar manner: margin >= 2.2
-                            thresh = 0.5 if is_typ else (1.5 if manner_match else 2.2)
 
-                            if margin >= thresh:
-                                best_cand = cand_phone
-                                cand_margin = margin
-                                break
+                            # Softened / calibrated acoustic threshold:
+                            if target_is_vowel:
+                                # Vowels: only test phonologically typical L2 pairs, ignoring non-typical pairs (coarticulation artifacts)
+                                if not is_typ:
+                                    continue
+                                thresh = 1.8
+                                if margin >= thresh and err_prob >= 0.08:
+                                    best_cand = cand_phone
+                                    cand_margin = margin
+                                    break
+                            else:
+                                # Consonants: 1.2 for typical L2 pairs (CH->SH, TH->T/S, Z->S), 2.2 for manner match, 3.2 for dissimilar
+                                thresh = 1.2 if is_typ else (2.2 if manner_match else 3.2)
+                                if margin >= thresh and (is_typ or err_prob >= 0.15):
+                                    best_cand = cand_phone
+                                    cand_margin = margin
+                                    break
 
                         if best_cand and best_cand.rstrip("012") != target_base:
                             actual_phone = best_cand
@@ -298,15 +311,15 @@ class L2MDDModel(nn.Module):
             # 3. Model Prior Fallback if no acoustic substitution triggered
             if not is_suspicious:
                 thresh = float(sensitivity_threshold)
-                if pred_class_id == ERR_DEL and p_del >= max(0.08, thresh * 0.4):
+                if pred_class_id == ERR_DEL and p_del >= max(0.40, thresh) and p_del > p_correct:
                     actual_phone = "[DELETION]"
                     pred_class_name = "deletion"
                     is_suspicious = True
-                elif pred_class_id == ERR_ADD and p_add >= max(0.10, thresh * 0.45):
+                elif pred_class_id == ERR_ADD and p_add >= max(0.40, thresh) and p_add > p_correct:
                     actual_phone = "[ADDITION]"
                     pred_class_name = "addition"
                     is_suspicious = True
-                elif (pred_class_id == ERR_SUB or p_sub >= 0.08) and typs:
+                elif pred_class_id == ERR_SUB and p_sub >= max(0.45, thresh) and p_sub > p_correct and typs:
                     actual_phone = typs[0]
                     pred_class_name = "substitution"
                     is_suspicious = True

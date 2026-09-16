@@ -33,7 +33,7 @@ def _build_dialogue(
     for s in teacher_sentences:
         turns.append({
             "role": "teacher",
-            "scored": "scores" in s,
+            "scored": bool(s.get("scored") and s.get("scores")),
             "start_sec": s.get("start_sec"),
             "end_sec": s.get("end_sec"),
             "transcript": s.get("transcript", ""),

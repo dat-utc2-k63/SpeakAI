@@ -693,10 +693,10 @@ import { supabase } from './supabase.js';
           document.getElementById('runAssessBtn').disabled = false;
 
           // Lưu điểm tạm thời
-          currentApiResult.score_total = total;
-          currentApiResult.score_accuracy = acc;
-          currentApiResult.score_fluency = flu;
-          currentApiResult.score_prosodic = pro;
+          currentApiResult.score_total = sTotal;
+          currentApiResult.score_accuracy = sAcc;
+          currentApiResult.score_fluency = sFlu;
+          currentApiResult.score_prosodic = sPro;
 
           // ── KÍCH HOẠT AI EVALUATOR ĐÁNH GIÁ NGỮ PHÁP, NGỮ CẢNH & HIỆU CHUẨN ĐIỂM HỘI THOẠI ──
           const tfSummaryBox = document.getElementById('tfSummaryBox');
@@ -717,19 +717,23 @@ import { supabase } from './supabase.js';
             const turns = resultObj.dialogue?.turns || [];
             const aiEval = await evaluateConversationWithAi({
               dialogueTurns: turns,
-              pronunciationScores: { total, accuracy: acc, fluency: flu, prosodic: pro },
+              pronunciationScores: { total: sTotal, accuracy: sAcc, fluency: sFlu, prosodic: sPro },
             });
 
             if (aiEval && aiEval.score_total != null) {
-              total = aiEval.score_total;
-              document.getElementById('resTotal').textContent = total.toFixed(1);
+              sTotal = aiEval.score_total;
+              document.getElementById('resTotal').textContent = sTotal.toFixed(1);
               if (document.getElementById('resGrammar')) {
-                document.getElementById('resGrammar').textContent = aiEval.score_grammar.toFixed(1);
+                document.getElementById('resGrammar').textContent = Number(aiEval.score_grammar || 0).toFixed(1);
               }
               if (document.getElementById('resContext')) {
-                document.getElementById('resContext').textContent = aiEval.score_context.toFixed(1);
+                document.getElementById('resContext').textContent = Number(aiEval.score_context || 0).toFixed(1);
               }
-              updateLevelBadge(total);
+              updateLevelBadge(sTotal);
+
+              if (btnStu) {
+                btnStu.innerHTML = `<i class="bi bi-mortarboard me-1"></i>Học viên (${sTotal.toFixed(1)})`;
+              }
 
               if (statusBadge) {
                 statusBadge.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>Đã hiệu chuẩn AI';
@@ -804,10 +808,14 @@ import { supabase } from './supabase.js';
               currentApiResult.ai_eval = aiEval;
               currentApiResult.score_grammar = aiEval.score_grammar;
               currentApiResult.score_context = aiEval.score_context;
-              currentApiResult.score_total = total;
+              currentApiResult.score_total = sTotal;
             }
           } catch (aiErr) {
             console.warn('Lỗi gọi AI Evaluator cho hội thoại:', aiErr);
+            if (statusBadge) {
+              statusBadge.innerHTML = '<i class="bi bi-info-circle me-1"></i>Phân tích âm học';
+              statusBadge.className = 'badge bg-secondary-subtle text-secondary border border-secondary-subtle smaller';
+            }
             if (tfSummaryBox) {
               const otf = resultObj.overall_transformer_feedback || {};
               tfSummaryBox.innerHTML = otf.summary ? simpleMarkdown(otf.summary) : '<span class="text-muted">Đã hoàn thành phân tích âm học.</span>';
@@ -909,6 +917,23 @@ import { supabase } from './supabase.js';
           }).join('');
 
           if (isTeacher) {
+            if (!turn.scored) {
+              // Nếu không chấm cho teacher thì không cần đưa ra feedback hay highlight lỗi cho teacher
+              return `
+      <div class="timeline-item timeline-teacher">
+        <div class="timeline-dot teacher-dot"><i class="bi bi-person-video3"></i></div>
+        <div class="speech-bubble-enhanced teacher-bubble-enhanced">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="small text-muted fw-semibold"><i class="bi bi-person-badge me-1 text-primary"></i>Giáo viên</div>
+            <span class="badge bg-secondary-subtle text-muted border border-secondary-subtle smaller">Không chấm điểm</span>
+          </div>
+          <div class="teacher-transcript text-light py-1">${turn.transcript}</div>
+          ${audioHtml}
+        </div>
+      </div>`;
+            }
+
+            // Nếu CÓ chấm điểm cho teacher thì hiển thị đầy đủ như student
             return `
       <div class="timeline-item timeline-teacher">
         <div class="timeline-dot teacher-dot"><i class="bi bi-person-video3"></i></div>

@@ -490,12 +490,16 @@ QUY TẮC CHẤM ĐIỂM:
 2. Ngữ pháp & Từ vựng (score_grammar 0-10): Đánh giá cấu trúc, chia thì. Nói vấp/từ đệm đầu lượt không bị trừ điểm.
 3. Điểm tổng thể (score_total 0-10): Kết hợp Phát âm + Ngữ pháp + Ngữ cảnh theo trần trên.
 
+4. Phạm vi đánh giá:
+   - Toàn bộ điểm số, nhận xét (conversation_summary), grammar_errors, tips và better_dialogue_expressions CHỈ dành riêng cho Học viên (Student).
+   - TUYỆT ĐỐI KHÔNG bắt lỗi, không sửa lỗi, không đưa lời khuyên hay nhận xét tiêu cực cho Giáo viên (Teacher).
+
 OUTPUT JSON FORMAT:
 {
   "score_total": <float 0-10>,
   "score_grammar": <float 0-10>,
   "score_context": <float 0-10>,
-  "conversation_summary": "<Nhận xét sư phạm 2-3 câu tiếng Việt>",
+  "conversation_summary": "<Nhận xét sư phạm 2-3 câu tiếng Việt dành riêng cho Học viên>",
   "grammar_errors": [{"turn_index": <int>, "error_text": "...", "fix": "...", "explanation": "..."}],
   "communication_tips": ["<lời khuyên 1>", "<lời khuyên 2>"],
   "better_dialogue_expressions": ["<1 câu mẫu nâng cao>"]
@@ -563,12 +567,16 @@ ${conversationTranscript}
 Đánh giá toàn diện năng lực hội thoại của Học viên (Student); kết hợp Điểm tổng phát âm với Ngữ pháp & Ngữ cảnh để chốt score_total (KHÔNG tự tính lại điểm âm học); dùng các chỉ số chi tiết để nhận xét sâu sắc. Trả về đúng JSON.`;
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': effectiveKey,
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model: model,
         messages: [
@@ -577,7 +585,7 @@ ${conversationTranscript}
         ],
         temperature: 0.2,
       }),
-    });
+    }).finally(() => clearTimeout(timeoutId));
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
@@ -611,12 +619,24 @@ ${conversationTranscript}
       scoreTotal = Math.min(scoreTotal, Math.max(2.5, scoreContext + 0.6), 4.5);
     }
 
+    // Đảm bảo chỉ giữ lại lỗi ngữ pháp của Học viên
+    const rawGrammarErrors = Array.isArray(parsed.grammar_errors) ? parsed.grammar_errors : [];
+    const studentGrammarErrors = rawGrammarErrors.filter(ge => {
+      if (ge && ge.turn_index != null) {
+        const turn = dialogueTurns[ge.turn_index - 1] || dialogueTurns[ge.turn_index];
+        if (turn && (turn.role === 'teacher' || turn.speaker === 'Teacher')) {
+          return false;
+        }
+      }
+      return true;
+    });
+
     return {
       score_total: scoreTotal,
       score_grammar: scoreGrammar,
       score_context: scoreContext,
       conversation_summary: parsed.conversation_summary || 'Đã hoàn thành đánh giá hội thoại.',
-      grammar_errors: Array.isArray(parsed.grammar_errors) ? parsed.grammar_errors : [],
+      grammar_errors: studentGrammarErrors,
       communication_tips: Array.isArray(parsed.communication_tips) ? parsed.communication_tips : [],
       better_dialogue_expressions: Array.isArray(parsed.better_dialogue_expressions) ? parsed.better_dialogue_expressions : [],
       is_fallback: false,
