@@ -99,7 +99,7 @@ export async function fetchActiveSession(studentId, setId, mode = 'practice') {
       .select(`
         id, mode, status, started_at,
         practice_answers (
-          id, question_id, audio_url, transcript, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, result_json, created_at
+          id, question_id, audio_url, transcript, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, result_json, created_at
         )
       `)
       .eq('student_id', studentId)
@@ -147,6 +147,7 @@ export async function saveAnswer(sessionId, questionId, {
   score_prosodic,
   score_grammar,
   score_context,
+  score_lexical,
   result_json
 }) {
   // Kiểm tra xem câu hỏi này đã có câu trả lời trong session chưa
@@ -166,6 +167,7 @@ export async function saveAnswer(sessionId, questionId, {
     score_prosodic,
     score_grammar: score_grammar != null ? score_grammar : null,
     score_context: score_context != null ? score_context : null,
+    score_lexical: score_lexical != null ? score_lexical : null,
     result_json,
   };
 
@@ -310,13 +312,13 @@ export async function completeSession(sessionId, examBand = null) {
   // Lấy tất cả answers
   const { data: answers, error: aErr } = await supabase
     .from('practice_answers')
-    .select('score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context')
+    .select('score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical')
     .eq('session_id', sessionId);
   if (aErr) throw aErr;
 
   const count = (answers || []).filter(a => a.score_total != null).length;
-  let avgTotal = 0, avgAcc = 0, avgFlu = 0, avgPro = 0, avgGrammar = 0, avgContext = 0;
-  let countGrammar = 0, countContext = 0;
+  let avgTotal = 0, avgAcc = 0, avgFlu = 0, avgPro = 0, avgGrammar = 0, avgContext = 0, avgLexical = 0;
+  let countGrammar = 0, countContext = 0, countLexical = 0;
 
   if (count > 0) {
     for (const a of answers) {
@@ -332,6 +334,10 @@ export async function completeSession(sessionId, examBand = null) {
         avgContext += a.score_context;
         countContext++;
       }
+      if (a.score_lexical != null) {
+        avgLexical += a.score_lexical;
+        countLexical++;
+      }
     }
     avgTotal /= count;
     avgAcc /= count;
@@ -339,6 +345,7 @@ export async function completeSession(sessionId, examBand = null) {
     avgPro /= count;
     avgGrammar = countGrammar > 0 ? (avgGrammar / countGrammar) : 0;
     avgContext = countContext > 0 ? (avgContext / countContext) : 0;
+    avgLexical = countLexical > 0 ? (avgLexical / countLexical) : 0;
   }
 
   const updates = {
@@ -349,6 +356,7 @@ export async function completeSession(sessionId, examBand = null) {
     score_prosodic: avgPro,
     score_grammar: avgGrammar > 0 ? avgGrammar : null,
     score_context: avgContext > 0 ? avgContext : null,
+    score_lexical: avgLexical > 0 ? avgLexical : null,
     completed_at: new Date().toISOString(),
   };
 
@@ -369,6 +377,7 @@ export async function completeSession(sessionId, examBand = null) {
     score_prosodic: avgPro,
     score_grammar: avgGrammar,
     score_context: avgContext,
+    score_lexical: avgLexical,
     exam_band: examBand,
   };
 }
@@ -380,7 +389,7 @@ export async function fetchSessionHistory(studentId) {
   const { data, error } = await supabase
     .from('practice_sessions')
     .select(`
-      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, exam_band,
+      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, exam_band,
       started_at, completed_at,
       question_set:question_sets(id, title, level, exam_type)
     `)
@@ -398,7 +407,7 @@ export async function fetchSessionDetail(sessionId) {
   const { data: session, error: sErr } = await supabase
     .from('practice_sessions')
     .select(`
-      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, exam_band,
+      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, exam_band,
       started_at, completed_at,
       question_set:question_sets(id, title, level, exam_type, description)
     `)
@@ -409,7 +418,7 @@ export async function fetchSessionDetail(sessionId) {
   const { data: answers, error: aErr } = await supabase
     .from('practice_answers')
     .select(`
-      id, audio_url, transcript, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, result_json, created_at,
+      id, audio_url, transcript, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, result_json, created_at,
       question:questions(id, order_num, part_title, question_text, prep_time, response_time)
     `)
     .eq('session_id', sessionId)
@@ -600,7 +609,7 @@ export async function fetchStudentPracticeSessions(studentId) {
   const { data, error } = await supabase
     .from('practice_sessions')
     .select(`
-      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, exam_band,
+      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, exam_band,
       started_at, completed_at,
       question_set:question_sets(id, title, level, exam_type),
       student:profiles!student_id(full_name)

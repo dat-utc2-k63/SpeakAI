@@ -275,7 +275,7 @@
           <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
             <div>
               <h6 class="fw-bold mb-1"><i class="bi bi-award me-2 text-primary"></i>Điểm Đánh Giá Chuẩn IELTS / Cambridge Speaking</h6>
-              <p class="text-muted smaller mb-0">Đánh giá 4 trụ cột Khảo thí: Pronunciation (PR), Fluency & Coherence (FC), Grammatical Range & Accuracy (GRA)</p>
+              <p class="text-muted smaller mb-0">Đánh giá 4 trụ cột Khảo thí: Pronunciation (PR: 25%), Fluency & Coherence (FC: 25%), Lexical Resource (LR: 25%), Grammatical Range & Accuracy (GRA: 25%)</p>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
               <div class="btn-group btn-group-sm d-none" id="scoreRoleSwitcher" role="group">
@@ -286,47 +286,40 @@
               <span class="badge fs-6" id="resLevelBadge">--</span>
             </div>
           </div>
-          <div class="row g-3">
-            <div class="col-6 col-md-4 col-lg-2">
+          <div class="row g-3 row-cols-2 row-cols-md-3 row-cols-xl-5">
+            <div class="col">
               <div class="score-card score-card-total">
                 <div class="score-label">Overall Band</div>
                 <div class="score-value" id="resTotal">--</div>
-                <div class="score-sub">Điểm Tổng Thể</div>
+                <div class="score-sub">Thang điểm IELTS</div>
               </div>
             </div>
-            <div class="col-6 col-md-4 col-lg-2">
-              <div class="score-card">
-                <div class="score-label">Ngữ Pháp (GRA)</div>
-                <div class="score-value text-primary" id="resGrammar">--</div>
-                <div class="score-sub">Range & Accuracy</div>
-              </div>
-            </div>
-            <div class="col-6 col-md-4 col-lg-2">
-              <div class="score-card">
-                <div class="score-label">Mạch Lạc (FC)</div>
-                <div class="score-value text-info" id="resContext">--</div>
-                <div class="score-sub">Fluency & Coherence</div>
-              </div>
-            </div>
-            <div class="col-6 col-md-4 col-lg-2">
+            <div class="col">
               <div class="score-card">
                 <div class="score-label">Phát Âm (PR)</div>
-                <div class="score-value" id="resAcc">--</div>
-                <div class="score-sub">Accuracy (Âm vị)</div>
+                <div class="score-value text-success" id="resPR">--</div>
+                <div class="score-sub">Pronunciation (25%)</div>
               </div>
             </div>
-            <div class="col-6 col-md-4 col-lg-2">
+            <div class="col">
               <div class="score-card">
-                <div class="score-label">Lưu Loát (Flu)</div>
-                <div class="score-value" id="resFlu">--</div>
-                <div class="score-sub">Tốc độ & Nhịp điệu</div>
+                <div class="score-label">Mạch Lạc (FC)</div>
+                <div class="score-value text-info" id="resFC">--</div>
+                <div class="score-sub">Fluency & Coherence (25%)</div>
               </div>
             </div>
-            <div class="col-6 col-md-4 col-lg-2">
+            <div class="col">
               <div class="score-card">
-                <div class="score-label">Ngữ Điệu (Pro)</div>
-                <div class="score-value" id="resPro">--</div>
-                <div class="score-sub">Trọng âm & Ngữ điệu</div>
+                <div class="score-label">Từ Vựng (LR)</div>
+                <div class="score-value text-warning" id="resLR">--</div>
+                <div class="score-sub">Lexical Resource (25%)</div>
+              </div>
+            </div>
+            <div class="col">
+              <div class="score-card">
+                <div class="score-label">Ngữ Pháp (GRA)</div>
+                <div class="score-value text-primary" id="resGRA">--</div>
+                <div class="score-sub">Range & Accuracy (25%)</div>
               </div>
             </div>
           </div>
@@ -1025,26 +1018,30 @@
         <h4 class="fw-bold">Hoàn thành bài!</h4>
         <div class="summary-score" id="summaryTotalScore">0.0</div>
         <div class="summary-label">Điểm tổng thể khảo thí / 10</div>
-        <div class="d-flex justify-content-center gap-3 mt-3 flex-wrap">
-          <div class="text-center">
-            <div class="fw-bold text-primary" id="summaryGramScore">--</div>
-            <div class="text-muted small">Grammar</div>
+        <div class="row g-3 justify-content-center mt-3 row-cols-2 row-cols-md-4" style="max-width: 680px; margin: 0 auto;">
+          <div class="col">
+            <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25 text-center">
+              <div class="fw-bold text-success fs-5" id="summaryPRScore">--</div>
+              <div class="text-muted smaller">Phát Âm (PR: 25%)</div>
+            </div>
           </div>
-          <div class="text-center">
-            <div class="fw-bold text-info" id="summaryCtxScore">--</div>
-            <div class="text-muted small">Context</div>
+          <div class="col">
+            <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25 text-center">
+              <div class="fw-bold text-info fs-5" id="summaryFCScore">--</div>
+              <div class="text-muted smaller">Mạch Lạc (FC: 25%)</div>
+            </div>
           </div>
-          <div class="text-center">
-            <div class="fw-bold" id="summaryAccScore">--</div>
-            <div class="text-muted small">Accuracy</div>
+          <div class="col">
+            <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25 text-center">
+              <div class="fw-bold text-warning fs-5" id="summaryLRScore">--</div>
+              <div class="text-muted smaller">Từ Vựng (LR: 25%)</div>
+            </div>
           </div>
-          <div class="text-center">
-            <div class="fw-bold" id="summaryFluScore">--</div>
-            <div class="text-muted small">Fluency</div>
-          </div>
-          <div class="text-center">
-            <div class="fw-bold" id="summaryProScore">--</div>
-            <div class="text-muted small">Prosody</div>
+          <div class="col">
+            <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25 text-center">
+              <div class="fw-bold text-primary fs-5" id="summaryGRAScore">--</div>
+              <div class="text-muted smaller">Ngữ Pháp (GRA: 25%)</div>
+            </div>
           </div>
         </div>
       </div>

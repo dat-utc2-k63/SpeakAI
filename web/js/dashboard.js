@@ -648,20 +648,29 @@ import { supabase } from './supabase.js';
             levelBadge.className = `badge fs-6 ${info.color}`;
           }
 
-          let sGrammar = '--', sContext = '--';
-          let tGrammar = '--', tContext = '--';
+          let sGrammar = '--', sContext = '--', sLexical = '--';
+          let tGrammar = '--', tContext = '--', tLexical = '--';
 
-          function renderSummaryScores(total, acc, flu, pro, gram = '--', ctx = '--') {
-            document.getElementById('resTotal').textContent = total.toFixed(1);
-            document.getElementById('resAcc').textContent = acc.toFixed(1);
-            document.getElementById('resFlu').textContent = flu.toFixed(1);
-            document.getElementById('resPro').textContent = pro.toFixed(1);
-            if (document.getElementById('resGrammar')) document.getElementById('resGrammar').textContent = gram;
-            if (document.getElementById('resContext')) document.getElementById('resContext').textContent = ctx;
+          function renderSummaryScores(total, pr, fc = '--', lr = '--', gra = '--') {
+            const elTotal = document.getElementById('resTotal');
+            if (elTotal) elTotal.textContent = (Number(total) || 0).toFixed(1);
+
+            const elPR = document.getElementById('resPR') || document.getElementById('resAcc');
+            if (elPR) elPR.textContent = (Number(pr) || 0).toFixed(1);
+
+            const elFC = document.getElementById('resFC') || document.getElementById('resContext');
+            if (elFC) elFC.textContent = fc;
+
+            const elLR = document.getElementById('resLR') || document.getElementById('resLexical');
+            if (elLR) elLR.textContent = lr;
+
+            const elGRA = document.getElementById('resGRA') || document.getElementById('resGrammar');
+            if (elGRA) elGRA.textContent = gra;
+
             updateLevelBadge(total);
           }
 
-          renderSummaryScores(sTotal, sAcc, sFlu, sPro, sGrammar, sContext);
+          renderSummaryScores(sTotal, sAcc || sTotal, sContext, sLexical, sGrammar);
 
           // Quản lý nút chuyển đổi điểm Học viên / Giáo viên
           const switcher = document.getElementById('scoreRoleSwitcher');
@@ -678,12 +687,12 @@ import { supabase } from './supabase.js';
               btnStu.onclick = () => {
                 btnStu.classList.add('active');
                 btnTea.classList.remove('active');
-                renderSummaryScores(sTotal, sAcc, sFlu, sPro, sGrammar, sContext);
+                renderSummaryScores(sTotal, sAcc || sTotal, sContext, sLexical, sGrammar);
               };
               btnTea.onclick = () => {
                 btnTea.classList.add('active');
                 btnStu.classList.remove('active');
-                renderSummaryScores(tTotal, tAcc, tFlu, tPro, tGrammar, tContext);
+                renderSummaryScores(tTotal, tAcc || tTotal, tContext, tLexical, tGrammar);
               };
             } else {
               switcher.classList.add('d-none');
@@ -732,9 +741,10 @@ import { supabase } from './supabase.js';
             if (aiEval && aiEval.score_total != null) {
               sTotal = aiEval.score_total;
               sGrammar = Number(aiEval.score_grammar || 0).toFixed(1);
-              sContext = Number(aiEval.score_context || 0).toFixed(1);
+              sContext = Number(aiEval.score_context ?? aiEval.score_fluency_coherence ?? 0).toFixed(1);
+              sLexical = Number(aiEval.score_lexical || 0).toFixed(1);
               if (!btnTea || !btnTea.classList.contains('active')) {
-                renderSummaryScores(sTotal, sAcc, sFlu, sPro, sGrammar, sContext);
+                renderSummaryScores(sTotal, sAcc || sTotal, sContext, sLexical, sGrammar);
               }
 
               if (btnStu) {
@@ -819,6 +829,7 @@ import { supabase } from './supabase.js';
               currentApiResult.ai_eval = aiEval;
               currentApiResult.score_grammar = aiEval.score_grammar;
               currentApiResult.score_context = aiEval.score_context;
+              currentApiResult.score_lexical = aiEval.score_lexical;
               currentApiResult.score_total = sTotal;
             }
           } catch (aiErr) {
@@ -1041,7 +1052,8 @@ import { supabase } from './supabase.js';
 
             await saveAssessment(currentAssessmentId, {
               score_total: r.score_total, score_accuracy: r.score_accuracy, score_fluency: r.score_fluency,
-              score_prosodic: r.score_prosodic, llm_feedback: r.ai_eval?.conversation_summary || r.llm_feedback, result_json: r,
+              score_prosodic: r.score_prosodic, score_grammar: r.score_grammar, score_context: r.score_context,
+              score_lexical: r.score_lexical, llm_feedback: r.ai_eval?.conversation_summary || r.llm_feedback, result_json: r,
               title: document.getElementById('assessTitleInput').value.trim()
             });
 
@@ -1271,10 +1283,10 @@ import { supabase } from './supabase.js';
           <div class="fw-semibold">${titleText}</div>
           <div class="text-muted small">${date}</div>
           <div class="d-flex gap-2 mt-1 flex-wrap">
-            <span class="badge bg-secondary">PR: ${a.score_accuracy?.toFixed(1) ?? '--'}</span>
-            <span class="badge bg-secondary">Flu: ${a.score_fluency?.toFixed(1) ?? '--'}</span>
-            ${a.score_grammar != null ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle">GRA: ${Number(a.score_grammar).toFixed(1)}</span>` : ''}
+            <span class="badge bg-success-subtle text-success border border-success-subtle">PR: ${(a.score_accuracy || a.score_total || 0).toFixed(1)}</span>
             ${a.score_context != null ? `<span class="badge bg-info-subtle text-info border border-info-subtle">FC: ${Number(a.score_context).toFixed(1)}</span>` : ''}
+            ${(a.score_lexical != null || a.result_json?.score_lexical != null) ? `<span class="badge bg-warning-subtle text-warning border border-warning-subtle">LR: ${Number(a.score_lexical ?? a.result_json?.score_lexical).toFixed(1)}</span>` : ''}
+            ${a.score_grammar != null ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle">GRA: ${Number(a.score_grammar).toFixed(1)}</span>` : ''}
           </div>
         </div>
         <i class="bi bi-chevron-right text-muted"></i>
@@ -1298,79 +1310,44 @@ import { supabase } from './supabase.js';
           const aiEval = a.result_json?.ai_eval;
           const gramVal = a.score_grammar ?? aiEval?.score_grammar;
           const ctxVal = a.score_context ?? aiEval?.score_context;
+          const lexVal = a.score_lexical ?? aiEval?.score_lexical ?? r.score_lexical;
+          const prVal = (a.score_accuracy != null) ? a.score_accuracy : a.score_total;
 
-          const scoresGridHtml = (gramVal != null || ctxVal != null) ? `
-      <div class="row g-3">
-        <div class="col-6 col-md-4 col-lg-2">
+          const scoresGridHtml = `
+      <div class="row g-3 row-cols-2 row-cols-md-3 row-cols-xl-5">
+        <div class="col">
           <div class="score-card score-card-total">
             <div class="score-label">Overall Band</div>
             <div class="score-value">${(a.score_total || 0).toFixed(1)}</div>
-            <div class="score-sub">Điểm Tổng Thể</div>
+            <div class="score-sub">Thang điểm IELTS</div>
           </div>
         </div>
-        <div class="col-6 col-md-4 col-lg-2">
+        <div class="col">
           <div class="score-card">
-            <div class="score-label">Ngữ Pháp (GRA)</div>
-            <div class="score-value text-primary">${gramVal != null ? Number(gramVal).toFixed(1) : '--'}</div>
-            <div class="score-sub">Range & Accuracy</div>
+            <div class="score-label">Phát Âm (PR)</div>
+            <div class="score-value text-success">${(Number(prVal) || 0).toFixed(1)}</div>
+            <div class="score-sub">Pronunciation (25%)</div>
           </div>
         </div>
-        <div class="col-6 col-md-4 col-lg-2">
+        <div class="col">
           <div class="score-card">
             <div class="score-label">Mạch Lạc (FC)</div>
             <div class="score-value text-info">${ctxVal != null ? Number(ctxVal).toFixed(1) : '--'}</div>
-            <div class="score-sub">Fluency & Coherence</div>
+            <div class="score-sub">Fluency & Coherence (25%)</div>
           </div>
         </div>
-        <div class="col-6 col-md-4 col-lg-2">
+        <div class="col">
           <div class="score-card">
-            <div class="score-label">Phát Âm (PR)</div>
-            <div class="score-value">${(a.score_accuracy || 0).toFixed(1)}</div>
-            <div class="score-sub">Accuracy (Âm vị)</div>
+            <div class="score-label">Từ Vựng (LR)</div>
+            <div class="score-value text-warning">${lexVal != null ? Number(lexVal).toFixed(1) : (gramVal != null ? Number(gramVal).toFixed(1) : '--')}</div>
+            <div class="score-sub">Lexical Resource (25%)</div>
           </div>
         </div>
-        <div class="col-6 col-md-4 col-lg-2">
+        <div class="col">
           <div class="score-card">
-            <div class="score-label">Lưu Loát (Flu)</div>
-            <div class="score-value">${(a.score_fluency || 0).toFixed(1)}</div>
-            <div class="score-sub">Tốc độ & Nhịp điệu</div>
-          </div>
-        </div>
-        <div class="col-6 col-md-4 col-lg-2">
-          <div class="score-card">
-            <div class="score-label">Ngữ Điệu (Pro)</div>
-            <div class="score-value">${(a.score_prosodic || 0).toFixed(1)}</div>
-            <div class="score-sub">Trọng âm & Ngữ điệu</div>
-          </div>
-        </div>
-      </div>` : `
-      <div class="row g-3">
-        <div class="col-6 col-lg-3">
-          <div class="score-card score-card-total">
-            <div class="score-label">Tổng</div>
-            <div class="score-value">${(a.score_total || 0).toFixed(1)}</div>
-            <div class="score-sub">/ 10</div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3">
-          <div class="score-card">
-            <div class="score-label">Accuracy</div>
-            <div class="score-value">${(a.score_accuracy || 0).toFixed(1)}</div>
-            <div class="score-sub">/ 10</div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3">
-          <div class="score-card">
-            <div class="score-label">Fluency</div>
-            <div class="score-value">${(a.score_fluency || 0).toFixed(1)}</div>
-            <div class="score-sub">/ 10</div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3">
-          <div class="score-card">
-            <div class="score-label">Prosody</div>
-            <div class="score-value">${(a.score_prosodic || 0).toFixed(1)}</div>
-            <div class="score-sub">/ 10</div>
+            <div class="score-label">Ngữ Pháp (GRA)</div>
+            <div class="score-value text-primary">${gramVal != null ? Number(gramVal).toFixed(1) : '--'}</div>
+            <div class="score-sub">Range & Accuracy (25%)</div>
           </div>
         </div>
       </div>`;
@@ -3676,11 +3653,13 @@ import { supabase } from './supabase.js';
                   // Dạng Read Aloud: Hoàn toàn không chấm ngữ pháp và ngữ cảnh, chỉ giữ 100% điểm phát âm âm học
                   scores.grammar = null;
                   scores.context = null;
+                  scores.lexical = null;
                   scores.total = scores.total;
                 } else {
                   scores.total = geminiEval.score_total;
                   scores.grammar = geminiEval.score_grammar;
                   scores.context = geminiEval.score_context;
+                  scores.lexical = geminiEval.score_lexical;
                 }
               }
             } catch (gErr) {
@@ -3698,6 +3677,7 @@ import { supabase } from './supabase.js';
               score_prosodic: scores.prosodic,
               score_grammar: geminiEval?.score_grammar ?? null,
               score_context: geminiEval?.score_context ?? null,
+              score_lexical: geminiEval?.score_lexical ?? null,
               result_json: combinedResult,
             });
 
@@ -3752,39 +3732,32 @@ import { supabase } from './supabase.js';
                 }
               </div>
 
-              <!-- Lưới điểm tổng hợp -->
+              <!-- Lưới điểm chuẩn IELTS: Overall, PR (25%), FC (25%), LR (25%), GRA (25%) -->
               <div class="result-scores-grid">
                 <div class="result-score-item highlight-total">
                   <div class="score-label">Overall Band</div>
                   <div class="score-val ${valClass(s.total || 0)}">${(s.total || 0).toFixed(1)}</div>
-                  <div class="score-subtext">${isReadAloud ? 'Phát âm âm học' : 'Điểm tổng khảo thí'}</div>
+                  <div class="score-subtext">${isReadAloud ? 'Phát âm âm học' : 'Trung bình chuẩn 4 tiêu chí'}</div>
                 </div>
-                ${!isReadAloud ? `
                 <div class="result-score-item">
-                  <div class="score-label">Ngữ Pháp (GRA)</div>
-                  <div class="score-val ${valClass(s.grammar ?? gemini?.score_grammar ?? 0)}">${(s.grammar ?? gemini?.score_grammar ?? 0).toFixed(1)}</div>
-                  <div class="score-subtext">Range & Accuracy</div>
+                  <div class="score-label">Phát Âm (PR)</div>
+                  <div class="score-val ${valClass(s.accuracy || s.total || 0)}">${(s.accuracy || s.total || 0).toFixed(1)}</div>
+                  <div class="score-subtext">Pronunciation (25%)</div>
                 </div>
                 <div class="result-score-item">
                   <div class="score-label">Mạch Lạc (FC)</div>
-                  <div class="score-val ${valClass(s.context ?? gemini?.score_context ?? 0)}">${(s.context ?? gemini?.score_context ?? 0).toFixed(1)}</div>
-                  <div class="score-subtext">Fluency & Coherence</div>
-                </div>
-                ` : ''}
-                <div class="result-score-item">
-                  <div class="score-label">Phát Âm (PR)</div>
-                  <div class="score-val ${valClass(s.accuracy)}">${s.accuracy.toFixed(1)}</div>
-                  <div class="score-subtext">Phát âm âm vị</div>
+                  <div class="score-val ${valClass(s.context ?? gemini?.score_context ?? 0)}">${!isReadAloud ? (s.context ?? gemini?.score_context ?? 0).toFixed(1) : '--'}</div>
+                  <div class="score-subtext">Fluency & Coherence (25%)</div>
                 </div>
                 <div class="result-score-item">
-                  <div class="score-label">Lưu Loát (Flu)</div>
-                  <div class="score-val ${valClass(s.fluency)}">${s.fluency.toFixed(1)}</div>
-                  <div class="score-subtext">Tốc độ & Trôi chảy</div>
+                  <div class="score-label">Từ Vựng (LR)</div>
+                  <div class="score-val ${valClass(s.lexical ?? gemini?.score_lexical ?? 0)}">${!isReadAloud ? (s.lexical ?? gemini?.score_lexical ?? 0).toFixed(1) : '--'}</div>
+                  <div class="score-subtext">Lexical Resource (25%)</div>
                 </div>
                 <div class="result-score-item">
-                  <div class="score-label">Ngữ Điệu (Pro)</div>
-                  <div class="score-val ${valClass(s.prosodic)}">${s.prosodic.toFixed(1)}</div>
-                  <div class="score-subtext">Trọng âm & Ngữ điệu</div>
+                  <div class="score-label">Ngữ Pháp (GRA)</div>
+                  <div class="score-val ${valClass(s.grammar ?? gemini?.score_grammar ?? 0)}">${!isReadAloud ? (s.grammar ?? gemini?.score_grammar ?? 0).toFixed(1) : '--'}</div>
+                  <div class="score-subtext">Range & Accuracy (25%)</div>
                 </div>
               </div>
 
@@ -3930,6 +3903,7 @@ import { supabase } from './supabase.js';
                     score_prosodic: a.scores?.prosodic || 0,
                     score_grammar: a.scores?.grammar ?? a.geminiEval?.score_grammar ?? null,
                     score_context: a.scores?.context ?? a.geminiEval?.score_context ?? null,
+                    score_lexical: a.scores?.lexical ?? a.geminiEval?.score_lexical ?? null,
                     result_json: a.result || null,
                   });
                 }
@@ -3959,10 +3933,19 @@ import { supabase } from './supabase.js';
               examBandCard.classList.add('d-none');
             }
 
-            document.getElementById('summaryTotalScore').textContent = finalScores.score_total.toFixed(1);
-            document.getElementById('summaryAccScore').textContent = finalScores.score_accuracy.toFixed(1);
-            document.getElementById('summaryFluScore').textContent = finalScores.score_fluency.toFixed(1);
-            document.getElementById('summaryProScore').textContent = finalScores.score_prosodic.toFixed(1);
+            document.getElementById('summaryTotalScore').textContent = (finalScores.score_total || 0).toFixed(1);
+            if (document.getElementById('summaryPRScore')) {
+              document.getElementById('summaryPRScore').textContent = (finalScores.score_accuracy || finalScores.score_total || 0).toFixed(1);
+            }
+            if (document.getElementById('summaryFCScore')) {
+              document.getElementById('summaryFCScore').textContent = (finalScores.score_context != null ? finalScores.score_context.toFixed(1) : '--');
+            }
+            if (document.getElementById('summaryLRScore')) {
+              document.getElementById('summaryLRScore').textContent = (finalScores.score_lexical != null ? finalScores.score_lexical.toFixed(1) : '--');
+            }
+            if (document.getElementById('summaryGRAScore')) {
+              document.getElementById('summaryGRAScore').textContent = (finalScores.score_grammar != null ? finalScores.score_grammar.toFixed(1) : '--');
+            }
 
             // Detail list
             const detailList = document.getElementById('summaryDetailList');
@@ -3972,6 +3955,8 @@ import { supabase } from './supabase.js';
               const gemini = answer?.geminiEval || answer?.result?.gemini_eval;
               const gramScore = answer?.scores?.grammar ?? gemini?.score_grammar;
               const ctxScore = answer?.scores?.context ?? gemini?.score_context;
+              const lexScore = answer?.scores?.lexical ?? gemini?.score_lexical;
+              const prScore = answer?.scores?.accuracy || answer?.scores?.total || 0;
 
               if (answer && answer.scores) {
                 return `
@@ -3981,17 +3966,19 @@ import { supabase } from './supabase.js';
                       <div class="fw-semibold small">Câu ${idx + 1}: ${q.question_text}</div>
                       ${answer.transcript ? `<div class="text-muted smaller">"${answer.transcript}"</div>` : ''}
                       <div class="d-flex gap-2 mt-1 flex-wrap">
-                        ${(q.task_type !== 'read_aloud' && gramScore != null)
-                          ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle">Grammar: ${Number(gramScore).toFixed(1)}</span>`
-                          : ''
-                        }
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">PR: ${Number(prScore).toFixed(1)}</span>
                         ${(q.task_type !== 'read_aloud' && ctxScore != null)
-                          ? `<span class="badge bg-info-subtle text-info border border-info-subtle">Context: ${Number(ctxScore).toFixed(1)}</span>`
+                          ? `<span class="badge bg-info-subtle text-info border border-info-subtle">FC: ${Number(ctxScore).toFixed(1)}</span>`
                           : ''
                         }
-                        <span class="badge bg-secondary">Acc: ${answer.scores.accuracy.toFixed(1)}</span>
-                        <span class="badge bg-secondary">Flu: ${answer.scores.fluency.toFixed(1)}</span>
-                        <span class="badge bg-secondary">Pro: ${answer.scores.prosodic.toFixed(1)}</span>
+                        ${(q.task_type !== 'read_aloud' && lexScore != null)
+                          ? `<span class="badge bg-warning-subtle text-warning border border-warning-subtle">LR: ${Number(lexScore).toFixed(1)}</span>`
+                          : ''
+                        }
+                        ${(q.task_type !== 'read_aloud' && gramScore != null)
+                          ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle">GRA: ${Number(gramScore).toFixed(1)}</span>`
+                          : ''
+                        }
                       </div>
                       ${gemini?.feedback_summary ? `<div class="smaller text-warning mt-1"><i class="bi bi-lightbulb me-1"></i>${gemini.feedback_summary}</div>` : ''}
                       ${answer.audioUrl ? `<audio controls class="w-100 mt-2" src="${answer.audioUrl}"></audio>` : ''}
@@ -4056,11 +4043,10 @@ import { supabase } from './supabase.js';
                       <span class="text-muted small">${date} ${time}</span>
                     </div>
                     <div class="d-flex gap-2 mt-1 flex-wrap">
-                      ${s.score_grammar != null ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle">GRA: ${s.score_grammar.toFixed(1)}</span>` : ''}
+                      <span class="badge bg-success-subtle text-success border border-success-subtle">PR: ${(s.score_accuracy || s.score_total || 0).toFixed(1)}</span>
                       ${s.score_context != null ? `<span class="badge bg-info-subtle text-info border border-info-subtle">FC: ${s.score_context.toFixed(1)}</span>` : ''}
-                      <span class="badge bg-secondary">PR: ${(s.score_accuracy || 0).toFixed(1)}</span>
-                      <span class="badge bg-secondary">Flu: ${(s.score_fluency || 0).toFixed(1)}</span>
-                      <span class="badge bg-secondary">Pro: ${(s.score_prosodic || 0).toFixed(1)}</span>
+                      ${s.score_lexical != null ? `<span class="badge bg-warning-subtle text-warning border border-warning-subtle">LR: ${s.score_lexical.toFixed(1)}</span>` : ''}
+                      ${s.score_grammar != null ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle">GRA: ${s.score_grammar.toFixed(1)}</span>` : ''}
                     </div>
                   </div>
                   <i class="bi bi-chevron-right text-muted"></i>
@@ -4090,30 +4076,30 @@ import { supabase } from './supabase.js';
               <div class="practice-summary mb-4" style="padding:1.5rem;">
                 <div class="summary-score" style="font-size:2.5rem;">${(detail.score_total || 0).toFixed(1)}</div>
                 <div class="summary-label">Overall Band Điểm Khảo Thí / 10</div>
-                <div class="d-flex justify-content-center gap-3 mt-2 flex-wrap">
-                  ${detail.score_grammar != null ? `
-                    <div class="text-center">
-                      <div class="fw-bold text-primary">${detail.score_grammar.toFixed(1)}</div>
-                      <div class="text-muted small">Ngữ pháp (GRA)</div>
+                <div class="row g-3 justify-content-center mt-3 row-cols-2 row-cols-md-4" style="max-width:680px; margin: 0 auto;">
+                  <div class="col">
+                    <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25 text-center">
+                      <div class="fw-bold text-success fs-5">${(detail.score_accuracy || detail.score_total || 0).toFixed(1)}</div>
+                      <div class="text-muted smaller">Phát âm (PR: 25%)</div>
                     </div>
-                  ` : ''}
-                  ${detail.score_context != null ? `
-                    <div class="text-center">
-                      <div class="fw-bold text-info">${detail.score_context.toFixed(1)}</div>
-                      <div class="text-muted small">Mạch lạc (FC)</div>
+                  </div>
+                  <div class="col">
+                    <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25 text-center">
+                      <div class="fw-bold text-info fs-5">${detail.score_context != null ? detail.score_context.toFixed(1) : '--'}</div>
+                      <div class="text-muted smaller">Mạch lạc (FC: 25%)</div>
                     </div>
-                  ` : ''}
-                  <div class="text-center">
-                    <div class="fw-bold">${(detail.score_accuracy || 0).toFixed(1)}</div>
-                    <div class="text-muted small">Phát âm (PR)</div>
                   </div>
-                  <div class="text-center">
-                    <div class="fw-bold">${(detail.score_fluency || 0).toFixed(1)}</div>
-                    <div class="text-muted small">Lưu loát (Flu)</div>
+                  <div class="col">
+                    <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25 text-center">
+                      <div class="fw-bold text-warning fs-5">${detail.score_lexical != null ? detail.score_lexical.toFixed(1) : '--'}</div>
+                      <div class="text-muted smaller">Từ vựng (LR: 25%)</div>
+                    </div>
                   </div>
-                  <div class="text-center">
-                    <div class="fw-bold">${(detail.score_prosodic || 0).toFixed(1)}</div>
-                    <div class="text-muted small">Ngữ điệu (Pro)</div>
+                  <div class="col">
+                    <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25 text-center">
+                      <div class="fw-bold text-primary fs-5">${detail.score_grammar != null ? detail.score_grammar.toFixed(1) : '--'}</div>
+                      <div class="text-muted smaller">Ngữ pháp (GRA: 25%)</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -4124,6 +4110,8 @@ import { supabase } from './supabase.js';
                 const errors = gemini?.grammar_errors || [];
                 const gramScore = a.score_grammar ?? gemini?.score_grammar;
                 const ctxScore = a.score_context ?? gemini?.score_context;
+                const lexScore = a.score_lexical ?? gemini?.score_lexical;
+                const prScore = a.score_accuracy || a.score_total || 0;
 
                 return `
                   <div class="answer-result-card mb-3">
@@ -4133,28 +4121,29 @@ import { supabase } from './supabase.js';
                     </div>
                     <div class="result-scores-grid">
                       <div class="result-score-item highlight-total">
-                        <div class="score-label">Overall</div>
+                        <div class="score-label">Overall Band</div>
                         <div class="score-val ${valClass(a.score_total || 0)}">${(a.score_total || 0).toFixed(1)}</div>
+                        <div class="score-subtext">Tổng hợp</div>
                       </div>
                       <div class="result-score-item">
-                        <div class="score-label">Ngữ pháp (GRA)</div>
-                        <div class="score-val ${valClass(gramScore || 0)}">${gramScore != null ? Number(gramScore).toFixed(1) : '--'}</div>
+                        <div class="score-label">Phát âm (PR)</div>
+                        <div class="score-val ${valClass(prScore)}">${Number(prScore).toFixed(1)}</div>
+                        <div class="score-subtext">Pronunciation (25%)</div>
                       </div>
                       <div class="result-score-item">
                         <div class="score-label">Mạch lạc (FC)</div>
                         <div class="score-val ${valClass(ctxScore || 0)}">${ctxScore != null ? Number(ctxScore).toFixed(1) : '--'}</div>
+                        <div class="score-subtext">Fluency & Coherence (25%)</div>
                       </div>
                       <div class="result-score-item">
-                        <div class="score-label">Phát âm (PR)</div>
-                        <div class="score-val ${valClass(a.score_accuracy || 0)}">${(a.score_accuracy || 0).toFixed(1)}</div>
+                        <div class="score-label">Từ vựng (LR)</div>
+                        <div class="score-val ${valClass(lexScore || 0)}">${lexScore != null ? Number(lexScore).toFixed(1) : '--'}</div>
+                        <div class="score-subtext">Lexical Resource (25%)</div>
                       </div>
                       <div class="result-score-item">
-                        <div class="score-label">Lưu loát (Flu)</div>
-                        <div class="score-val ${valClass(a.score_fluency || 0)}">${(a.score_fluency || 0).toFixed(1)}</div>
-                      </div>
-                      <div class="result-score-item">
-                        <div class="score-label">Ngữ điệu (Pro)</div>
-                        <div class="score-val ${valClass(a.score_prosodic || 0)}">${(a.score_prosodic || 0).toFixed(1)}</div>
+                        <div class="score-label">Ngữ pháp (GRA)</div>
+                        <div class="score-val ${valClass(gramScore || 0)}">${gramScore != null ? Number(gramScore).toFixed(1) : '--'}</div>
+                        <div class="score-subtext">Range & Accuracy (25%)</div>
                       </div>
                     </div>
 
@@ -4231,7 +4220,7 @@ import { supabase } from './supabase.js';
             const { data: sessions, error } = await supabase
               .from('practice_sessions')
               .select(`
-                id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, exam_band,
+                id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, exam_band,
                 started_at, completed_at,
                 question_set:question_sets(id, title, level, exam_type)
               `)
@@ -4267,7 +4256,7 @@ import { supabase } from './supabase.js';
             const { data: sessions, error } = await supabase
               .from('practice_sessions')
               .select(`
-                id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, exam_band,
+                id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, exam_band,
                 started_at, completed_at,
                 question_set:question_sets(id, title, level, exam_type),
                 student:profiles!student_id(id, full_name, email)
@@ -4326,11 +4315,12 @@ import { supabase } from './supabase.js';
                     }
                     ${!isDone ? `<span class="badge bg-secondary-subtle text-secondary small">Đang làm dở</span>` : ''}
                   </div>
-                  <div class="d-flex gap-3 flex-wrap small text-muted">
+                  <div class="d-flex gap-2 flex-wrap small text-muted align-items-center">
                     <span><i class="bi bi-calendar3 me-1"></i>${date} ${time}</span>
-                    ${s.score_accuracy != null ? `<span class="text-light">Accuracy: ${s.score_accuracy.toFixed(1)}</span>` : ''}
-                    ${s.score_fluency != null ? `<span class="text-light">Fluency: ${s.score_fluency.toFixed(1)}</span>` : ''}
-                    ${s.score_prosodic != null ? `<span class="text-light">Prosody: ${s.score_prosodic.toFixed(1)}</span>` : ''}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">PR: ${(s.score_accuracy || s.score_total || 0).toFixed(1)}</span>
+                    ${s.score_context != null ? `<span class="badge bg-info-subtle text-info border border-info-subtle">FC: ${s.score_context.toFixed(1)}</span>` : ''}
+                    ${s.score_lexical != null ? `<span class="badge bg-warning-subtle text-warning border border-warning-subtle">LR: ${s.score_lexical.toFixed(1)}</span>` : ''}
+                    ${s.score_grammar != null ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle">GRA: ${s.score_grammar.toFixed(1)}</span>` : ''}
                   </div>
                 </div>
                 <button class="btn btn-sm btn-outline-info rounded-pill px-3">

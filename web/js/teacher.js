@@ -91,9 +91,7 @@ export async function saveAssessment(assessmentId, resultData) {
     const finalJson = resultData.result_json || {};
     finalJson.title = resultData.title;
 
-    const { error } = await supabase
-    .from('assessments')
-    .update({
+    const updatePayload = {
       saved: true,
       status: 'done',
       score_total: resultData.score_total,
@@ -102,7 +100,14 @@ export async function saveAssessment(assessmentId, resultData) {
       score_prosodic: resultData.score_prosodic,
       llm_feedback: resultData.llm_feedback,
       result_json: finalJson,
-    })
+    };
+    if (resultData.score_grammar != null) updatePayload.score_grammar = resultData.score_grammar;
+    if (resultData.score_context != null) updatePayload.score_context = resultData.score_context;
+    if (resultData.score_lexical != null) updatePayload.score_lexical = resultData.score_lexical;
+
+    const { error } = await supabase
+    .from('assessments')
+    .update(updatePayload)
     .eq('id', assessmentId);
   if (error) throw error;
 }
@@ -114,7 +119,7 @@ export async function fetchSavedAssessments(teacherId) {
   const { data, error } = await supabase
     .from('assessments')
     .select(`
-      id, created_at, score_total, score_accuracy, score_fluency, score_prosodic, llm_feedback, status, result_json,
+      id, created_at, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, llm_feedback, status, result_json,
       student:profiles!student_id(full_name, email)
     `)
     .eq('teacher_id', teacherId)

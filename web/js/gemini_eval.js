@@ -80,26 +80,34 @@ export async function testGeminiConnection(apiKey, apiUrl = DEFAULT_GEMINI_ENDPO
  * System Prompt chuyên gia Khảo thí Ngôn ngữ Anh quốc tế
  */
 function buildExaminerSystemPrompt() {
-  return `Bạn là Giám khảo Khảo thí Speaking Quốc tế (Chuẩn IELTS / Cambridge / CEFR). Đánh giá bài nói của học viên theo đúng 4 trụ cột khảo thí và trả về DUY NHẤT 1 JSON.
+  return `Bạn là Giám khảo Khảo thí Speaking Quốc tế (Chuẩn IELTS / Cambridge). Đánh giá bài nói của học viên chuẩn xác theo đúng 4 TRỤ CỘT IELTS (PR: 25%, FC: 25%, LR: 25%, GRA: 25%) và trả về DUY NHẤT 1 JSON.
 
 QUY TẮC CHẤM ĐIỂM THEO 4 TRỤ CỘT IELTS / CAMBRIDGE:
-1. FC - Fluency & Coherence / Ngữ cảnh & Mạch lạc (score_context 0-10 - Tiêu chí Gatekeeper):
-   - Đánh giá khả năng hiểu đề, phản xạ, độ trôi chảy và mức độ mở rộng câu trả lời (expansion).
-   - Lạc đề (irrelevant) hoặc cộc lốc (1-3 từ): score_context <= 2.5, score_total BẮT BUỘC <= 3.5 (IELTS FC Band 3-4). Điểm ngữ pháp TUYỆT ĐỐI KHÔNG được kéo điểm tổng lên dù câu đúng ngữ pháp.
-   - Đạt một phần (score_context 3.0-4.5): score_total BẮT BUỘC <= 4.5.
-   - Đúng trọng tâm (score_context >= 5.0): Ngữ pháp và phát âm phát huy trọn vẹn để nâng điểm tổng (6.0-10.0).
-2. GRA - Grammatical Range & Accuracy / Ngữ pháp (score_grammar 0-10):
+1. PR - Pronunciation (score_pronunciation 0-10 - 25%): Đã được đo lường chính xác bằng mô hình âm học SpeechOcean762 + quét âm vị L2-MDD.
+2. FC - Fluency & Coherence / Mạch lạc & Ngữ cảnh (score_fluency_coherence 0-10 - 25% - Gatekeeper):
+   - Đánh giá khả năng hiểu đề, phản xạ, độ trôi chảy, tính mạch lạc và mở rộng câu trả lời theo đúng câu hỏi.
+   - Lạc đề (irrelevant) hoặc cộc lốc (1-3 từ): score_fluency_coherence <= 2.5, score_total BẮT BUỘC <= 3.5 (IELTS FC Band 3-4).
+   - Đạt một phần: 3.0 - 4.5 -> score_total BẮT BUỘC <= 4.5.
+   - Đúng trọng tâm: >= 5.0.
+3. LR - Lexical Resource / Vốn từ vựng (score_lexical 0-10 - 25%):
+   - Đánh giá sự phong phú từ vựng, tính chính xác theo chủ đề, khả năng dùng collocations, idioms tự nhiên, tránh lặp từ.
+   - Câu trả lời đơn sơ cấp (chỉ dùng từ A1-A2, thiếu từ vựng chủ đề): score_lexical <= 5.5.
+   - Dùng từ chính xác, có cụm từ tự nhiên: score_lexical 6.5 - 8.0.
+   - Vốn từ đa dạng, thành ngữ tinh tế: score_lexical 8.5 - 10.0.
+4. GRA - Grammatical Range & Accuracy / Ngữ pháp (score_grammar 0-10 - 25%):
    - Đánh giá cấu trúc câu (đơn, ghép, phức), sự đa dạng và độ chính xác của thì, mạo từ, giới từ, trật tự từ.
    - Trừ điểm thực chất: 1 lỗi -> max 7.5; 2-3 lỗi -> max 6.0; >=4 lỗi -> max 5.0.
-3. PR - Pronunciation: Đã được đo lường chính xác bằng mô hình âm học SpeechOcean762 + quét âm vị L2-MDD.
-4. LR - Lexical Resource / Vốn từ: Đề xuất cách dùng từ và câu diễn đạt tự nhiên, nâng cao trong "better_expression".
 5. Nói vấp / từ đệm / ngập ngừng ban đầu ("um, uh, well, wait..."):
    - Phản xạ tự nhiên, TUYỆT ĐỐI KHÔNG trừ điểm Grammar hay Context nếu câu chính phía sau đúng.
-6. Overall Band / Điểm tổng thể (score_total 0-10): Kết hợp Phát âm PR (40%) + Ngữ pháp GRA (30%) + Mạch lạc FC (30%) theo các mức trần trên (TUYỆT ĐỐI KHÔNG tự tính lại hoặc chia trung bình điểm âm học).
+6. Overall Band (score_total 0-10): Tính theo công thức chuẩn IELTS:
+   Overall = (PR * 0.25) + (FC * 0.25) + (LR * 0.25) + (GRA * 0.25) có áp dụng trần Gatekeeper.
 
 OUTPUT JSON FORMAT:
 {
   "score_total": <float 0-10>,
+  "score_pronunciation": <float 0-10>,
+  "score_fluency_coherence": <float 0-10>,
+  "score_lexical": <float 0-10>,
   "score_grammar": <float 0-10>,
   "score_context": <float 0-10>,
   "relevance_level": "too_short" | "irrelevant" | "partially_relevant" | "relevant" | "excellent",
@@ -313,20 +321,28 @@ Phát âm âm học (SpeechOcean): Điểm tổng=${rawPronTotal.toFixed(1)}/10 
       }
     }
 
-    // Chuẩn hóa điểm ngữ pháp & ngữ cảnh
+    // Chuẩn hóa 4 tiêu chí IELTS (PR, FC, LR, GRA)
     let scoreGrammar = taskType === 'read_aloud' ? null : clampScore(parsed.score_grammar, 0, 10);
-    let scoreContext = taskType === 'read_aloud' ? null : clampScore(parsed.score_context, 0, 10);
+    let scoreContext = taskType === 'read_aloud' ? null : clampScore(parsed.score_context ?? parsed.score_fluency_coherence, 0, 10);
+    let scoreLexical = taskType === 'read_aloud' ? null : clampScore(parsed.score_lexical ?? parsed.score_grammar, 0, 10);
     const relevanceLevel = taskType === 'read_aloud' ? 'relevant' : (parsed.relevance_level || (scoreContext < 3.0 ? 'irrelevant' : 'relevant'));
 
-    // Hiệu chuẩn điểm tổng thể: Với read_aloud, điểm tổng thuần túy là điểm phát âm âm học
+    // Tính điểm tổng theo chuẩn IELTS: PR (25%) + FC (25%) + LR (25%) + GRA (25%)
+    let rawWeighted = parsed.score_total != null
+      ? Number(parsed.score_total)
+      : Math.round(((rawPronTotal * 0.25) + (scoreContext * 0.25) + (scoreLexical * 0.25) + (scoreGrammar * 0.25)) * 10) / 10;
+
     const scoreTotal = taskType === 'read_aloud'
       ? clampScore(rawPronTotal, 0, 10)
-      : calibrateTotalScoreWithContext(parsed.score_total, scoreContext, scoreGrammar, relevanceLevel, taskType);
+      : calibrateTotalScoreWithContext(rawWeighted, scoreContext, scoreGrammar, scoreLexical, relevanceLevel, taskType);
 
     return {
       score_total: scoreTotal,
-      score_grammar: scoreGrammar, // null đối với read_aloud
-      score_context: scoreContext, // null đối với read_aloud
+      score_pronunciation: rawPronTotal,
+      score_fluency_coherence: scoreContext,
+      score_lexical: scoreLexical,
+      score_grammar: scoreGrammar,
+      score_context: scoreContext,
       relevance_level: relevanceLevel,
       grammar_errors: taskType === 'read_aloud' ? [] : (Array.isArray(parsed.grammar_errors) ? parsed.grammar_errors : []),
       feedback_summary: parsed.feedback_summary || 'Đã hoàn thành phân tích câu trả lời.',
@@ -356,11 +372,12 @@ Phát âm âm học (SpeechOcean): Điểm tổng=${rawPronTotal.toFixed(1)}/10 
  * Nếu ngữ cảnh đã không phù hợp (lạc đề, quá cộc lốc), điểm ngữ pháp
  * tuyệt đối không được can thiệp nhiều để kéo điểm tổng lên.
  */
-function calibrateTotalScoreWithContext(rawTotal, contextScore, grammarScore, relevanceLevel, taskType = '') {
+function calibrateTotalScoreWithContext(rawTotal, contextScore, grammarScore, lexicalScore = null, relevanceLevel = '', taskType = '') {
   let total = Number(rawTotal);
   if (isNaN(total)) total = 5.0;
   const ctx = Number(contextScore) || 0;
   const gram = Number(grammarScore) || 0;
+  const lex = Number(lexicalScore) || gram;
 
   // Trường hợp đặc thù cho Read Aloud:
   // Ngữ pháp của bài đọc không phải do học viên tạo ra mà là văn bản đề thi
@@ -378,7 +395,7 @@ function calibrateTotalScoreWithContext(rawTotal, contextScore, grammarScore, re
   // Trường hợp 1: Ngữ cảnh lạc đề hoàn toàn hoặc cộc lốc vô nghĩa
   // (relevance là 'irrelevant' / 'too_short' hoặc context < 3.0)
   if (relevanceLevel === 'irrelevant' || relevanceLevel === 'too_short' || ctx < 3.0) {
-    // Ngữ pháp chỉ can thiệp tối đa tượng trưng (dưới 10%), không được kéo điểm tổng vượt quá trần
+    // Ngữ pháp & Từ vựng chỉ can thiệp tối đa tượng trưng (dưới 10%), không được kéo điểm tổng vượt quá trần
     const ceiling = Math.min(3.5, Math.max(1.0, ctx + 0.8));
     if (total > ceiling) {
       total = ceiling;
@@ -407,15 +424,19 @@ function fallbackHeuristicEval({ questionText, transcript, pronunciationScores, 
 
   let scoreGrammar = 6.0;
   let scoreContext = 6.0;
+  let scoreLexical = 6.0;
   let relevance = 'relevant';
-  let summary = 'Đã đánh giá cơ bản theo tiêu chuẩn khảo thí.';
+  let summary = 'Đã đánh giá cơ bản theo tiêu chuẩn khảo thí IELTS.';
 
   // Trường hợp đặc thù dạng Read Aloud: chỉ tính điểm phát âm âm học
   if (taskType === 'read_aloud') {
     return {
       score_total: clampScore(rawPron, 0, 10),
-      score_grammar: null, // Read Aloud hoàn toàn không tính điểm ngữ pháp
-      score_context: null, // Read Aloud hoàn toàn không tính điểm ngữ cảnh
+      score_pronunciation: clampScore(rawPron, 0, 10),
+      score_fluency_coherence: null,
+      score_lexical: null,
+      score_grammar: null,
+      score_context: null,
       relevance_level: 'relevant',
       grammar_errors: [],
       feedback_summary: 'Đã hoàn thành đánh giá phát âm đọc to.',
@@ -428,6 +449,7 @@ function fallbackHeuristicEval({ questionText, transcript, pronunciationScores, 
   if (wordCount <= 3) {
     scoreGrammar = 3.0;
     scoreContext = 2.0;
+    scoreLexical = 3.0;
     relevance = 'too_short';
     summary = 'Câu trả lời quá ngắn, chưa đủ ý diễn đạt theo yêu cầu của câu hỏi.';
   } 
@@ -435,6 +457,7 @@ function fallbackHeuristicEval({ questionText, transcript, pronunciationScores, 
   else if (wordCount <= 7) {
     scoreGrammar = 5.5;
     scoreContext = 4.5;
+    scoreLexical = 5.0;
     relevance = 'partially_relevant';
     summary = 'Bạn trả lời được một phần nhưng câu còn ngắn, nên mở rộng thêm chi tiết.';
   } 
@@ -444,22 +467,27 @@ function fallbackHeuristicEval({ questionText, transcript, pronunciationScores, 
     if (taskType === 'long_turn' && wordCount < 30) {
       scoreGrammar = Math.min(7.5, Math.max(5.0, rawPron * 0.85));
       scoreContext = 4.5;
+      scoreLexical = 5.5;
       relevance = 'partially_relevant';
       summary = 'Dạng Cue Card / Long Turn yêu cầu bài nói dài và bao quát các ý gợi ý. Bạn nên phát triển thêm chi tiết.';
     } else {
       scoreGrammar = Math.min(9.0, Math.max(5.0, rawPron * 0.9));
       scoreContext = Math.min(9.0, Math.max(5.5, rawPron * 0.95));
+      scoreLexical = Math.min(8.5, Math.max(5.0, rawPron * 0.88));
       relevance = 'relevant';
-      summary = 'Câu trả lời đầy đủ ý, cấu trúc ngữ pháp tương đối rõ ràng.';
+      summary = 'Câu trả lời đầy đủ ý, cấu trúc ngữ pháp và từ vựng tương đối rõ ràng.';
     }
   }
 
-  // Nếu ngữ cảnh không phù hợp, điểm ngữ pháp không can thiệp nhiều vào điểm tổng
-  let rawCalculatedTotal = (rawPron * 0.4) + (scoreGrammar * 0.3) + (scoreContext * 0.3);
-  const scoreTotal = calibrateTotalScoreWithContext(rawCalculatedTotal, scoreContext, scoreGrammar, relevance, taskType);
+  // Chuẩn 4 trụ cột IELTS: PR (25%) + FC (25%) + LR (25%) + GRA (25%)
+  let rawCalculatedTotal = (rawPron * 0.25) + (scoreContext * 0.25) + (scoreLexical * 0.25) + (scoreGrammar * 0.25);
+  const scoreTotal = calibrateTotalScoreWithContext(rawCalculatedTotal, scoreContext, scoreGrammar, scoreLexical, relevance, taskType);
 
   return {
     score_total: scoreTotal,
+    score_pronunciation: clampScore(rawPron, 0, 10),
+    score_fluency_coherence: clampScore(scoreContext, 0, 10),
+    score_lexical: clampScore(scoreLexical, 0, 10),
     score_grammar: clampScore(scoreGrammar, 0, 10),
     score_context: clampScore(scoreContext, 0, 10),
     relevance_level: relevance,
@@ -480,34 +508,30 @@ function clampScore(val, min = 0, max = 10) {
  * System Prompt Giám khảo Khảo thí Đánh giá Hội thoại (Spoken Dialogue)
  */
 function buildDialogueExaminerSystemPrompt() {
-  return `Bạn là Giám khảo Khảo thí Hội thoại Speaking Quốc tế (Chuẩn IELTS / Cambridge / CEFR). Phân tích đoạn hội thoại giữa Giáo viên và Học viên theo 4 trụ cột khảo thí, đánh giá nghiêm ngặt, khách quan và trả về DUY NHẤT 1 JSON.
+  return `Bạn là Giám khảo Khảo thí Hội thoại Speaking Quốc tế (Chuẩn IELTS / Cambridge). Phân tích đoạn hội thoại giữa Giáo viên và Học viên theo 4 TRỤ CỘT IELTS (PR: 25%, FC: 25%, LR: 25%, GRA: 25%), đánh giá nghiêm ngặt, khách quan và trả về DUY NHẤT 1 JSON.
 
 QUY TẮC CHẤM ĐIỂM THEO 4 TRỤ CỘT IELTS / CAMBRIDGE:
-1. GRA - Grammatical Range & Accuracy / Ngữ pháp (score_grammar 0-10):
+1. PR - Pronunciation / Phát âm (score_pronunciation 0-10 - 25%): Đã đo lường bằng mô hình âm học SpeechOcean762 + quét âm vị L2-MDD.
+2. FC - Fluency & Coherence / Mạch lạc & Tương tác (score_fluency_coherence 0-10 - 25% - Gatekeeper):
+   - Đánh giá khả năng hiểu và phản hồi ăn khớp với câu hỏi của giáo viên, khả năng phát triển ý và duy trì hội thoại liên tục.
+   - Câu trả lời chỉ ở mức A1-A2 ngắn gọn (1 câu đơn giản): score_fluency_coherence tối đa 5.5 - 6.0.
+   - Cộc lốc (1-2 từ) hoặc lạc đề (score_fluency_coherence < 4.5): score_total BẮT BUỘC <= 3.5 - 4.5 (IELTS FC Band 3-4: phản xạ nghèo nàn). Điểm ngữ pháp KHÔNG ĐƯỢC can thiệp kéo điểm tổng lên.
+3. LR - Lexical Resource / Vốn từ vựng (score_lexical 0-10 - 25%):
+   - Đánh giá vốn từ vựng học viên sử dụng trong cuộc hội thoại: độ phong phú, tính linh hoạt, cụm từ tự nhiên (collocations), tránh lặp từ.
+   - Từ vựng sơ cấp hạn chế: score_lexical <= 5.5.
+   - Từ vựng đa dạng, có cụm từ tự nhiên: score_lexical 6.5 - 8.0.
+   - Vốn từ xuất sắc, thành ngữ tự nhiên: score_lexical 8.5 - 10.0.
+   - Đưa vào "better_dialogue_expressions" các câu mẫu diễn đạt tự nhiên, thành ngữ / collocations đắt giá.
+4. GRA - Grammatical Range & Accuracy / Ngữ pháp (score_grammar 0-10 - 25%):
    - 8.5 - 10.0 (C1-C2): Ngữ pháp thành thạo, câu phức linh hoạt, diễn đạt tự nhiên, KHÔNG có lỗi ngữ pháp.
    - 7.0 - 8.4 (B2): Cấu trúc câu tốt, có câu ghép/phức, chỉ mắc 1 lỗi nhỏ không làm đổi nghĩa.
    - 5.5 - 6.9 (B1): Diễn đạt được ý cơ bản nhưng câu đơn giản, mắc 2 lỗi ngữ pháp (chia thì, mạo từ, giới từ, từ loại).
-   - 4.0 - 5.4 (A2): Câu rất ngắn, đơn sơ cấp, mắc từ 3 lỗi ngữ pháp cơ bản trở lên (ví dụ: 'My favorite animal is dog', 'I eat bun bo for lunch today', 'I want to go Japan'). Điểm ngữ pháp BẮT BUỘC <= 5.4.
+   - 4.0 - 5.4 (A2): Câu rất ngắn, đơn sơ cấp, mắc từ 3 lỗi ngữ pháp cơ bản trở lên. Điểm ngữ pháp BẮT BUỘC <= 5.4.
    - 1.0 - 3.9 (A1/Pre-A1): Chỉ nói từ rời rạc, cụt ngủn, sai ngữ pháp nghiêm trọng.
    - QUY TẮC TRỪ ĐIỂM: MỖI lỗi ngữ pháp trong "grammar_errors" BẮT BUỘC trừ 1.0 - 1.5 điểm. TUYỆT ĐỐI KHÔNG cho điểm 7.0+ nếu học sinh có từ 3 lỗi ngữ pháp trở lên.
-   - Luôn liệt kê chi tiết các lỗi trong "grammar_errors". Với mỗi lỗi:
-     + "turn_index": số thứ tự lượt của câu nói bị lỗi (int).
-     + "error_text": cụm từ học viên nói bị lỗi ngữ pháp.
-     + "fix": cách sửa lại chuẩn xác, tự nhiên theo văn phong bản xứ.
-     + "explanation": giải thích chi tiết lỗi bằng tiếng Việt (nêu rõ lý do sai và quy tắc ngữ pháp đúng).
-   - Nếu học viên nói chuẩn xác không mắc lỗi nào, để "grammar_errors": [].
-
-2. FC - Fluency & Coherence / Mạch lạc & Ngữ cảnh (score_context 0-10 - Tiêu chí Gatekeeper):
-   - Đánh giá khả năng hiểu và phản hồi ăn khớp với câu hỏi của giáo viên, khả năng phát triển ý và duy trì hội thoại liên tục.
-   - Câu trả lời chỉ ở mức A1-A2 ngắn gọn (1 câu đơn giản): score_context tối đa 5.5 - 6.0.
-   - Cộc lốc (1-2 từ) hoặc lạc đề (score_context < 4.5): score_total BẮT BUỘC <= 3.5 - 4.5 (IELTS FC Band 3-4: phản xạ nghèo nàn). Điểm ngữ pháp KHÔNG ĐƯỢC can thiệp kéo điểm tổng lên.
-
-3. PR - Pronunciation / Phát âm: Sử dụng điểm phát âm âm học SpeechOcean762 + L2-MDD.
-
-4. LR - Lexical Resource / Vốn từ: Đưa vào "better_dialogue_expressions" các câu mẫu diễn đạt tự nhiên, thành ngữ / collocations đắt giá.
-
-5. Overall Band / Điểm tổng thể (score_total 0-10): Kết hợp Phát âm PR (40%) + Ngữ pháp GRA (30%) + Mạch lạc FC (30%) theo các mức trần trên.
-
+   - Luôn liệt kê chi tiết các lỗi trong "grammar_errors" (turn_index, error_text, fix, explanation).
+5. Overall Band / Điểm tổng thể (score_total 0-10): Tính theo công thức chuẩn IELTS:
+   Overall = (PR * 0.25) + (FC * 0.25) + (LR * 0.25) + (GRA * 0.25) có áp dụng trần Gatekeeper.
 6. Phạm vi đánh giá:
    - Toàn bộ điểm số, nhận xét (conversation_summary), grammar_errors, tips và better_dialogue_expressions CHỈ dành riêng cho Học viên (Student).
    - TUYỆT ĐỐI KHÔNG bắt lỗi, không sửa lỗi và không nhận xét tiêu cực về Giáo viên (Teacher).
@@ -515,6 +539,9 @@ QUY TẮC CHẤM ĐIỂM THEO 4 TRỤ CỘT IELTS / CAMBRIDGE:
 OUTPUT JSON FORMAT:
 {
   "score_total": <float 0-10>,
+  "score_pronunciation": <float 0-10>,
+  "score_fluency_coherence": <float 0-10>,
+  "score_lexical": <float 0-10>,
   "score_grammar": <float 0-10>,
   "score_context": <float 0-10>,
   "conversation_summary": "<Nhận xét sư phạm chi tiết 2-3 câu tiếng Việt dành riêng cho Học viên>",
@@ -552,6 +579,9 @@ export async function evaluateConversationWithAi({
   if (!studentFullText) {
     return {
       score_total: 1.0,
+      score_pronunciation: 1.0,
+      score_fluency_coherence: 1.0,
+      score_lexical: 1.0,
       score_grammar: 1.0,
       score_context: 1.0,
       conversation_summary: 'Không phát hiện thấy lượt nói nào của học viên trong đoạn hội thoại.',
@@ -581,8 +611,8 @@ export async function evaluateConversationWithAi({
   const userPrompt = `HỘI THOẠI:
 ${conversationTranscript}
 
-ĐIỂM PHÁT ÂM HỌC VIÊN (SpeechOcean): Điểm tổng=${rawPronTotal.toFixed(1)}/10 [Chi tiết: Accuracy=${acc.toFixed(1)}, Fluency=${flu.toFixed(1)}, Prosody=${pro.toFixed(1)}]
-Đánh giá toàn diện năng lực hội thoại của Học viên (Student); kiểm tra kỹ lưỡng các lỗi sai ngữ pháp của học viên để đưa vào grammar_errors; kết hợp Điểm tổng phát âm với Ngữ pháp & Ngữ cảnh để chốt score_total (KHÔNG tự tính lại điểm âm học). Trả về đúng JSON.`;
+ĐIỂM PHÁT ÂM HỌC VIÊN (SpeechOcean - PR): Điểm tổng=${rawPronTotal.toFixed(1)}/10 [Chi tiết: Accuracy=${acc.toFixed(1)}, Fluency=${flu.toFixed(1)}, Prosody=${pro.toFixed(1)}]
+Đánh giá toàn diện năng lực hội thoại của Học viên (Student) theo đúng 4 TRỤ CỘT IELTS: PR (25%), FC (25%), LR (25%), GRA (25%); kiểm tra kỹ lưỡng các lỗi sai ngữ pháp của học viên để đưa vào grammar_errors; kết hợp cả 4 tiêu chí để chốt score_total (KHÔNG tự tính lại điểm âm học PR). Trả về đúng JSON.`;
 
   try {
     const controller = new AbortController();
@@ -627,7 +657,8 @@ ${conversationTranscript}
     }
 
     let scoreGrammar = clampScore(parsed.score_grammar, 0, 10);
-    let scoreContext = clampScore(parsed.score_context, 0, 10);
+    let scoreContext = clampScore(parsed.score_context ?? parsed.score_fluency_coherence, 0, 10);
+    let scoreLexical = clampScore(parsed.score_lexical ?? parsed.score_grammar, 0, 10);
     let scoreTotal = clampScore(parsed.score_total, 0, 10);
 
     // Giữ lại lỗi ngữ pháp do AI trả về
@@ -642,8 +673,8 @@ ${conversationTranscript}
       scoreGrammar = Math.min(scoreGrammar, 7.5);
     }
 
-    // Phân hóa điểm tổng thể: kết hợp công bằng giữa Âm học (40%) + Ngữ pháp (30%) + Ngữ cảnh (30%)
-    const weightedTotal = Math.round(((rawPronTotal * 0.40) + (scoreGrammar * 0.30) + (scoreContext * 0.30)) * 10) / 10;
+    // Phân hóa điểm tổng thể chuẩn 4 trụ cột IELTS: PR (25%) + FC (25%) + LR (25%) + GRA (25%)
+    const weightedTotal = Math.round(((rawPronTotal * 0.25) + (scoreContext * 0.25) + (scoreLexical * 0.25) + (scoreGrammar * 0.25)) * 10) / 10;
     if (weightedTotal > 0) {
       scoreTotal = Math.min(scoreTotal, weightedTotal + 0.3);
     }
@@ -657,6 +688,9 @@ ${conversationTranscript}
 
     return {
       score_total: scoreTotal,
+      score_pronunciation: rawPronTotal,
+      score_fluency_coherence: scoreContext,
+      score_lexical: scoreLexical,
       score_grammar: scoreGrammar,
       score_context: scoreContext,
       conversation_summary: parsed.conversation_summary || 'Đã hoàn thành đánh giá hội thoại.',
@@ -691,25 +725,30 @@ function fallbackConversationHeuristic({ studentTurns, studentFullText, pronunci
 
   let gram = 6.0;
   let ctx = 6.0;
+  let lex = 6.0;
   let total = rawPron;
   let summary = 'Học viên tham gia hội thoại đầy đủ các lượt.';
 
   if (avgWordsPerTurn <= 2) {
     gram = 4.0;
     ctx = 2.5;
+    lex = 3.5;
     summary = 'Học viên trả lời các lượt nói còn quá ngắn (cộc lốc), chưa phát triển được ngữ cảnh hội thoại.';
   } else if (avgWordsPerTurn <= 5) {
     gram = 5.5;
     ctx = 4.5;
+    lex = 5.0;
     summary = 'Học viên phản xạ tương đối tốt, câu trả lời đủ ý nhưng nên dùng thêm các liên từ kết nối.';
   } else {
     gram = Math.min(9.0, Math.max(5.5, rawPron * 0.9));
     ctx = Math.min(9.0, Math.max(6.0, rawPron * 0.95));
+    lex = Math.min(8.5, Math.max(5.0, rawPron * 0.88));
     summary = 'Khả năng phản xạ và duy trì hội thoại tốt, từ vựng và ngữ pháp tương đối linh hoạt.';
   }
 
-  total = (rawPron * 0.4) + (gram * 0.3) + (ctx * 0.3);
-  // Nếu ngữ cảnh không phù hợp, điểm ngữ pháp không can thiệp nhiều vào điểm tổng
+  // Chuẩn 4 trụ cột IELTS: PR (25%) + FC (25%) + LR (25%) + GRA (25%)
+  total = (rawPron * 0.25) + (ctx * 0.25) + (lex * 0.25) + (gram * 0.25);
+  // Nếu ngữ cảnh không phù hợp, các điểm khác không kéo điểm tổng lên
   if (ctx < 3.0) {
     total = Math.min(total, Math.max(1.0, ctx + 0.8), 3.5);
   } else if (ctx < 4.5) {
@@ -749,6 +788,9 @@ function fallbackConversationHeuristic({ studentTurns, studentFullText, pronunci
 
   return {
     score_total: clampScore(total, 0, 10),
+    score_pronunciation: clampScore(rawPron, 0, 10),
+    score_fluency_coherence: clampScore(ctx, 0, 10),
+    score_lexical: clampScore(lex, 0, 10),
     score_grammar: clampScore(gram, 0, 10),
     score_context: clampScore(ctx, 0, 10),
     conversation_summary: summary,

@@ -24,7 +24,7 @@ export async function fetchStudentAssessments(studentId) {
   const { data, error } = await supabase
     .from('assessments')
     .select(`
-      id, created_at, score_total, score_accuracy, score_fluency, score_prosodic, llm_feedback, status, result_json,
+      id, created_at, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, llm_feedback, status, result_json,
       teacher:profiles!teacher_id(full_name)
     `)
     .eq('student_id', studentId)
@@ -40,16 +40,20 @@ export async function fetchStudentAssessments(studentId) {
 export async function fetchStudentStats(studentId) {
   const { data, error } = await supabase
     .from('assessments')
-    .select('score_total, score_accuracy, score_fluency, score_prosodic')
+    .select('score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical')
     .eq('student_id', studentId)
     .eq('saved', true);
   if (error) throw error;
-  if (!data || data.length === 0) return { count: 0, avgTotal: 0, avgAcc: 0, avgFlu: 0, avgPro: 0 };
+  if (!data || data.length === 0) return { count: 0, avgTotal: 0, avgAcc: 0, avgFlu: 0, avgPro: 0, avgPR: 0, avgFC: 0, avgLR: 0, avgGRA: 0 };
   const count = data.length;
   const avg = (key) => (data.reduce((s, r) => s + (r[key] || 0), 0) / count).toFixed(1);
   return {
     count,
     avgTotal: avg('score_total'),
+    avgPR: avg('score_accuracy'),
+    avgFC: avg('score_context'),
+    avgLR: avg('score_lexical'),
+    avgGRA: avg('score_grammar'),
     avgAcc: avg('score_accuracy'),
     avgFlu: avg('score_fluency'),
     avgPro: avg('score_prosodic'),

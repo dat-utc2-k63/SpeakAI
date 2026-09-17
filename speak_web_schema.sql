@@ -47,6 +47,9 @@ create table if not exists public.assessments (
   saved boolean default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+alter table public.assessments add column if not exists score_grammar double precision;
+alter table public.assessments add column if not exists score_context double precision;
+alter table public.assessments add column if not exists score_lexical double precision;
 
 -- 2.3. TABLE: global_settings
 -- Lưu URL GPU backend Cloudflare & Cấu hình Gemini 3.7 Flash API
@@ -133,9 +136,10 @@ alter table public.practice_sessions add column if not exists mode text check (m
 alter table public.practice_sessions add column if not exists exam_band text;
 alter table public.practice_sessions add column if not exists score_grammar double precision;
 alter table public.practice_sessions add column if not exists score_context double precision;
+alter table public.practice_sessions add column if not exists score_lexical double precision;
 
 -- 2.7. TABLE: practice_answers
--- Bài ghi âm và kết quả chấm điểm từng câu (Điểm âm học + Điểm ngữ pháp + Điểm ngữ cảnh)
+-- Bài ghi âm và kết quả chấm điểm từng câu (Điểm âm học + Điểm ngữ pháp + Điểm ngữ cảnh + Điểm từ vựng)
 create table if not exists public.practice_answers (
   id uuid default gen_random_uuid() primary key,
   session_id uuid references public.practice_sessions(id) on delete cascade not null,
@@ -148,11 +152,13 @@ create table if not exists public.practice_answers (
   score_prosodic double precision,
   score_grammar double precision,
   score_context double precision,
+  score_lexical double precision,
   result_json jsonb,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table public.practice_answers add column if not exists score_grammar double precision;
 alter table public.practice_answers add column if not exists score_context double precision;
+alter table public.practice_answers add column if not exists score_lexical double precision;
 
 -- ==============================================================================
 -- 3. STORAGE BUCKET: speakai-audio
