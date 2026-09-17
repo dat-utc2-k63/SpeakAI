@@ -212,9 +212,6 @@ import { supabase } from './supabase.js';
             document.getElementById('sidebarName').textContent = 'Lỗi kết nối';
             document.getElementById('sidebarRole').textContent = 'Error';
             alert('Lỗi khởi tạo trang: ' + (err.message || err));
-          } finally {
-            const loader = document.getElementById('globalAiLoader');
-            if (loader) loader.remove();
           }
         })();
 
@@ -1484,9 +1481,6 @@ import { supabase } from './supabase.js';
         document.getElementById('reEnrollVoiceBtn').addEventListener('click', () => {
           buildSentencesList();
           new bootstrap.Modal(document.getElementById('voiceModal')).show();
-          if (typeof initEcapaModel === 'function') {
-            initEcapaModel().catch(e => console.log('Init ECAPA error:', e));
-          }
         });
 
         function setLoading(btn, isLoading) {
@@ -2152,7 +2146,7 @@ import { supabase } from './supabase.js';
                 subtitleEl.innerHTML = `Phân quyền sửa/xóa cho bộ đề: <b class="text-white">${currentEditSetData.title || ''}</b>`;
               }
 
-              const searchInput = document.getElementById('searchPermTeacherInput');
+              const searchInput = document.getElementById('permSearchInput') || document.getElementById('searchPermTeacherInput');
               if (searchInput) searchInput.value = '';
 
               const listEl = document.getElementById('permTeachersList');
@@ -2173,7 +2167,7 @@ import { supabase } from './supabase.js';
           }
 
           // Tìm kiếm giáo viên trong modal phân quyền
-          const searchPermInput = document.getElementById('searchPermTeacherInput');
+          const searchPermInput = document.getElementById('permSearchInput') || document.getElementById('searchPermTeacherInput');
           if (searchPermInput) {
             searchPermInput.addEventListener('input', (e) => {
               const query = e.target.value.toLowerCase().trim();
@@ -2190,8 +2184,34 @@ import { supabase } from './supabase.js';
             });
           }
 
+          // Chọn tất cả giáo viên trong modal phân quyền
+          const permSelectAllBtn = document.getElementById('permSelectAllBtn');
+          if (permSelectAllBtn) {
+            permSelectAllBtn.addEventListener('click', () => {
+              document.querySelectorAll('.perm-teacher-checkbox').forEach(cb => {
+                const item = cb.closest('.perm-teacher-item');
+                if (!item || !item.classList.contains('d-none')) {
+                  cb.checked = true;
+                }
+              });
+            });
+          }
+
+          // Bỏ chọn tất cả giáo viên trong modal phân quyền
+          const permDeselectAllBtn = document.getElementById('permDeselectAllBtn');
+          if (permDeselectAllBtn) {
+            permDeselectAllBtn.addEventListener('click', () => {
+              document.querySelectorAll('.perm-teacher-checkbox').forEach(cb => {
+                const item = cb.closest('.perm-teacher-item');
+                if (!item || !item.classList.contains('d-none')) {
+                  cb.checked = false;
+                }
+              });
+            });
+          }
+
           // Lưu phân quyền
-          const savePermBtn = document.getElementById('savePermBtn');
+          const savePermBtn = document.getElementById('savePermissionsBtn') || document.getElementById('savePermBtn');
           if (savePermBtn) {
             savePermBtn.addEventListener('click', async () => {
               if (!currentEditSetId) return;

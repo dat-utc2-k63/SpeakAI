@@ -50,7 +50,13 @@ export function getBackendUrl() {
     if (url.endsWith('/')) url = url.slice(0, -1);
     return url;
   }
-  return localStorage.getItem('backendUrl') || "https://YOUR_NAMED_TUNNEL_DOMAIN";
+  const local = localStorage.getItem('backendUrl');
+  if (local) {
+    let url = local.trim();
+    if (url.endsWith('/')) url = url.slice(0, -1);
+    return url;
+  }
+  return "";
 }
 
 /**
@@ -74,6 +80,10 @@ export function cosineSimilarity(vecA, vecB) {
  */
 export async function fetchEmbeddingFromBackend(audioBlob) {
   const backendUrl = getBackendUrl();
+  if (!backendUrl) {
+    throw new Error('Chưa cấu hình API Backend! Vui lòng khởi chạy server Kaggle / Cloudflare Tunnel và cập nhật URL máy chủ AI.');
+  }
+
   const formData = new FormData();
   formData.append("audio", audioBlob, "voice_sample.wav");
   
@@ -83,12 +93,12 @@ export async function fetchEmbeddingFromBackend(audioBlob) {
   });
   
   if (!response.ok) {
-    throw new Error(`Lỗi API Kaggle: ${response.status}`);
+    throw new Error(`Lỗi API Kaggle (${response.status}): Không thể trích xuất embedding`);
   }
   
   const data = await response.json();
   if (!data.success) {
-    throw new Error(data.error || "Lỗi trích xuất embedding");
+    throw new Error(data.error || "Lỗi trích xuất embedding từ mô hình");
   }
   
   return data.embedding;

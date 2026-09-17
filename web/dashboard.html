@@ -16,40 +16,6 @@
 </head>
 
 <body class="dashboard-page">
-  <div id="globalAiLoader"
-    class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center d-none"
-    style="background: rgba(15, 23, 42, 0.95); z-index: 9999; backdrop-filter: blur(5px);">
-    <div class="spinner-border text-primary mb-3" style="width: 4rem; height: 4rem;" role="status">
-      <span class="visually-hidden">Loading...</span>
-    </div>
-    <h3 class="text-white fw-bold">Đang tải mô hình AI...</h3>
-    <div class="w-75 mt-3 mb-2" style="max-width: 400px;">
-      <div class="progress" style="height: 10px; background-color: rgba(255,255,255,0.1);">
-        <div id="aiLoaderProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-          role="progressbar" style="width: 0%;"></div>
-      </div>
-    </div>
-    <p class="text-muted" id="aiLoaderText">Đang chuẩn bị kết nối...</p>
-  </div>
-  <script>
-    window.showAiLoader = () => {
-      const loader = document.getElementById('globalAiLoader');
-      if (loader) loader.classList.remove('d-none');
-    };
-
-    window.updateAiProgress = (percent, loadedMB, totalMB) => {
-      const bar = document.getElementById('aiLoaderProgress');
-      const text = document.getElementById('aiLoaderText');
-      if (bar && text) {
-        bar.style.width = percent + '%';
-        if (totalMB > 0) {
-          text.innerHTML = `Đã tải: <b>${loadedMB}MB</b> / ${totalMB}MB (${percent}%)`;
-        } else {
-          text.innerHTML = `Đang xử lý mô hình AI... (${percent}%)`;
-        }
-      }
-    };
-  </script>
 
   <!-- ── SIDEBAR ───────────────────────────────────────────── -->
   <aside class="sidebar" id="sidebar">
@@ -1230,27 +1196,6 @@
         </div>
       </div>
 
-      <!-- Voice Enrollment Modal -->
-      <div class="modal fade" id="voiceEnrollModal" tabindex="-1" data-bs-backdrop="static">
-        <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">Đăng ký mẫu giọng</h5>
-            </div>
-            <div class="modal-body">
-              <p class="text-muted small">Hãy đọc câu sau để hệ thống nhận diện giọng của bạn:</p>
-              <div id="enrollSentence" class="alert alert-info p-3 fw-bold text-center"></div>
-              <div class="text-center my-4">
-                <button id="recordEnrollBtn" class="btn btn-lg btn-primary rounded-circle"
-                  style="width: 70px; height: 70px;">
-                  <i class="bi bi-mic"></i>
-                </button>
-                <div id="enrollStatus" class="mt-2 text-muted small">Nhấn để bắt đầu ghi âm</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
 
       <!-- ── VOICE ENROLLMENT MODAL ──────────────────────── -->
