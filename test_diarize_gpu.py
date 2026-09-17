@@ -44,7 +44,8 @@ def run_test(audio_path: str, teacher_ref: str = None, student_ref: str = None):
         merge_gap_sec=0.5,
         consecutive_merge_gap_sec=2.5,
         step_sec=0.25,
-        boundary_step_sec=0.05
+        boundary_step_sec=0.05,
+        min_similarity_threshold=0.40
     )
     print(f"Khoi tao xong! ({time.time() - start_init:.2f}s)\n")
 

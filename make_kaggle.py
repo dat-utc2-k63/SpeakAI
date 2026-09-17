@@ -82,10 +82,10 @@ asr:
   torch_dtype: float16
   max_new_tokens: 440
   lang_id:
-    enabled: true
+    enabled: false
     drop_languages: [vi, vie, vietnamese]
     min_confidence: 0.45
-    text_vi_regex: true
+    text_vi_regex: false
 
 wavlm:
   model_name: pretrained_models/wavlm-large
@@ -154,6 +154,7 @@ sentence_split:
 diarization:
   vad_threshold_db: -42.0
   consecutive_merge_gap_sec: 2.5
+  min_similarity_threshold: 0.40
 """
 
 # models/__init__.py

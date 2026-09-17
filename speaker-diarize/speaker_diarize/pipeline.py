@@ -55,12 +55,14 @@ class TwoSpeakerSplitter:
         consecutive_merge_gap_sec: float = 2.5,
         step_sec: float = 0.5,
         boundary_step_sec: float = 0.1,
+        min_similarity_threshold: float = 0.40,
     ) -> None:
         self.embedder = embedder or ERes2NetEmbedder(device=device)
         self.vad = vad or RmsVad(threshold_db=vad_threshold_db)
         self.min_segment_sec = min_segment_sec
         self.merge_gap_sec = merge_gap_sec
         self.consecutive_merge_gap_sec = consecutive_merge_gap_sec
+        self.min_similarity_threshold = min_similarity_threshold
         self.buffer = SlidingWindowBuffer(window_sec=cluster_window_sec, step_sec=step_sec)
         self.boundary_buffer = SlidingWindowBuffer(
             window_sec=boundary_window_sec, 
@@ -325,8 +327,8 @@ class TwoSpeakerSplitter:
                     # Quyết định role dựa trên so sánh độ tương đồng giọng thực tế
                     role = ROLE_TEACHER if t_score >= s_score else ROLE_STUDENT
                     
-                    # Lọc bỏ đoạn nhiễu/tạp âm không khớp với cả 2 người nói (< 0.50)
-                    if max(t_score, s_score) < 0.50:
+                    # Lọc bỏ đoạn nhiễu/tạp âm không khớp với cả 2 người nói (< 0.40)
+                    if max(t_score, s_score) < self.min_similarity_threshold:
                         continue
                         
                 except ValueError:

@@ -213,6 +213,7 @@ class SpeakingPipeline:
         diar_cfg = self.config.get("diarization") or {}
         vad_thresh = float(diar_cfg.get("vad_threshold_db", -42.0))
         consec_gap = float(diar_cfg.get("consecutive_merge_gap_sec", 2.5))
+        min_sim_thresh = float(diar_cfg.get("min_similarity_threshold", 0.40))
         self.diarizer = TwoSpeakerSplitter(
             device=self.diarize_device,
             vad_threshold_db=vad_thresh,
@@ -223,7 +224,8 @@ class SpeakingPipeline:
             merge_gap_sec=0.5,
             consecutive_merge_gap_sec=consec_gap,
             step_sec=0.25,
-            boundary_step_sec=0.05
+            boundary_step_sec=0.05,
+            min_similarity_threshold=min_sim_thresh,
         )
         
         # ── Load Whisper Transcriber on self.asr_device (cuda:0) ──
@@ -307,7 +309,7 @@ class SpeakingPipeline:
             return None, False
 
         drop_vi = False
-        if score:
+        if score and self._lang_id_cfg.get("enabled", False):
             drop_vi, reason = is_vietnamese_segment(
                 seg["path"],
                 transcript,
