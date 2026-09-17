@@ -50,12 +50,21 @@ export async function fetchSetWithQuestions(setId) {
     ...setData,
     exam_type: setData.exam_type || 'general',
     time_limit: setData.time_limit || 0,
-    questions: (questions || []).map(q => ({
-      ...q,
-      task_type: q.task_type || 'short_qa',
-      prep_time: q.prep_time !== undefined && q.prep_time !== null ? q.prep_time : 15,
-      response_time: q.response_time !== undefined && q.response_time !== null ? q.response_time : 45,
-    }))
+    questions: (questions || []).map(q => {
+      let tType = q.task_type;
+      if (!tType && q.hint && typeof q.hint === 'string' && q.hint.startsWith('__META__:')) {
+        try {
+          const meta = JSON.parse(q.hint.slice(9));
+          if (meta.task_type) tType = meta.task_type;
+        } catch (e) {}
+      }
+      return {
+        ...q,
+        task_type: tType || 'short_qa',
+        prep_time: q.prep_time !== undefined && q.prep_time !== null ? q.prep_time : 15,
+        response_time: q.response_time !== undefined && q.response_time !== null ? q.response_time : 45,
+      };
+    })
   };
 }
 

@@ -2010,6 +2010,15 @@ import { supabase } from './supabase.js';
           const availableTypes = getAvailableTaskTypes(currentExam);
 
           const validIds = availableTypes.map(t => t.id || t.key);
+          if (selectedTaskType && !validIds.includes(selectedTaskType) && TASK_TYPES[selectedTaskType]) {
+            availableTypes.push({
+              ...TASK_TYPES[selectedTaskType],
+              id: selectedTaskType,
+              key: selectedTaskType,
+              status: 'primary',
+            });
+            validIds.push(selectedTaskType);
+          }
           if (!selectedTaskType || !validIds.includes(selectedTaskType)) {
             selectedTaskType = validIds[0] || 'short_qa';
           }

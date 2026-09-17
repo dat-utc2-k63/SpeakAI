@@ -336,6 +336,23 @@ export function getAvailableTaskTypes(examType = 'general') {
   return list;
 }
 
+function encodeMetaHint(taskType, originalHint) {
+  return `__META__:${JSON.stringify({ task_type: taskType, hint: originalHint || null })}`;
+}
+
+function decodeMetaHint(hintValue) {
+  if (hintValue && typeof hintValue === 'string' && hintValue.startsWith('__META__:')) {
+    try {
+      const parsed = JSON.parse(hintValue.slice(9));
+      return {
+        task_type: parsed.task_type || null,
+        hint: parsed.hint || null
+      };
+    } catch (e) {}
+  }
+  return { task_type: null, hint: hintValue || null };
+}
+
 /**
  * Lấy danh sách câu hỏi trong bộ đề
  */
@@ -346,31 +363,37 @@ export async function fetchQuestions(setId) {
     .eq('set_id', setId)
     .order('order_num', { ascending: true });
   if (error) throw error;
-  return (data || []).map(q => ({
-    ...q,
-    task_type: q.task_type || 'short_qa',
-    image_url: q.image_url || null,
-    reference_text: q.reference_text || null,
-    prep_time: q.prep_time !== undefined && q.prep_time !== null ? q.prep_time : 15,
-    response_time: q.response_time !== undefined && q.response_time !== null ? q.response_time : 45,
-  }));
+  return (data || []).map(q => {
+    const meta = decodeMetaHint(q.hint);
+    return {
+      ...q,
+      task_type: q.task_type || meta.task_type || 'short_qa',
+      hint: meta.hint !== null ? meta.hint : (q.hint && !q.hint.startsWith('__META__:') ? q.hint : null),
+      image_url: q.image_url || null,
+      reference_text: q.reference_text || null,
+      prep_time: q.prep_time !== undefined && q.prep_time !== null ? q.prep_time : 15,
+      response_time: q.response_time !== undefined && q.response_time !== null ? q.response_time : 45,
+    };
+  });
 }
 
 /**
  * Thêm câu hỏi mới vào bộ đề
  */
 export async function addQuestion(setId, { question_text, order_num, part_title, prep_time, response_time, task_type, image_url, reference_text, hint }) {
+  const tType = task_type || 'short_qa';
+  const metaHint = encodeMetaHint(tType, hint);
   const payload = {
     set_id: setId,
     question_text,
     reference_text: reference_text || null,
     image_url: image_url || null,
-    hint: hint || null,
+    hint: metaHint,
     order_num: order_num || 1,
     part_title: part_title || null,
     prep_time: prep_time !== undefined ? parseInt(prep_time) : 15,
     response_time: response_time !== undefined ? parseInt(response_time) : 45,
-    task_type: task_type || 'short_qa',
+    task_type: tType,
   };
 
   try {
@@ -379,7 +402,7 @@ export async function addQuestion(setId, { question_text, order_num, part_title,
       .insert(payload)
       .select()
       .single();
-    if (!error) return data;
+    if (!error) return { ...data, task_type: data.task_type || tType, hint: hint || null };
     // Fallback nếu database Supabase chưa chạy migration cột task_type hoặc image_url
     if (error && (error.message?.includes('image_url') || error.message?.includes('task_type') || error.code === '42703' || error.code === 'PGRST204')) {
       console.warn('Cột image_url hoặc task_type chưa có trong DB Supabase, fallback:', error.message);
@@ -391,7 +414,7 @@ export async function addQuestion(setId, { question_text, order_num, part_title,
         .select()
         .single();
       if (retryError) throw retryError;
-      return { ...retryData, task_type: task_type || 'short_qa', image_url: image_url || null };
+      return { ...retryData, task_type: tType, image_url: image_url || null, hint: hint || null };
     }
     throw error;
   } catch (err) {
@@ -404,7 +427,7 @@ export async function addQuestion(setId, { question_text, order_num, part_title,
         .select()
         .single();
       if (retryError) throw retryError;
-      return { ...retryData, task_type: task_type || 'short_qa', image_url: image_url || null };
+      return { ...retryData, task_type: tType, image_url: image_url || null, hint: hint || null };
     }
     throw err;
   }
@@ -414,15 +437,20 @@ export async function addQuestion(setId, { question_text, order_num, part_title,
  * Cập nhật câu hỏi
  */
 export async function updateQuestion(questionId, updates) {
+  const safeUpdates = { ...updates };
+  const tType = updates.task_type;
+  if (tType) {
+    safeUpdates.hint = encodeMetaHint(tType, updates.hint);
+  }
+
   try {
     const { error } = await supabase
       .from('questions')
-      .update(updates)
+      .update(safeUpdates)
       .eq('id', questionId);
     if (!error) return;
     // Fallback nếu database Supabase chưa có cột task_type hoặc image_url
     if (error && (error.message?.includes('image_url') || error.message?.includes('task_type') || error.code === '42703' || error.code === 'PGRST204')) {
-      const safeUpdates = { ...updates };
       if (error.message?.includes('image_url')) delete safeUpdates.image_url;
       if (error.message?.includes('task_type')) delete safeUpdates.task_type;
       const { error: retryErr } = await supabase
@@ -435,7 +463,6 @@ export async function updateQuestion(questionId, updates) {
     throw error;
   } catch (err) {
     if (err.message?.includes('image_url') || err.message?.includes('task_type')) {
-      const safeUpdates = { ...updates };
       delete safeUpdates.image_url;
       delete safeUpdates.task_type;
       const { error: retryErr } = await supabase
