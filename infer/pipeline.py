@@ -308,16 +308,26 @@ class SpeakingPipeline:
         if not transcript.strip():
             return None, False
 
+        # Clean Whisper hallucinations & bracketed sound annotations
+        clean_tr = re.sub(r"\[.*?\]|\(.*?\)", "", transcript).strip()
+        lower_tr = clean_tr.lower().strip(" .,!?")
+        hallucination_phrases = {
+            "thank you for watching", "thanks for watching", "please subscribe",
+            "subtitles by", "like and subscribe", "see you next time", "bye bye",
+        }
+        if not clean_tr or lower_tr in hallucination_phrases:
+            return None, False
+
         drop_vi = False
         if score and self._lang_id_cfg.get("enabled", False):
             drop_vi, reason = is_vietnamese_segment(
                 seg["path"],
-                transcript,
+                clean_tr,
                 device=self.asr_device,
                 cfg=self._lang_id_cfg,
             )
             if drop_vi:
-                print(f"[lang_id] Bỏ đoạn tiếng Việt ({reason}): {transcript[:60]}…", flush=True)
+                print(f"[lang_id] Bỏ đoạn tiếng Việt ({reason}): {clean_tr[:60]}…", flush=True)
                 return None, True
 
         if not score:
@@ -328,18 +338,34 @@ class SpeakingPipeline:
                 "duration_sec": seg["duration_sec"],
                 "audio": seg["path"],
                 "turn_index": seg["index"],
-                "transcript": transcript,
+                "transcript": clean_tr,
                 "role": role,
                 "scored": False,
             }, False
 
         try:
             track = self.assess_track(
-                seg["path"], transcript, feedback=False, lang=lang,
+                seg["path"], clean_tr, feedback=False, lang=lang,
                 feedback_mode="local", truncate=False, apply_preprocess=False,
             )
-        except ValueError:
-            return None, False
+        except Exception as assess_err:
+            print(f"[{role}] assess_track notice for turn {seg['index']} ('{clean_tr[:40]}'): {assess_err}. Bảo toàn turn với scored=False.")
+            words_fallback = [{"word": w, "status": "good"} for w in clean_tr.split() if w.strip()]
+            return {
+                "index": seg["index"],
+                "start_sec": seg["start_sec"],
+                "end_sec": seg["end_sec"],
+                "duration_sec": seg["duration_sec"],
+                "audio": seg["path"],
+                "turn_index": seg["index"],
+                "transcript": clean_tr,
+                "role": role,
+                "scored": False,
+                "scores": {"total": 6.0, "accuracy": 6.0, "fluency": 6.0, "prosodic": 6.0},
+                "errors": {"phonemes": [], "words": []},
+                "words_detail": words_fallback,
+                "transformer_feedback": {},
+            }, False
 
         return {
             "index": seg["index"],
@@ -379,7 +405,6 @@ class SpeakingPipeline:
 
         # ── Run L2-MDD model for full-phoneme scanning & ASHA error diagnosis ──
         # L2-MDD is the EXCLUSIVE authority for phoneme error detection and word error marking.
-        # SpeechOcean762 is strictly used for utterance scores (Total, Acc, Flu, Pro).
         l2_turn_feedback = None
         final_errors = {"phonemes": [], "words": []}
         words_detail = []
@@ -416,8 +441,34 @@ class SpeakingPipeline:
             final_errors = pron_errors or {"phonemes": [], "words": []}
             words_detail = pron_result.get("words_detail") or []
 
-        # SpeechOcean762 is the SOLE scoring model for utterance metrics (Total, Acc, Flu, Pro)
-        final_scores = pron_scores
+        # ── Hiệu chuẩn & Phân hóa điểm số dựa trên lỗi âm vị thực tế từ L2-MDD ──
+        # Phạt điểm Accuracy và Total khi có lỗi phát âm âm vị nghiêm trọng (ASHA critical/bad)
+        calibrated_scores = dict(pron_scores)
+        if words_detail:
+            num_crit = 0
+            num_warn = 0
+            for w in words_detail:
+                for ph in w.get("phones", []):
+                    st = ph.get("status")
+                    if st == "bad":
+                        num_crit += 1
+                    elif st == "warning":
+                        num_warn += 1
+
+            if num_crit > 0 or num_warn > 0:
+                # Mỗi âm vị phát âm sai nghiêm trọng trừ 0.40; cảnh báo trừ 0.15 (tối đa trừ 3.5 điểm)
+                pen = min(3.5, num_crit * 0.40 + num_warn * 0.15)
+                base_acc = float(pron_scores.get("accuracy", 7.0))
+                calibrated_acc = max(1.5, round(base_acc - pen, 2))
+                calibrated_scores["accuracy"] = calibrated_acc
+
+                # Tính lại Total score phản ánh đúng Accuracy sau khi trừ điểm
+                flu = float(pron_scores.get("fluency", 7.0))
+                pro = float(pron_scores.get("prosodic", 7.0))
+                calibrated_total = max(1.5, round(0.50 * calibrated_acc + 0.30 * flu + 0.20 * pro, 2))
+                calibrated_scores["total"] = calibrated_total
+
+        final_scores = calibrated_scores
 
         # Generate per-turn feedback
         transformer_feedback = PronunciationScorer.generate_transformer_feedback(

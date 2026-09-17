@@ -131,13 +131,13 @@ scorer:
   phoneme_low_threshold: 1.2
   calibration:
     enabled: true
-    slope: 1.20
-    offset: -1.60
+    slope: 1.25
+    offset: -2.20
     short_duration_sec: 3.5
     short_duration_factor: 0.40
     long_duration_sec: 4.0
-    long_duration_factor: 0.15
-    long_duration_max_boost: 1.5
+    long_duration_factor: 0.05
+    long_duration_max_boost: 0.4
     phone_slope: 6.0
     phone_offset: -3.0
 

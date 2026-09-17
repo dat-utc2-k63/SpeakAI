@@ -1013,6 +1013,22 @@ import { supabase } from './supabase.js';
                 }
               }
             }
+            if (r.student && Array.isArray(r.student.sentences)) {
+              for (let i = 0; i < r.student.sentences.length; i++) {
+                let s = r.student.sentences[i];
+                if (s.audio) {
+                  s.audio = await uploadUrl(s.audio, 'student_sent_' + i);
+                }
+              }
+            }
+            if (r.teacher && Array.isArray(r.teacher.sentences)) {
+              for (let i = 0; i < r.teacher.sentences.length; i++) {
+                let s = r.teacher.sentences[i];
+                if (s.audio) {
+                  s.audio = await uploadUrl(s.audio, 'teacher_sent_' + i);
+                }
+              }
+            }
 
             await saveAssessment(currentAssessmentId, {
               score_total: r.score_total, score_accuracy: r.score_accuracy, score_fluency: r.score_fluency,

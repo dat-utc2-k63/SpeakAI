@@ -477,21 +477,29 @@ function clampScore(val, min = 0, max = 10) {
  * System Prompt Giám khảo Khảo thí Đánh giá Hội thoại (Spoken Dialogue)
  */
 function buildDialogueExaminerSystemPrompt() {
-  return `Bạn là Giám khảo Khảo thí Hội thoại Speaking (CEFR/IELTS). Phân tích đoạn hội thoại giữa Giáo viên và Học viên, trả về DUY NHẤT 1 JSON.
+  return `Bạn là Giám khảo Khảo thí Hội thoại Speaking (CEFR/IELTS). Phân tích đoạn hội thoại giữa Giáo viên và Học viên, đánh giá nghiêm ngặt, khách quan và trả về DUY NHẤT 1 JSON.
 
-QUY TẮC CHẤM ĐIỂM:
-1. Ngữ cảnh & Phản xạ (score_context 0-10 - Gatekeeper):
-   - Đánh giá khả năng hiểu và phản hồi ăn khớp với câu hỏi của giáo viên.
-   - Cộc lốc (1-2 từ) hoặc lạc đề (score_context < 4.5): score_total BẮT BUỘC <= 3.5 - 4.5. Điểm ngữ pháp KHÔNG ĐƯỢC can thiệp kéo điểm tổng lên.
-2. Ngữ pháp & Từ vựng (score_grammar 0-10):
-   - BẮT BUỘC kiểm tra chi tiết các câu của Học viên để phát hiện các điểm sai ngữ pháp, chia sai thì, trật tự từ, giới từ, mạo từ hay dùng sai từ.
+QUY TẮC CHẤM ĐIỂM VÀ PHÂN HÓA NĂNG LỰC (CEFR / IELTS SCALE):
+1. Ngữ pháp & Từ vựng (score_grammar 0-10):
+   - 8.5 - 10.0 (C1-C2): Ngữ pháp thành thạo, câu phức linh hoạt, diễn đạt tự nhiên, KHÔNG có lỗi ngữ pháp.
+   - 7.0 - 8.4 (B2): Cấu trúc câu tốt, có câu ghép/phức, chỉ mắc 1 lỗi nhỏ không làm đổi nghĩa.
+   - 5.5 - 6.9 (B1): Diễn đạt được ý cơ bản nhưng câu đơn giản, mắc 2 lỗi ngữ pháp (chia thì, mạo từ, giới từ, từ loại).
+   - 4.0 - 5.4 (A2): Câu rất ngắn, đơn sơ cấp, mắc từ 3 lỗi ngữ pháp cơ bản trở lên (ví dụ: 'My favorite animal is dog', 'I eat bun bo for lunch today', 'I want to go Japan'). Điểm ngữ pháp BẮT BUỘC <= 5.4.
+   - 1.0 - 3.9 (A1/Pre-A1): Chỉ nói từ rời rạc, cụt ngủn, sai ngữ pháp nghiêm trọng.
+   - QUY TẮC TRỪ ĐIỂM: MỖI lỗi ngữ pháp trong "grammar_errors" BẮT BUỘC trừ 1.0 - 1.5 điểm. TUYỆT ĐỐI KHÔNG cho điểm 7.0+ nếu học sinh có từ 3 lỗi ngữ pháp trở lên.
    - Luôn liệt kê chi tiết các lỗi trong "grammar_errors". Với mỗi lỗi:
      + "turn_index": số thứ tự lượt của câu nói bị lỗi (int).
      + "error_text": cụm từ học viên nói bị lỗi ngữ pháp.
      + "fix": cách sửa lại chuẩn xác, tự nhiên theo văn phong bản xứ.
      + "explanation": giải thích chi tiết lỗi bằng tiếng Việt (nêu rõ lý do sai và quy tắc ngữ pháp đúng).
-   - Nếu học viên nói chuẩn xác không mắc lỗi ngữ pháp nào, để "grammar_errors": [].
-3. Điểm tổng thể (score_total 0-10): Kết hợp Phát âm + Ngữ pháp + Ngữ cảnh theo trần trên.
+   - Nếu học viên nói chuẩn xác không mắc lỗi nào, để "grammar_errors": [].
+
+2. Ngữ cảnh & Phản xạ (score_context 0-10 - Gatekeeper):
+   - Đánh giá khả năng hiểu và phản hồi ăn khớp với câu hỏi của giáo viên.
+   - Câu trả lời chỉ ở mức A1-A2 ngắn gọn (1 câu đơn giản): score_context tối đa 5.5 - 6.0.
+   - Cộc lốc (1-2 từ) hoặc lạc đề (score_context < 4.5): score_total BẮT BUỘC <= 3.5 - 4.5. Điểm ngữ pháp KHÔNG ĐƯỢC can thiệp kéo điểm tổng lên.
+
+3. Điểm tổng thể (score_total 0-10): Kết hợp Phát âm âm học (40%) + Ngữ pháp (30%) + Ngữ cảnh (30%) theo các mức trần trên.
 
 4. Phạm vi đánh giá:
    - Toàn bộ điểm số, nhận xét (conversation_summary), grammar_errors, tips và better_dialogue_expressions CHỈ dành riêng cho Học viên (Student).
@@ -611,9 +619,27 @@ ${conversationTranscript}
       }
     }
 
-    const scoreGrammar = clampScore(parsed.score_grammar, 0, 10);
-    const scoreContext = clampScore(parsed.score_context, 0, 10);
+    let scoreGrammar = clampScore(parsed.score_grammar, 0, 10);
+    let scoreContext = clampScore(parsed.score_context, 0, 10);
     let scoreTotal = clampScore(parsed.score_total, 0, 10);
+
+    // Giữ lại lỗi ngữ pháp do AI trả về
+    const studentGrammarErrors = Array.isArray(parsed.grammar_errors) ? parsed.grammar_errors : [];
+
+    // Guardrail chốt chặn chống over-scoring: Phạt điểm thực chất khi có lỗi ngữ pháp
+    if (studentGrammarErrors.length >= 4) {
+      scoreGrammar = Math.min(scoreGrammar, 5.2);
+    } else if (studentGrammarErrors.length >= 2) {
+      scoreGrammar = Math.min(scoreGrammar, 6.2);
+    } else if (studentGrammarErrors.length === 1) {
+      scoreGrammar = Math.min(scoreGrammar, 7.5);
+    }
+
+    // Phân hóa điểm tổng thể: kết hợp công bằng giữa Âm học (40%) + Ngữ pháp (30%) + Ngữ cảnh (30%)
+    const weightedTotal = Math.round(((rawPronTotal * 0.40) + (scoreGrammar * 0.30) + (scoreContext * 0.30)) * 10) / 10;
+    if (weightedTotal > 0) {
+      scoreTotal = Math.min(scoreTotal, weightedTotal + 0.3);
+    }
 
     // Hiệu chuẩn hội thoại: Nếu ngữ cảnh không phù hợp, điểm ngữ pháp không can thiệp nhiều vào điểm tổng
     if (scoreContext < 3.0) {
@@ -621,9 +647,6 @@ ${conversationTranscript}
     } else if (scoreContext < 4.5) {
       scoreTotal = Math.min(scoreTotal, Math.max(2.5, scoreContext + 0.6), 4.5);
     }
-
-    // Giữ lại lỗi ngữ pháp do AI trả về
-    const studentGrammarErrors = Array.isArray(parsed.grammar_errors) ? parsed.grammar_errors : [];
 
     return {
       score_total: scoreTotal,
