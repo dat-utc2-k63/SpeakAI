@@ -564,7 +564,6 @@ export async function assessSingleAnswer(apiUrl, audioBlob, studentEmbeddings, o
   formData.append('teacher_embeddings_json', JSON.stringify(studentEmbeddings || []));
   formData.append('student_embeddings_json', JSON.stringify(studentEmbeddings || []));
   formData.append('score_teacher', 'false');
-  formData.append('skip_feedback', 'true');
   formData.append('diarize', 'false');
   if (options.taskType) {
     formData.append('task_type', options.taskType);

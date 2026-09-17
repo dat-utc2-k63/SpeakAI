@@ -526,7 +526,6 @@ import { supabase } from './supabase.js';
             formData.append("teacher_embeddings_json", JSON.stringify(tEmb || []));
             formData.append("student_embeddings_json", JSON.stringify(sEmb || []));
             formData.append("score_teacher", scoreTeacher);
-            formData.append("skip_feedback", "true"); // Bỏ qua LLM cũ trên Colab vì đã tích hợp AI Evaluator bằng API Key trực tiếp trên client
 
             const startResponse = await fetch(`${apiUrl.replace(/\/$/, '')}/assess_start`, {
               method: "POST",
@@ -589,6 +588,207 @@ import { supabase } from './supabase.js';
 
         let currentAssessmentId = null;
         let currentApiResult = null;
+
+        // IELTS Band & CEFR Level helper chuẩn quốc tế
+        function getIeltsBandLabel(score) {
+          const s = Number(score) || 0;
+          if (s >= 8.5) return { band: 'IELTS 8.5 - 9.0', level: 'C2 Xuất sắc', color: 'bg-success' };
+          if (s >= 7.5) return { band: 'IELTS 7.5 - 8.0', level: 'C1 Rất tốt', color: 'bg-primary' };
+          if (s >= 6.5) return { band: 'IELTS 6.5 - 7.0', level: 'B2 Khá', color: 'bg-info text-dark' };
+          if (s >= 5.0) return { band: 'IELTS 5.0 - 6.0', level: 'B1 Trung bình', color: 'bg-warning text-dark' };
+          if (s >= 3.5) return { band: 'IELTS 3.5 - 4.5', level: 'A2 Giới hạn', color: 'bg-danger' };
+          return { band: 'IELTS 1.0 - 3.0', level: 'A1 Cần cải thiện', color: 'bg-danger' };
+        }
+
+        /**
+         * Render Khung Nhận Xét & Đánh Giá Toàn Diện Chuẩn Quốc Tế
+         * Tích hợp đồng thời:
+         * 1. Tổng quan IELTS Band & CEFR
+         * 2. Bảng phân tích 4 Trụ Cột (PR: 25%, FC: 25%, LR: 25%, GRA: 25%)
+         * 3. Thẻ sửa lỗi ngữ pháp chi tiết (Grammar Correction Cards)
+         * 4. Lưu ý âm vị & phát âm âm học IPA (SpeechOcean & L2-MDD Tips)
+         * 5. Mẫu câu giao tiếp tự nhiên nâng cao (Better Expressions)
+         * 6. Lời khuyên phản xạ giao tiếp (Communication Tips)
+         */
+        function renderComprehensiveAiFeedback(aiEval, otf = {}, extraScores = {}) {
+          const isFallback = Boolean(aiEval?.is_fallback);
+          const hasAi = Boolean(aiEval);
+          const otfTips = Array.isArray(otf?.tips) ? otf.tips : [];
+          const otfSummary = otf?.summary || '';
+
+          // Điểm số 4 trụ cột
+          const totalScore = Number(aiEval?.score_total ?? extraScores.total ?? 0);
+          const prScore = Number(aiEval?.score_pronunciation ?? extraScores.accuracy ?? extraScores.pr ?? totalScore).toFixed(1);
+          const fcScore = (aiEval?.score_fluency_coherence ?? aiEval?.score_context ?? extraScores.context != null)
+            ? Number(aiEval?.score_fluency_coherence ?? aiEval?.score_context ?? extraScores.context).toFixed(1)
+            : '--';
+          const lrScore = (aiEval?.score_lexical ?? extraScores.lexical != null)
+            ? Number(aiEval?.score_lexical ?? extraScores.lexical).toFixed(1)
+            : '--';
+          const graScore = (aiEval?.score_grammar ?? extraScores.grammar != null)
+            ? Number(aiEval?.score_grammar ?? extraScores.grammar).toFixed(1)
+            : '--';
+
+          const bandInfo = getIeltsBandLabel(totalScore);
+
+          let html = `
+            <!-- Header Tổng quan & IELTS Band -->
+            <div class="mb-3 p-3 rounded-3" style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08);">
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2 pb-2 border-bottom border-secondary border-opacity-25">
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bi bi-award-fill text-warning fs-5"></i>
+                  <span class="fw-bold text-white fs-6">Đánh Giá Hội Thoại Chuẩn Quốc Tế</span>
+                  <span class="badge ${bandInfo.color} fs-7">${bandInfo.band} · ${bandInfo.level}</span>
+                </div>
+                <div>
+                  ${hasAi && !isFallback
+                    ? '<span class="badge bg-primary-subtle text-primary border border-primary-subtle small"><i class="bi bi-stars me-1"></i>AI Evaluator (Chuẩn Khảo Thí)</span>'
+                    : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle small"><i class="bi bi-cpu me-1"></i>Phân tích Âm học & Heuristic</span>'
+                  }
+                </div>
+              </div>
+              <div class="text-light text-opacity-90 small lh-base">
+                ${simpleMarkdown(aiEval?.conversation_summary || otfSummary || 'Đã hoàn thành phân tích toàn diện cuộc hội thoại.')}
+              </div>
+            </div>
+
+            <!-- 4 Trụ Cột Đánh Giá IELTS -->
+            <div class="mb-3">
+              <div class="small fw-semibold text-muted text-uppercase mb-2" style="letter-spacing: 0.05em;">
+                <i class="bi bi-grid-fill me-1 text-primary"></i>Phân Tích 4 Trụ Cột Đánh Giá (IELTS Speaking Rubric):
+              </div>
+              <div class="row g-2 row-cols-2 row-cols-md-4">
+                <div class="col">
+                  <div class="p-2 rounded bg-dark border border-secondary border-opacity-25 text-center h-100">
+                    <div class="d-flex align-items-center justify-content-center gap-1 mb-1">
+                      <span class="badge bg-success-subtle text-success smaller">PR (25%)</span>
+                    </div>
+                    <div class="fs-5 fw-bold text-success">${prScore}</div>
+                    <div class="text-white small fw-semibold">Phát Âm & Ngữ Điệu</div>
+                    <div class="text-muted smaller" style="font-size:0.68rem;">Mô hình âm học SpeechOcean</div>
+                  </div>
+                </div>
+                <div class="col">
+                  <div class="p-2 rounded bg-dark border border-secondary border-opacity-25 text-center h-100">
+                    <div class="d-flex align-items-center justify-content-center gap-1 mb-1">
+                      <span class="badge bg-info-subtle text-info smaller">FC (25%)</span>
+                    </div>
+                    <div class="fs-5 fw-bold text-info">${fcScore}</div>
+                    <div class="text-white small fw-semibold">Mạch Lạc & Tương Tác</div>
+                    <div class="text-muted smaller" style="font-size:0.68rem;">Phản xạ & Mở rộng ý</div>
+                  </div>
+                </div>
+                <div class="col">
+                  <div class="p-2 rounded bg-dark border border-secondary border-opacity-25 text-center h-100">
+                    <div class="d-flex align-items-center justify-content-center gap-1 mb-1">
+                      <span class="badge bg-warning-subtle text-warning smaller">LR (25%)</span>
+                    </div>
+                    <div class="fs-5 fw-bold text-warning">${lrScore}</div>
+                    <div class="text-white small fw-semibold">Vốn Từ Vựng</div>
+                    <div class="text-muted smaller" style="font-size:0.68rem;">Độ phong phú & Collocations</div>
+                  </div>
+                </div>
+                <div class="col">
+                  <div class="p-2 rounded bg-dark border border-secondary border-opacity-25 text-center h-100">
+                    <div class="d-flex align-items-center justify-content-center gap-1 mb-1">
+                      <span class="badge bg-primary-subtle text-primary smaller">GRA (25%)</span>
+                    </div>
+                    <div class="fs-5 fw-bold text-primary">${graScore}</div>
+                    <div class="text-white small fw-semibold">Ngữ Pháp & Cấu Trúc</div>
+                    <div class="text-muted smaller" style="font-size:0.68rem;">Độ chính xác & Câu phức</div>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+
+          // Thẻ lỗi ngữ pháp (Grammar Errors)
+          if (aiEval?.grammar_errors && aiEval.grammar_errors.length > 0) {
+            html += `
+              <div class="mb-3">
+                <div class="small fw-semibold text-warning mb-2 d-flex align-items-center gap-1">
+                  <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+                  <span>Các điểm ngữ pháp & cấu trúc cần lưu ý sửa đổi (${aiEval.grammar_errors.length}):</span>
+                </div>
+                <div class="d-flex flex-column gap-2">
+                  ${aiEval.grammar_errors.map((ge, idx) => `
+                    <div class="p-2 rounded bg-dark border border-secondary border-opacity-25 small">
+                      <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle smaller">
+                          ${ge.turn_index ? `Lượt ${ge.turn_index} - Học viên nói` : `Lỗi ${idx + 1}`}
+                        </span>
+                        <span class="text-danger font-monospace text-decoration-line-through">"${ge.error_text}"</span>
+                        <i class="bi bi-arrow-right text-muted"></i>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle smaller">Sửa chuẩn</span>
+                        <span class="text-success fw-bold font-monospace">"${ge.fix}"</span>
+                      </div>
+                      ${ge.explanation ? `<div class="text-muted smaller ps-2 border-start border-warning border-2">${ge.explanation}</div>` : ''}
+                    </div>
+                  `).join('')}
+                </div>
+              </div>`;
+          } else if (hasAi) {
+            html += `
+              <div class="mb-3 p-2 rounded bg-dark border border-secondary border-opacity-25 small text-success d-flex align-items-center gap-2">
+                <i class="bi bi-check-circle-fill fs-6"></i>
+                <span><strong>Ngữ pháp đạt chuẩn:</strong> Học viên phản xạ và kiểm soát cấu trúc ngữ pháp tốt trong các lượt nói.</span>
+              </div>`;
+          }
+
+          // Khôi phục Lời khuyên Âm vị & Phát âm Âm học từ SpeechOcean / L2-MDD (otf.tips)
+          if (otfTips.length > 0) {
+            html += `
+              <div class="mb-3 clean-feedback-box">
+                <div class="clean-feedback-title d-flex align-items-center gap-1">
+                  <i class="bi bi-soundwave text-warning fs-6"></i>
+                  <span>Lưu Ý Âm Vị & Phát Âm Âm Học (SpeechOcean & L2-MDD):</span>
+                </div>
+                <div class="clean-feedback-list mt-2">
+                  ${otfTips.map(tip => `
+                    <div class="feedback-issue-item d-flex align-items-start gap-1">
+                      <i class="bi bi-dot text-warning fs-5 lh-1"></i>
+                      <span class="small">${tip}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>`;
+          }
+
+          // Mẫu câu giao tiếp tự nhiên & nâng cao (better_dialogue_expressions)
+          const expressions = aiEval?.better_dialogue_expressions || [];
+          if (expressions.length > 0) {
+            html += `
+              <div class="mb-3 p-2 rounded bg-dark border border-secondary border-opacity-25">
+                <div class="small fw-semibold text-success mb-1 d-flex align-items-center gap-1">
+                  <i class="bi bi-chat-quote-fill text-success"></i>
+                  <span>Cách diễn đạt mẫu tự nhiên, nâng cao (Native Expressions):</span>
+                </div>
+                <div class="d-flex flex-column gap-1 mt-1">
+                  ${expressions.map(exp => `
+                    <div class="small text-light fst-italic ps-2 border-start border-success border-2">
+                      "${exp}"
+                    </div>
+                  `).join('')}
+                </div>
+              </div>`;
+          }
+
+          // Lời khuyên phản xạ & giao tiếp (communication_tips)
+          const commTips = aiEval?.communication_tips || [];
+          if (commTips.length > 0) {
+            html += `
+              <div class="mb-2">
+                <div class="small fw-semibold text-info mb-1 d-flex align-items-center gap-1">
+                  <i class="bi bi-lightbulb-fill text-info"></i>
+                  <span>Lời khuyên giao tiếp & phản xạ tự nhiên:</span>
+                </div>
+                <ul class="mb-0 ps-3 small text-muted">
+                  ${commTips.map(tip => `<li>${tip}</li>`).join('')}
+                </ul>
+              </div>`;
+          }
+
+          return html;
+        }
 
         async function showRealResults(assessmentId, resultObj, llmFeedback) {
           currentAssessmentId = assessmentId;
@@ -756,73 +956,15 @@ import { supabase } from './supabase.js';
                 statusBadge.className = 'badge bg-success-subtle text-success border border-success-subtle smaller';
               }
 
-              // Hiển thị Nhận xét Sư phạm & Lỗi Ngữ pháp của AI Evaluator
+              // Hiển thị Nhận xét Sư phạm Toàn diện của AI Evaluator & Âm học
               if (tfSummaryBox) {
-                let html = `
-                  <div class="mb-3">
-                    <div class="fw-semibold text-white mb-2 d-flex align-items-center gap-2">
-                      <i class="bi bi-robot text-primary fs-5"></i>
-                      <span>Nhận Xét Sư Phạm từ AI Evaluator</span>
-                      ${aiEval.is_fallback ? '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle smaller">Đánh giá cơ bản</span>' : '<span class="badge bg-primary-subtle text-primary border border-primary-subtle smaller">Chuẩn Khảo Thí</span>'}
-                    </div>
-                    <div class="text-light text-opacity-90 small lh-base p-3 rounded-3" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08);">
-                      ${simpleMarkdown(aiEval.conversation_summary || '')}
-                    </div>
-                  </div>`;
-
-                if (aiEval.grammar_errors && aiEval.grammar_errors.length > 0) {
-                  html += `
-                    <div class="mb-3">
-                      <div class="small fw-semibold text-warning mb-2">
-                        <i class="bi bi-exclamation-triangle-fill me-1"></i>Các điểm ngữ pháp & cấu trúc cần cải thiện:
-                      </div>
-                      <div class="d-flex flex-column gap-2">
-                        ${aiEval.grammar_errors.map(ge => `
-                          <div class="p-2 rounded bg-dark border border-secondary border-opacity-25 small">
-                            <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
-                              <span class="badge bg-danger-subtle text-danger border border-danger-subtle smaller">Học viên nói</span>
-                              <span class="text-danger font-monospace">"${ge.error_text}"</span>
-                              <i class="bi bi-arrow-right text-muted"></i>
-                              <span class="badge bg-success-subtle text-success border border-success-subtle smaller">Sửa chuẩn</span>
-                              <span class="text-success fw-bold font-monospace">"${ge.fix}"</span>
-                            </div>
-                            ${ge.explanation ? `<div class="text-muted smaller">${ge.explanation}</div>` : ''}
-                          </div>
-                        `).join('')}
-                      </div>
-                    </div>`;
-                } else {
-                  html += `
-                    <div class="mb-3 p-2 rounded bg-dark border border-secondary border-opacity-25 small text-success">
-                      <i class="bi bi-check-circle-fill me-1"></i>Ngữ pháp: Học viên phản xạ và diễn đạt các cấu trúc ngữ pháp đạt chuẩn trong lượt nói.
-                    </div>`;
-                }
-
-                if (aiEval.communication_tips && aiEval.communication_tips.length > 0) {
-                  html += `
-                    <div class="mb-2">
-                      <div class="small fw-semibold text-info mb-1">
-                        <i class="bi bi-lightbulb-fill me-1"></i>Lời khuyên phản xạ & giao tiếp tự nhiên:
-                      </div>
-                      <ul class="mb-0 ps-3 small text-muted">
-                        ${aiEval.communication_tips.map(tip => `<li>${tip}</li>`).join('')}
-                      </ul>
-                    </div>`;
-                }
-
-                if (aiEval.better_dialogue_expressions && aiEval.better_dialogue_expressions.length > 0) {
-                  html += `
-                    <div class="mt-3 pt-2 border-top border-secondary border-opacity-25">
-                      <div class="small fw-semibold text-success mb-1">
-                        <i class="bi bi-chat-quote-fill me-1"></i>Cách diễn đạt mẫu tự nhiên, nâng cao:
-                      </div>
-                      <div class="small text-light fst-italic ps-2 border-start border-success border-2">
-                        "${aiEval.better_dialogue_expressions.join('" / "')}"
-                      </div>
-                    </div>`;
-                }
-
-                tfSummaryBox.innerHTML = html;
+                tfSummaryBox.innerHTML = renderComprehensiveAiFeedback(aiEval, resultObj.overall_transformer_feedback, {
+                  total: sTotal,
+                  accuracy: sAcc,
+                  context: sContext,
+                  lexical: sLexical,
+                  grammar: sGrammar
+                });
               }
 
               // Lưu dữ liệu vào kết quả
@@ -840,7 +982,13 @@ import { supabase } from './supabase.js';
             }
             if (tfSummaryBox) {
               const otf = resultObj.overall_transformer_feedback || {};
-              tfSummaryBox.innerHTML = otf.summary ? simpleMarkdown(otf.summary) : '<span class="text-muted">Đã hoàn thành phân tích âm học.</span>';
+              tfSummaryBox.innerHTML = renderComprehensiveAiFeedback(null, otf, {
+                total: sTotal,
+                accuracy: sAcc,
+                context: sContext,
+                lexical: sLexical,
+                grammar: sGrammar
+              });
             }
           }
         }
@@ -1354,81 +1502,14 @@ import { supabase } from './supabase.js';
 
           // AI Feedback HTML
           let tfHtml = '';
-          if (aiEval) {
-            let innerHtml = `
-              <div class="mb-3">
-                <div class="fw-semibold text-white mb-2 d-flex align-items-center gap-2">
-                  <i class="bi bi-robot text-primary fs-5"></i>
-                  <span>Nhận Xét Sư Phạm từ AI Evaluator</span>
-                  <span class="badge bg-primary-subtle text-primary border border-primary-subtle smaller">Chuẩn Khảo Thí</span>
-                </div>
-                <div class="text-light text-opacity-90 small lh-base p-3 rounded-3" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08);">
-                  ${simpleMarkdown(aiEval.conversation_summary || '')}
-                </div>
-              </div>`;
-
-            if (aiEval.grammar_errors && aiEval.grammar_errors.length > 0) {
-              innerHtml += `
-                <div class="mb-3">
-                  <div class="small fw-semibold text-warning mb-2">
-                    <i class="bi bi-exclamation-triangle-fill me-1"></i>Các điểm ngữ pháp & cấu trúc cần cải thiện:
-                  </div>
-                  <div class="d-flex flex-column gap-2">
-                    ${aiEval.grammar_errors.map(ge => `
-                      <div class="p-2 rounded bg-dark border border-secondary border-opacity-25 small">
-                        <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
-                          <span class="badge bg-danger-subtle text-danger border border-danger-subtle smaller">Học viên nói</span>
-                          <span class="text-danger font-monospace">"${ge.error_text}"</span>
-                          <i class="bi bi-arrow-right text-muted"></i>
-                          <span class="badge bg-success-subtle text-success border border-success-subtle smaller">Sửa chuẩn</span>
-                          <span class="text-success fw-bold font-monospace">"${ge.fix}"</span>
-                        </div>
-                        ${ge.explanation ? `<div class="text-muted smaller">${ge.explanation}</div>` : ''}
-                      </div>
-                    `).join('')}
-                  </div>
-                </div>`;
-            }
-
-            if (aiEval.communication_tips && aiEval.communication_tips.length > 0) {
-              innerHtml += `
-                <div class="mb-2">
-                  <div class="small fw-semibold text-info mb-1">
-                    <i class="bi bi-lightbulb-fill me-1"></i>Lời khuyên phản xạ & giao tiếp tự nhiên:
-                  </div>
-                  <ul class="mb-0 ps-3 small text-muted">
-                    ${aiEval.communication_tips.map(tip => `<li>${tip}</li>`).join('')}
-                  </ul>
-                </div>`;
-            }
-
-            if (aiEval.better_dialogue_expressions && aiEval.better_dialogue_expressions.length > 0) {
-              innerHtml += `
-                <div class="mt-3 pt-2 border-top border-secondary border-opacity-25">
-                  <div class="small fw-semibold text-success mb-1">
-                    <i class="bi bi-chat-quote-fill me-1"></i>Cách diễn đạt mẫu tự nhiên, nâng cao:
-                  </div>
-                  <div class="small text-light fst-italic ps-2 border-start border-success border-2">
-                    "${aiEval.better_dialogue_expressions.join('" / "')}"
-                  </div>
-                </div>`;
-            }
-
+          if (aiEval || otf.summary || (otf.tips && otf.tips.length > 0)) {
             tfHtml = `
               <div class="section-card mb-4 tf-feedback-section">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="fw-bold mb-0"><i class="bi bi-robot me-2 text-info"></i>Đánh Giá Toàn Diện của AI Evaluator</h6>
-                  <span class="badge bg-success-subtle text-success border border-success-subtle smaller">Đã hiệu chuẩn</span>
+                  <h6 class="fw-bold mb-0"><i class="bi bi-robot me-2 text-info"></i>Nhận Xét & Đánh Giá Chi Tiết từ AI Evaluator</h6>
+                  <span class="badge bg-success-subtle text-success border border-success-subtle smaller">Chuẩn Khảo Thí</span>
                 </div>
-                <div>${innerHtml}</div>
-              </div>`;
-          } else if (otf.summary) {
-            tfHtml = `
-              <div class="section-card mb-4 tf-feedback-section">
-                <h6 class="fw-bold mb-3"><i class="bi bi-cpu me-2 text-info"></i>Phân tích AI Chi tiết (Transformer)</h6>
-                <div class="mb-3 p-3 rounded-3" style="background: rgba(79, 70, 229, 0.08); border-left: 3px solid var(--color-indigo);">
-                  ${simpleMarkdown(otf.summary)}
-                </div>
+                <div>${renderComprehensiveAiFeedback(aiEval, otf, { total, pr: prVal, context: ctxVal, lexical: lexVal, grammar: gramVal })}</div>
               </div>`;
           }
 
@@ -3820,6 +3901,24 @@ import { supabase } from './supabase.js';
                   </div>
                   <div class="fst-italic small text-light ps-3 border-start border-info border-2">
                     "${gemini.better_expression}"
+                  </div>
+                </div>
+              ` : ''}
+
+              <!-- Lưu ý âm vị âm học SpeechOcean / L2-MDD nếu có -->
+              ${(answer.result?.overall_transformer_feedback?.tips || []).length > 0 ? `
+                <div class="clean-feedback-box mt-3">
+                  <div class="clean-feedback-title d-flex align-items-center gap-1">
+                    <i class="bi bi-soundwave text-warning"></i>
+                    <span>Lưu ý phát âm âm vị (SpeechOcean & L2-MDD):</span>
+                  </div>
+                  <div class="clean-feedback-list mt-1">
+                    ${answer.result.overall_transformer_feedback.tips.map(tip => `
+                      <div class="feedback-issue-item small d-flex align-items-start gap-1">
+                        <i class="bi bi-dot text-warning fs-5 lh-1"></i>
+                        <span>${tip}</span>
+                      </div>
+                    `).join('')}
                   </div>
                 </div>
               ` : ''}

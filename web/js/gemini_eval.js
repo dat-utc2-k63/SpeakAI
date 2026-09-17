@@ -6,20 +6,64 @@
  * TUYỆT ĐỐI KHÔNG DÙNG CÔNG THỨC PHẦN TRĂM CỐ ĐỊNH.
  */
 
+import { supabase } from './supabase.js';
+
 export const DEFAULT_GEMINI_ENDPOINT = 'https://revidapi.com/v1/chat/completions';
-export const DEFAULT_GEMINI_MODEL = '';
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.7-flash';
+
+let supabaseSettingsPromise = null;
 
 /**
- * Lấy cấu hình AI Evaluator API từ cache / globalSettings / localStorage
+ * Đồng bộ cấu hình AI Evaluator (model, apiKey, apiUrl) trực tiếp từ Supabase global_settings
+ */
+export async function syncGeminiConfigFromSupabase(force = false) {
+  if (!supabase) return;
+  if (!force && typeof window !== 'undefined' && window.globalGeminiModel && window.globalGeminiApiKey) {
+    return;
+  }
+  if (!supabaseSettingsPromise || force) {
+    supabaseSettingsPromise = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('global_settings')
+          .select('api_url, gemini_api_key, gemini_api_url, gemini_model')
+          .eq('id', 1)
+          .maybeSingle();
+
+        if (!error && data) {
+          if (typeof window !== 'undefined') {
+            if (data.api_url && !window.globalApiUrl) window.globalApiUrl = data.api_url;
+            if (data.gemini_api_key) window.globalGeminiApiKey = data.gemini_api_key;
+            if (data.gemini_api_url) window.globalGeminiApiUrl = data.gemini_api_url;
+            if (data.gemini_model) window.globalGeminiModel = data.gemini_model;
+          }
+          if (typeof localStorage !== 'undefined') {
+            if (data.gemini_api_key) localStorage.setItem('speakai_gemini_key', data.gemini_api_key.trim());
+            if (data.gemini_api_url) localStorage.setItem('speakai_gemini_url', data.gemini_api_url.trim());
+            if (data.gemini_model) localStorage.setItem('speakai_gemini_model', data.gemini_model.trim());
+          }
+        }
+      } catch (err) {
+        console.warn('Lỗi lấy cấu hình AI Evaluator từ Supabase:', err);
+      } finally {
+        supabaseSettingsPromise = null;
+      }
+    })();
+  }
+  await supabaseSettingsPromise;
+}
+
+/**
+ * Lấy cấu hình AI Evaluator API từ Supabase (window) / cache / localStorage
  */
 export function getGeminiConfig() {
-  const localKey = (typeof localStorage !== 'undefined') ? localStorage.getItem('speakai_gemini_key') : null;
-  const localUrl = (typeof localStorage !== 'undefined') ? localStorage.getItem('speakai_gemini_url') : null;
-  const localModel = (typeof localStorage !== 'undefined') ? localStorage.getItem('speakai_gemini_model') : null;
-
   const windowKey = (typeof window !== 'undefined') ? window.globalGeminiApiKey : null;
   const windowUrl = (typeof window !== 'undefined') ? window.globalGeminiApiUrl : null;
   const windowModel = (typeof window !== 'undefined') ? window.globalGeminiModel : null;
+
+  const localKey = (typeof localStorage !== 'undefined') ? localStorage.getItem('speakai_gemini_key') : null;
+  const localUrl = (typeof localStorage !== 'undefined') ? localStorage.getItem('speakai_gemini_url') : null;
+  const localModel = (typeof localStorage !== 'undefined') ? localStorage.getItem('speakai_gemini_model') : null;
 
   return {
     apiKey: (windowKey || localKey || '').trim(),
@@ -51,6 +95,7 @@ export async function testGeminiConnection(apiKey, apiUrl = DEFAULT_GEMINI_ENDPO
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${cleanKey}`,
       'x-api-key': cleanKey,
     },
     body: JSON.stringify({
@@ -80,27 +125,27 @@ export async function testGeminiConnection(apiKey, apiUrl = DEFAULT_GEMINI_ENDPO
  * System Prompt chuyên gia Khảo thí Ngôn ngữ Anh quốc tế
  */
 function buildExaminerSystemPrompt() {
-  return `Bạn là Giám khảo Khảo thí Speaking Quốc tế (Chuẩn IELTS / Cambridge). Đánh giá bài nói của học viên chuẩn xác theo đúng 4 TRỤ CỘT IELTS (PR: 25%, FC: 25%, LR: 25%, GRA: 25%) và trả về DUY NHẤT 1 JSON.
+  return `Bạn là Giám khảo Khảo thí Speaking Quốc tế (Chuẩn IELTS / Cambridge). Đánh giá bài nói của học viên chuẩn xác, nghiêm ngặt theo đúng 4 TRỤ CỘT IELTS (PR: 25%, FC: 25%, LR: 25%, GRA: 25%) và trả về DUY NHẤT 1 JSON.
 
-QUY TẮC CHẤM ĐIỂM THEO 4 TRỤ CỘT IELTS / CAMBRIDGE:
+QUY TẮC CHẤM ĐIỂM THEO 4 TRỤ CỘT IELTS / CAMBRIDGE (NGHIÊM NGẶT, KHÔNG CHÂM CHƯỚC):
 1. PR - Pronunciation (score_pronunciation 0-10 - 25%): Đã được đo lường chính xác bằng mô hình âm học SpeechOcean762 + quét âm vị L2-MDD.
 2. FC - Fluency & Coherence / Mạch lạc & Ngữ cảnh (score_fluency_coherence 0-10 - 25% - Gatekeeper):
-   - Đánh giá khả năng hiểu đề, phản xạ, độ trôi chảy, tính mạch lạc và mở rộng câu trả lời theo đúng câu hỏi.
-   - Lạc đề (irrelevant) hoặc cộc lốc (1-3 từ): score_fluency_coherence <= 2.5, score_total BẮT BUỘC <= 3.5 (IELTS FC Band 3-4).
-   - Đạt một phần: 3.0 - 4.5 -> score_total BẮT BUỘC <= 4.5.
-   - Đúng trọng tâm: >= 5.0.
+   - Đánh giá độ trôi chảy, khả năng hiểu đề, sự ăn khớp và mở rộng ý theo câu hỏi.
+   - Cộc lốc (1-3 từ) hoặc lạc đề: score_fluency_coherence <= 2.5, score_total BẮT BUỘC <= 3.5.
+   - Trả lời 1 câu đơn sơ cấp (chỉ S-V-O cơ bản, chưa mở rộng): score_fluency_coherence tối đa 5.0 - 5.5.
+   - Có phát triển ý với ví dụ/giải thích: 6.5 - 7.5.
+   - Trôi chảy tự nhiên, liên kết chặt chẽ (Band 8+): >= 8.0.
 3. LR - Lexical Resource / Vốn từ vựng (score_lexical 0-10 - 25%):
-   - Đánh giá sự phong phú từ vựng, tính chính xác theo chủ đề, khả năng dùng collocations, idioms tự nhiên, tránh lặp từ.
-   - Câu trả lời đơn sơ cấp (chỉ dùng từ A1-A2, thiếu từ vựng chủ đề): score_lexical <= 5.5.
-   - Dùng từ chính xác, có cụm từ tự nhiên: score_lexical 6.5 - 8.0.
-   - Vốn từ đa dạng, thành ngữ tinh tế: score_lexical 8.5 - 10.0.
+   - Câu trả lời sơ cấp (chỉ dùng từ vựng quen thuộc A1-A2, thiếu từ vựng chủ đề): score_lexical <= 5.0.
+   - Từ vựng mức trung cấp (B1-B2), có cụm từ phù hợp ngữ cảnh: 6.0 - 7.0.
+   - Từ vựng phong phú, sử dụng collocations tự nhiên, chính xác (C1-C2): >= 8.0.
 4. GRA - Grammatical Range & Accuracy / Ngữ pháp (score_grammar 0-10 - 25%):
-   - Đánh giá cấu trúc câu (đơn, ghép, phức), sự đa dạng và độ chính xác của thì, mạo từ, giới từ, trật tự từ.
-   - Trừ điểm thực chất: 1 lỗi -> max 7.5; 2-3 lỗi -> max 6.0; >=4 lỗi -> max 5.0.
-5. Nói vấp / từ đệm / ngập ngừng ban đầu ("um, uh, well, wait..."):
-   - Phản xạ tự nhiên, TUYỆT ĐỐI KHÔNG trừ điểm Grammar hay Context nếu câu chính phía sau đúng.
-6. Overall Band (score_total 0-10): Tính theo công thức chuẩn IELTS:
+   - Câu đơn sơ cấp, ngữ pháp cơ bản: tối đa 5.5.
+   - QUY TẮC TRỪ ĐIỂM: MỖI lỗi ngữ pháp (chia thì, to be, số ít/nhiều, giới từ, mạo từ) BẮT BUỘC trừ 1.0 - 1.5 điểm và liệt kê rõ ràng trong grammar_errors.
+   - 1 lỗi ngữ pháp: max 6.5; 2 lỗi: max 5.5; >= 3 lỗi: max 4.5.
+5. Overall Band (score_total 0-10): Tính theo công thức chuẩn IELTS:
    Overall = (PR * 0.25) + (FC * 0.25) + (LR * 0.25) + (GRA * 0.25) có áp dụng trần Gatekeeper.
+   TUYỆT ĐỐI KHÔNG chấm điểm trên 6.0 cho các câu trả lời ngắn sơ cấp hoặc có từ 2 lỗi ngữ pháp trở lên.
 
 OUTPUT JSON FORMAT:
 {
@@ -208,6 +253,7 @@ export async function evaluateAnswerWithGemini({
   pronunciationScores = {},
   apiKey = null,
 }) {
+  await syncGeminiConfigFromSupabase();
   const config = getGeminiConfig();
   const effectiveKey = (apiKey || config.apiKey || '').trim();
   const endpoint = config.apiUrl || DEFAULT_GEMINI_ENDPOINT;
@@ -286,6 +332,7 @@ Phát âm âm học (SpeechOcean): Điểm tổng=${rawPronTotal.toFixed(1)}/10 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${effectiveKey}`,
         'x-api-key': effectiveKey,
       },
       body: JSON.stringify({
@@ -465,17 +512,17 @@ function fallbackHeuristicEval({ questionText, transcript, pronunciationScores, 
   else {
     // Dạng Long turn yêu cầu nói dài hơn
     if (taskType === 'long_turn' && wordCount < 30) {
-      scoreGrammar = Math.min(7.5, Math.max(5.0, rawPron * 0.85));
+      scoreGrammar = Math.min(6.5, Math.max(4.5, rawPron * 0.75));
       scoreContext = 4.5;
-      scoreLexical = 5.5;
+      scoreLexical = 5.0;
       relevance = 'partially_relevant';
       summary = 'Dạng Cue Card / Long Turn yêu cầu bài nói dài và bao quát các ý gợi ý. Bạn nên phát triển thêm chi tiết.';
     } else {
-      scoreGrammar = Math.min(9.0, Math.max(5.0, rawPron * 0.9));
-      scoreContext = Math.min(9.0, Math.max(5.5, rawPron * 0.95));
-      scoreLexical = Math.min(8.5, Math.max(5.0, rawPron * 0.88));
+      scoreGrammar = Math.min(7.0, Math.max(4.5, rawPron * 0.8));
+      scoreContext = Math.min(7.0, Math.max(4.5, rawPron * 0.82));
+      scoreLexical = Math.min(6.5, Math.max(4.5, rawPron * 0.78));
       relevance = 'relevant';
-      summary = 'Câu trả lời đầy đủ ý, cấu trúc ngữ pháp và từ vựng tương đối rõ ràng.';
+      summary = 'Câu trả lời đầy đủ ý, cấu trúc ngữ pháp và từ vựng ở mức cơ bản.';
     }
   }
 
@@ -508,27 +555,28 @@ function clampScore(val, min = 0, max = 10) {
  * System Prompt Giám khảo Khảo thí Đánh giá Hội thoại (Spoken Dialogue)
  */
 function buildDialogueExaminerSystemPrompt() {
-  return `Bạn là Giám khảo Khảo thí Hội thoại Speaking Quốc tế (Chuẩn IELTS / Cambridge). Phân tích đoạn hội thoại giữa Giáo viên và Học viên theo 4 TRỤ CỘT IELTS (PR: 25%, FC: 25%, LR: 25%, GRA: 25%), đánh giá nghiêm ngặt, khách quan và trả về DUY NHẤT 1 JSON.
+  return `Bạn là Giám khảo Khảo thí Hội thoại Speaking Quốc tế (Chuẩn IELTS / Cambridge). Phân tích đoạn hội thoại giữa Giáo viên và Học viên theo 4 TRỤ CỘT IELTS (PR: 25%, FC: 25%, LR: 25%, GRA: 25%), đánh giá nghiêm ngặt, chuẩn xác, KHÔNG THỔI PHỒNG ĐIỂM và trả về DUY NHẤT 1 JSON.
 
-QUY TẮC CHẤM ĐIỂM THEO 4 TRỤ CỘT IELTS / CAMBRIDGE:
+QUY TẮC CHẤM ĐIỂM THEO 4 TRỤ CỘT IELTS / CAMBRIDGE (NGHIÊM NGẶT):
 1. PR - Pronunciation / Phát âm (score_pronunciation 0-10 - 25%): Đã đo lường bằng mô hình âm học SpeechOcean762 + quét âm vị L2-MDD.
 2. FC - Fluency & Coherence / Mạch lạc & Tương tác (score_fluency_coherence 0-10 - 25% - Gatekeeper):
    - Đánh giá khả năng hiểu và phản hồi ăn khớp với câu hỏi của giáo viên, khả năng phát triển ý và duy trì hội thoại liên tục.
-   - Câu trả lời chỉ ở mức A1-A2 ngắn gọn (1 câu đơn giản): score_fluency_coherence tối đa 5.5 - 6.0.
-   - Cộc lốc (1-2 từ) hoặc lạc đề (score_fluency_coherence < 4.5): score_total BẮT BUỘC <= 3.5 - 4.5 (IELTS FC Band 3-4: phản xạ nghèo nàn). Điểm ngữ pháp KHÔNG ĐƯỢC can thiệp kéo điểm tổng lên.
+   - Câu trả lời chỉ ở mức A1-A2 ngắn gọn (1 câu đơn giản): score_fluency_coherence tối đa 5.0 - 5.5.
+   - Cộc lốc (1-2 từ) hoặc lạc đề (score_fluency_coherence < 4.5): score_total BẮT BUỘC <= 3.5 - 4.5. Điểm ngữ pháp KHÔNG ĐƯỢC can thiệp kéo điểm tổng lên.
+   - Phản xạ tự nhiên, phát triển ý đa dạng, có câu nối mạch lạc (B2+): 6.5 - 8.0.
 3. LR - Lexical Resource / Vốn từ vựng (score_lexical 0-10 - 25%):
    - Đánh giá vốn từ vựng học viên sử dụng trong cuộc hội thoại: độ phong phú, tính linh hoạt, cụm từ tự nhiên (collocations), tránh lặp từ.
-   - Từ vựng sơ cấp hạn chế: score_lexical <= 5.5.
-   - Từ vựng đa dạng, có cụm từ tự nhiên: score_lexical 6.5 - 8.0.
-   - Vốn từ xuất sắc, thành ngữ tự nhiên: score_lexical 8.5 - 10.0.
+   - Từ vựng sơ cấp hạn chế (A1-A2): score_lexical <= 5.0.
+   - Từ vựng khá (B1-B2), có cụm từ tự nhiên: 6.0 - 7.0.
+   - Vốn từ xuất sắc, thành ngữ tự nhiên (C1-C2): 8.0 - 10.0.
    - Đưa vào "better_dialogue_expressions" các câu mẫu diễn đạt tự nhiên, thành ngữ / collocations đắt giá.
 4. GRA - Grammatical Range & Accuracy / Ngữ pháp (score_grammar 0-10 - 25%):
    - 8.5 - 10.0 (C1-C2): Ngữ pháp thành thạo, câu phức linh hoạt, diễn đạt tự nhiên, KHÔNG có lỗi ngữ pháp.
    - 7.0 - 8.4 (B2): Cấu trúc câu tốt, có câu ghép/phức, chỉ mắc 1 lỗi nhỏ không làm đổi nghĩa.
-   - 5.5 - 6.9 (B1): Diễn đạt được ý cơ bản nhưng câu đơn giản, mắc 2 lỗi ngữ pháp (chia thì, mạo từ, giới từ, từ loại).
-   - 4.0 - 5.4 (A2): Câu rất ngắn, đơn sơ cấp, mắc từ 3 lỗi ngữ pháp cơ bản trở lên. Điểm ngữ pháp BẮT BUỘC <= 5.4.
-   - 1.0 - 3.9 (A1/Pre-A1): Chỉ nói từ rời rạc, cụt ngủn, sai ngữ pháp nghiêm trọng.
-   - QUY TẮC TRỪ ĐIỂM: MỖI lỗi ngữ pháp trong "grammar_errors" BẮT BUỘC trừ 1.0 - 1.5 điểm. TUYỆT ĐỐI KHÔNG cho điểm 7.0+ nếu học sinh có từ 3 lỗi ngữ pháp trở lên.
+   - 5.0 - 6.4 (B1): Diễn đạt được ý cơ bản nhưng chỉ dùng câu đơn giản, mắc 2 lỗi ngữ pháp (chia thì, to be, mạo từ, giới từ, số ít/nhiều).
+   - 3.5 - 4.9 (A2): Câu rất ngắn, đơn sơ cấp, mắc từ 3 lỗi ngữ pháp cơ bản trở lên. Điểm ngữ pháp BẮT BUỘC <= 4.9.
+   - 1.0 - 3.4 (A1/Pre-A1): Chỉ nói từ rời rạc, cụt ngủn, sai ngữ pháp nghiêm trọng.
+   - QUY TẮC TRỪ ĐIỂM: MỖI lỗi ngữ pháp trong "grammar_errors" BẮT BUỘC trừ 1.0 - 1.5 điểm. TUYỆT ĐỐI KHÔNG cho điểm >= 6.5 nếu học sinh chỉ nói câu đơn giản hoặc có từ 2 lỗi ngữ pháp trở lên.
    - Luôn liệt kê chi tiết các lỗi trong "grammar_errors" (turn_index, error_text, fix, explanation).
 5. Overall Band / Điểm tổng thể (score_total 0-10): Tính theo công thức chuẩn IELTS:
    Overall = (PR * 0.25) + (FC * 0.25) + (LR * 0.25) + (GRA * 0.25) có áp dụng trần Gatekeeper.
@@ -559,6 +607,7 @@ export async function evaluateConversationWithAi({
   pronunciationScores = {},
   apiKey = null,
 }) {
+  await syncGeminiConfigFromSupabase();
   const config = getGeminiConfig();
   const effectiveKey = (apiKey || config.apiKey || '').trim();
   const endpoint = config.apiUrl || DEFAULT_GEMINI_ENDPOINT;
@@ -622,6 +671,7 @@ ${conversationTranscript}
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${effectiveKey}`,
         'x-api-key': effectiveKey,
       },
       signal: controller.signal,
@@ -666,17 +716,18 @@ ${conversationTranscript}
 
     // Guardrail chốt chặn chống over-scoring: Phạt điểm thực chất khi có lỗi ngữ pháp
     if (studentGrammarErrors.length >= 4) {
-      scoreGrammar = Math.min(scoreGrammar, 5.2);
+      scoreGrammar = Math.min(scoreGrammar, 4.8);
     } else if (studentGrammarErrors.length >= 2) {
-      scoreGrammar = Math.min(scoreGrammar, 6.2);
+      scoreGrammar = Math.min(scoreGrammar, 5.8);
     } else if (studentGrammarErrors.length === 1) {
-      scoreGrammar = Math.min(scoreGrammar, 7.5);
+      scoreGrammar = Math.min(scoreGrammar, 6.8);
     }
 
     // Phân hóa điểm tổng thể chuẩn 4 trụ cột IELTS: PR (25%) + FC (25%) + LR (25%) + GRA (25%)
+    // Tuyệt đối không cộng dồn boost nhân tạo (+0.3)
     const weightedTotal = Math.round(((rawPronTotal * 0.25) + (scoreContext * 0.25) + (scoreLexical * 0.25) + (scoreGrammar * 0.25)) * 10) / 10;
     if (weightedTotal > 0) {
-      scoreTotal = Math.min(scoreTotal, weightedTotal + 0.3);
+      scoreTotal = Math.min(scoreTotal, weightedTotal);
     }
 
     // Hiệu chuẩn hội thoại: Nếu ngữ cảnh không phù hợp, điểm ngữ pháp không can thiệp nhiều vào điểm tổng
@@ -730,20 +781,20 @@ function fallbackConversationHeuristic({ studentTurns, studentFullText, pronunci
   let summary = 'Học viên tham gia hội thoại đầy đủ các lượt.';
 
   if (avgWordsPerTurn <= 2) {
-    gram = 4.0;
+    gram = 3.5;
     ctx = 2.5;
-    lex = 3.5;
+    lex = 3.0;
     summary = 'Học viên trả lời các lượt nói còn quá ngắn (cộc lốc), chưa phát triển được ngữ cảnh hội thoại.';
   } else if (avgWordsPerTurn <= 5) {
-    gram = 5.5;
+    gram = 5.0;
     ctx = 4.5;
-    lex = 5.0;
-    summary = 'Học viên phản xạ tương đối tốt, câu trả lời đủ ý nhưng nên dùng thêm các liên từ kết nối.';
+    lex = 4.5;
+    summary = 'Học viên phản xạ tương đối tốt, câu trả lời đủ ý nhưng nên mở rộng thêm chi tiết và sử dụng các liên từ kết nối.';
   } else {
-    gram = Math.min(9.0, Math.max(5.5, rawPron * 0.9));
-    ctx = Math.min(9.0, Math.max(6.0, rawPron * 0.95));
-    lex = Math.min(8.5, Math.max(5.0, rawPron * 0.88));
-    summary = 'Khả năng phản xạ và duy trì hội thoại tốt, từ vựng và ngữ pháp tương đối linh hoạt.';
+    gram = Math.min(6.8, Math.max(4.5, rawPron * 0.78));
+    ctx = Math.min(6.8, Math.max(5.0, rawPron * 0.8));
+    lex = Math.min(6.5, Math.max(4.5, rawPron * 0.75));
+    summary = 'Học viên duy trì được mạch hội thoại, có phản xạ tương tác nhưng cần đa dạng hóa từ vựng và cấu trúc ngữ pháp phức.';
   }
 
   // Chuẩn 4 trụ cột IELTS: PR (25%) + FC (25%) + LR (25%) + GRA (25%)

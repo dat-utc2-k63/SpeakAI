@@ -168,7 +168,6 @@ def assess_start_api(
     teacher_embeddings_json: str = Form("[]"),
     student_embeddings_json: str = Form("[]"),
     score_teacher: bool = Form(False),
-    skip_feedback: bool = Form(False),
     diarize: str = Form("true"),
     reference_text: Optional[str] = Form(None),
     task_type: Optional[str] = Form(None),
@@ -195,7 +194,7 @@ def assess_start_api(
             process_assessment,
             task_id, conv_path,
             teacher_embeddings_json, student_embeddings_json,
-            is_score_teacher, skip_feedback, is_diarize,
+            is_score_teacher, is_diarize,
             reference_text, task_type,
         )
         return JSONResponse({'success': True, 'task_id': task_id})
@@ -207,7 +206,6 @@ def assess_start_api(
 def assess_practice_api(
     background_tasks: BackgroundTasks,
     audio: UploadFile = File(...),
-    skip_feedback: bool = Form(True),
     reference_text: Optional[str] = Form(None),
     task_type: Optional[str] = Form(None),
 ):
@@ -231,7 +229,7 @@ def assess_practice_api(
             process_assessment,
             task_id, conv_path,
             "[]", "[]",
-            False, skip_feedback, False,
+            False, False,
             reference_text, task_type,
         )
         return JSONResponse({'success': True, 'task_id': task_id})
@@ -242,7 +240,7 @@ def assess_practice_api(
 def process_assessment(
     task_id, conv_path,
     teacher_embeddings_json, student_embeddings_json,
-    score_teacher, skip_feedback,
+    score_teacher,
     diarize=True, reference_text=None, task_type=None,
 ):
     try:
@@ -300,49 +298,6 @@ def process_assessment(
         if raw_result.get('student') and diar.get('student'):
             raw_result['student']['full_audio'] = str(diar['student'])
 
-        # Generate LLM feedback
-        gen_turn_fb = _get_global('generate_turn_feedback')
-        gen_overall = _get_global('generate_overall_summary')
-
-        if skip_feedback:
-            tasks[task_id]['step'] = 'Bỏ qua LLM Feedback...'
-            llm_feedback = 'Không có phản hồi (bỏ qua bởi người dùng).'
-        else:
-            tasks[task_id]['step'] = 'Đang tạo Feedback cho từng lượt nói...'
-            teacher_ctx = 'Không có'
-            for turn in raw_result.get('dialogue', {}).get('turns', []):
-                if turn['role'].upper() == 'TEACHER':
-                    teacher_ctx = turn['transcript']
-                elif turn['role'].upper() == 'STUDENT':
-                    tf = turn.get('transformer_feedback', {})
-                    l2_note = turn.get('l2_mdd_feedback')
-                    turn_parts = []
-                    if tf and tf.get('summary'):
-                        turn_parts.append(tf['summary'])
-                        if tf.get('tips'):
-                            turn_parts.extend(tf['tips'][:2])
-                    elif gen_turn_fb:
-                        fb = gen_turn_fb(
-                            teacher_text=teacher_ctx,
-                            student_text=turn['transcript'],
-                            score=turn.get('scores', {}).get('accuracy', 0),
-                            errors=turn.get('errors', {}),
-                            l2_note=l2_note,
-                        )
-                        if fb:
-                            turn_parts.append(fb)
-
-                    if l2_note and not any(l2_note in p for p in turn_parts):
-                        turn_parts.append(f"💡 {l2_note}")
-
-                    turn['llm_feedback'] = '\n'.join(turn_parts)
-
-            tasks[task_id]['step'] = 'Đang tạo Feedback tổng hợp...'
-            if gen_overall:
-                llm_feedback = gen_overall(raw_result)
-            else:
-                llm_feedback = 'Feedback generator not available.'
-
         # Convert local paths to public URLs & sanitize Path objects
         def convert_paths_to_urls(node):
             if isinstance(node, dict):
@@ -369,7 +324,8 @@ def process_assessment(
             os.remove(conv_path)
 
         tasks[task_id]['result'] = raw_result
-        tasks[task_id]['llm_feedback'] = llm_feedback
+        tasks[task_id]['llm_feedback'] = None
+        tasks[task_id]['step'] = 'Hoàn tất phân tích âm học.'
         tasks[task_id]['status'] = 'completed'
     except Exception as e:
         print(f'API Error in task {task_id}: {e}')

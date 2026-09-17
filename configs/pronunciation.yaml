@@ -84,8 +84,8 @@ scorer:
   phoneme_low_threshold: 1.2
   calibration:
     enabled: true
-    slope: 1.25
-    offset: -2.20
+    slope: 1.20
+    offset: -2.80
     short_duration_sec: 3.5
     short_duration_factor: 0.40
     long_duration_sec: 4.0

@@ -457,8 +457,8 @@ class SpeakingPipeline:
                         num_warn += 1
 
             if num_crit > 0 or num_warn > 0:
-                # Mỗi âm vị phát âm sai nghiêm trọng trừ 0.40; cảnh báo trừ 0.15 (tối đa trừ 3.5 điểm)
-                pen = min(3.5, num_crit * 0.40 + num_warn * 0.15)
+                # Mỗi âm vị phát âm sai nghiêm trọng trừ 0.55; cảnh báo trừ 0.20 (tối đa trừ 4.0 điểm)
+                pen = min(4.0, num_crit * 0.55 + num_warn * 0.20)
                 base_acc = float(pron_scores.get("accuracy", 7.0))
                 calibrated_acc = max(1.5, round(base_acc - pen, 2))
                 calibrated_scores["accuracy"] = calibrated_acc
@@ -473,7 +473,7 @@ class SpeakingPipeline:
 
         # Generate per-turn feedback
         transformer_feedback = PronunciationScorer.generate_transformer_feedback(
-            scores_pronunciation=pron_scores,
+            scores_pronunciation=final_scores,
             errors_pronunciation=final_errors,
             transcript=transcript,
         )
