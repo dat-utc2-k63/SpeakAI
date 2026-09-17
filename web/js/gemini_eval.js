@@ -374,14 +374,14 @@ Phát âm âm học (SpeechOcean): Điểm tổng=${rawPronTotal.toFixed(1)}/10 
     let scoreLexical = taskType === 'read_aloud' ? null : clampScore(parsed.score_lexical ?? parsed.score_grammar, 0, 10);
     const relevanceLevel = taskType === 'read_aloud' ? 'relevant' : (parsed.relevance_level || (scoreContext < 3.0 ? 'irrelevant' : 'relevant'));
 
-    // Tính điểm tổng theo chuẩn IELTS: PR (25%) + FC (25%) + LR (25%) + GRA (25%)
-    let rawWeighted = parsed.score_total != null
-      ? Number(parsed.score_total)
-      : Math.round(((rawPronTotal * 0.25) + (scoreContext * 0.25) + (scoreLexical * 0.25) + (scoreGrammar * 0.25)) * 10) / 10;
-
-    const scoreTotal = taskType === 'read_aloud'
-      ? clampScore(rawPronTotal, 0, 10)
-      : calibrateTotalScoreWithContext(rawWeighted, scoreContext, scoreGrammar, scoreLexical, relevanceLevel, taskType);
+    // Điểm tổng chính xác 100% là trung bình cộng của 4 trụ cột IELTS:
+    // Overall = PR (25%) + FC (25%) + LR (25%) + GRA (25%)
+    let scoreTotal;
+    if (taskType === 'read_aloud') {
+      scoreTotal = clampScore(rawPronTotal, 0, 10);
+    } else {
+      scoreTotal = Math.round(((rawPronTotal * 0.25) + (scoreContext * 0.25) + (scoreLexical * 0.25) + (scoreGrammar * 0.25)) * 10) / 10;
+    }
 
     return {
       score_total: scoreTotal,
@@ -527,8 +527,12 @@ function fallbackHeuristicEval({ questionText, transcript, pronunciationScores, 
   }
 
   // Chuẩn 4 trụ cột IELTS: PR (25%) + FC (25%) + LR (25%) + GRA (25%)
-  let rawCalculatedTotal = (rawPron * 0.25) + (scoreContext * 0.25) + (scoreLexical * 0.25) + (scoreGrammar * 0.25);
-  const scoreTotal = calibrateTotalScoreWithContext(rawCalculatedTotal, scoreContext, scoreGrammar, scoreLexical, relevance, taskType);
+  let scoreTotal;
+  if (taskType === 'read_aloud') {
+    scoreTotal = clampScore(rawPron, 0, 10);
+  } else {
+    scoreTotal = Math.round(((rawPron * 0.25) + (scoreContext * 0.25) + (scoreLexical * 0.25) + (scoreGrammar * 0.25)) * 10) / 10;
+  }
 
   return {
     score_total: scoreTotal,
@@ -709,7 +713,6 @@ ${conversationTranscript}
     let scoreGrammar = clampScore(parsed.score_grammar, 0, 10);
     let scoreContext = clampScore(parsed.score_context ?? parsed.score_fluency_coherence, 0, 10);
     let scoreLexical = clampScore(parsed.score_lexical ?? parsed.score_grammar, 0, 10);
-    let scoreTotal = clampScore(parsed.score_total, 0, 10);
 
     // Giữ lại lỗi ngữ pháp do AI trả về
     const studentGrammarErrors = Array.isArray(parsed.grammar_errors) ? parsed.grammar_errors : [];
@@ -723,19 +726,9 @@ ${conversationTranscript}
       scoreGrammar = Math.min(scoreGrammar, 6.8);
     }
 
-    // Phân hóa điểm tổng thể chuẩn 4 trụ cột IELTS: PR (25%) + FC (25%) + LR (25%) + GRA (25%)
-    // Tuyệt đối không cộng dồn boost nhân tạo (+0.3)
-    const weightedTotal = Math.round(((rawPronTotal * 0.25) + (scoreContext * 0.25) + (scoreLexical * 0.25) + (scoreGrammar * 0.25)) * 10) / 10;
-    if (weightedTotal > 0) {
-      scoreTotal = Math.min(scoreTotal, weightedTotal);
-    }
-
-    // Hiệu chuẩn hội thoại: Nếu ngữ cảnh không phù hợp, điểm ngữ pháp không can thiệp nhiều vào điểm tổng
-    if (scoreContext < 3.0) {
-      scoreTotal = Math.min(scoreTotal, Math.max(1.0, scoreContext + 0.8), 3.5);
-    } else if (scoreContext < 4.5) {
-      scoreTotal = Math.min(scoreTotal, Math.max(2.5, scoreContext + 0.6), 4.5);
-    }
+    // Điểm tổng thể chính xác 100% là trung bình cộng của 4 trụ cột IELTS:
+    // Overall = PR (25%) + FC (25%) + LR (25%) + GRA (25%)
+    const scoreTotal = Math.round(((rawPronTotal * 0.25) + (scoreContext * 0.25) + (scoreLexical * 0.25) + (scoreGrammar * 0.25)) * 10) / 10;
 
     return {
       score_total: scoreTotal,
@@ -798,13 +791,7 @@ function fallbackConversationHeuristic({ studentTurns, studentFullText, pronunci
   }
 
   // Chuẩn 4 trụ cột IELTS: PR (25%) + FC (25%) + LR (25%) + GRA (25%)
-  total = (rawPron * 0.25) + (ctx * 0.25) + (lex * 0.25) + (gram * 0.25);
-  // Nếu ngữ cảnh không phù hợp, các điểm khác không kéo điểm tổng lên
-  if (ctx < 3.0) {
-    total = Math.min(total, Math.max(1.0, ctx + 0.8), 3.5);
-  } else if (ctx < 4.5) {
-    total = Math.min(total, Math.max(2.5, ctx + 0.6), 4.5);
-  }
+  total = Math.round(((rawPron * 0.25) + (ctx * 0.25) + (lex * 0.25) + (gram * 0.25)) * 10) / 10;
 
   const fallbackGrammarErrors = [];
   const lowerText = studentFullText.toLowerCase();
