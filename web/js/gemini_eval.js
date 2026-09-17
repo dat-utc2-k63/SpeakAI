@@ -1,20 +1,16 @@
 /**
- * SpeakAI – Gemini 3.7 Flash Evaluation Service
+ * SpeakAI – LLM / AI Evaluator Service
  * 
- * Tích hợp API Gemini (RevidAPI / OpenAI-compatible endpoint)
- * URL: https://revidapi.com/v1/chat/completions
- * Model: gemini-3.7-flash
- * Header: x-api-key: YOUR_API_KEY
- * 
+ * Tích hợp LLM API (OpenAI-compatible / Custom endpoint cấu hình động từ Database/Settings)
  * Chấm điểm Ngữ pháp, Ngữ cảnh và kết hợp với điểm phát âm âm học
  * TUYỆT ĐỐI KHÔNG DÙNG CÔNG THỨC PHẦN TRĂM CỐ ĐỊNH.
  */
 
 export const DEFAULT_GEMINI_ENDPOINT = 'https://revidapi.com/v1/chat/completions';
-export const DEFAULT_GEMINI_MODEL = 'gemini-3.7-flash';
+export const DEFAULT_GEMINI_MODEL = '';
 
 /**
- * Lấy cấu hình Gemini API từ cache / globalSettings / localStorage
+ * Lấy cấu hình AI Evaluator API từ cache / globalSettings / localStorage
  */
 export function getGeminiConfig() {
   const localKey = (typeof localStorage !== 'undefined') ? localStorage.getItem('speakai_gemini_key') : null;

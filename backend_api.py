@@ -52,12 +52,25 @@ def start_cloudflare_tunnel(port=8000):
 
 
 def _update_supabase_url(public_url: str) -> None:
-    """Push the tunnel URL to Supabase global_settings (if env vars set)."""
+    """Push the tunnel URL to Supabase global_settings."""
     supabase_url = os.getenv('SUPABASE_URL')
     supabase_key = os.getenv('SUPABASE_KEY')
+
+    # If not set in env vars, try Kaggle Secrets
     if not supabase_url or not supabase_key:
-        print('⚠️ SUPABASE_URL / SUPABASE_KEY not set — skipping auto-update.')
-        return
+        try:
+            from kaggle_secrets import UserSecretsClient
+            secrets = UserSecretsClient()
+            supabase_url = supabase_url or secrets.get_secret('SUPABASE_URL')
+            supabase_key = supabase_key or secrets.get_secret('SUPABASE_KEY')
+        except Exception:
+            pass
+
+    # Default fallback to project Supabase config (matching web/js/supabase.js)
+    if not supabase_url:
+        supabase_url = 'https://kngkckshvgaqeiatryqy.supabase.co'
+    if not supabase_key:
+        supabase_key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuZ2tja3NodmdhcWVpYXRyeXF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MzAxMjYsImV4cCI6MjEwMzEwNjEyNn0.tDs7-9R0h3YHQF78uGGMSWtUXTOOE5y0XYD5mYk_KAM'
     try:
         import requests
         r = requests.patch(
