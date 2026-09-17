@@ -10,6 +10,7 @@ ROOT = str(Path(__file__).resolve().parent)
 
 INCLUDE_FILES = [
     "paths.py",
+    "backend_api.py",
     "configs/pronunciation.yaml",
     "data/audio_preprocess.py",
     "data/audio_info.py",
@@ -28,7 +29,6 @@ INCLUDE_FILES = [
     "models/wavlm_encoder.py",
     "infer/__init__.py",
     "infer/device_utils.py",
-    "infer/ensure_models.py",
     "infer/lang_id.py",
     "infer/load_progress.py",
     "infer/pipeline.py",
@@ -131,15 +131,15 @@ scorer:
   phoneme_low_threshold: 1.2
   calibration:
     enabled: true
-    slope: 1.39
-    offset: -3.20
+    slope: 1.20
+    offset: -1.60
     short_duration_sec: 3.5
-    short_duration_factor: 0.75
+    short_duration_factor: 0.40
     long_duration_sec: 4.0
-    long_duration_factor: 0.28
-    long_duration_max_boost: 2.5
-    phone_slope: 7.0
-    phone_offset: -4.0
+    long_duration_factor: 0.15
+    long_duration_max_boost: 1.5
+    phone_slope: 6.0
+    phone_offset: -3.0
 
 sentence_split:
   min_silence_sec: 0.35
@@ -654,9 +654,44 @@ run_cells.append(code_cell([
 ]))
 
 run_cells.append(md_cell(["---\n", "## Khởi chạy Backend API (FastAPI + Cloudflare Tunnel)"]))
-with open(os.path.join(ROOT, "backend_api.py"), "r", encoding="utf-8") as f:
-    backend_lines = f.readlines()
-run_cells.append(code_cell(backend_lines))
+
+# Pre-backend cell: start tunnel and register globals
+run_cells.append(code_cell([
+    "# Setup tunnel and inject globals into backend_api\n",
+    "import backend_api\n",
+    "import builtins\n",
+    "\n",
+    "# Start Cloudflare Tunnel\n",
+    "PUBLIC_URL = backend_api.start_cloudflare_tunnel(8000)\n",
+    "backend_api.PUBLIC_URL = PUBLIC_URL\n",
+    "if PUBLIC_URL:\n",
+    "    backend_api._update_supabase_url(PUBLIC_URL)\n",
+    "    print(f'🚀 API IS LIVE AT: {PUBLIC_URL}')\n",
+    "else:\n",
+    "    print('Running without Cloudflare tunnel')\n",
+    "\n",
+    "# Register notebook globals so backend_api can find them\n",
+    "builtins.pipeline = pipeline\n",
+    "builtins.extract_embedder = extract_embedder\n",
+    "builtins.generate_turn_feedback = generate_turn_feedback\n",
+    "builtins.generate_overall_summary = generate_overall_summary\n",
+    "\n",
+    "# Start FastAPI server in background thread\n",
+    "import threading, uvicorn\n",
+    "config = uvicorn.Config(app=backend_api.app, host='0.0.0.0', port=8000, log_level='info')\n",
+    "server = uvicorn.Server(config)\n",
+    "server_thread = threading.Thread(target=server.run, daemon=True)\n",
+    "server_thread.start()\n",
+    "print('FastAPI Server is running!')\n",
+    "import time\n",
+    "try:\n",
+    "    while server_thread.is_alive():\n",
+    "        time.sleep(1)\n",
+    "except KeyboardInterrupt:\n",
+    "    print('Shutting down FastAPI Server...')\n",
+    "    server.should_exit = True\n",
+    "    server_thread.join(timeout=5)\n",
+]))
 
 def save_notebook(cells, filename):
     notebook = {

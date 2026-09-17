@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 class CMUDict:
     """Load and query CMUdict for word -> phoneme lookup."""
 
-  # ARPAbet phoneme pattern (e.g. AH0, T, SH)
+    # ARPAbet phoneme pattern (e.g. AH0, T, SH)
     PHONE_RE = re.compile(r"^[A-Z]{1,2}\d?$")
 
     def __init__(self, dict_path: Optional[str] = None):

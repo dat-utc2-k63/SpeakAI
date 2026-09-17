@@ -1,4 +1,4 @@
-# Pronunciation Assessment — Colab Edition (GPU only, no HuggingFace auto-download)
+# Pronunciation Assessment — Kaggle/Local Edition
 project:
   seed: 42
   device: cuda
@@ -29,7 +29,7 @@ inference:
   max_upload_mb: 300
 
 asr:
-  model_name: /content/drive/MyDrive/SpeakAI-Eval/pretrained_models/whisper-small.en
+  model_name: pretrained_models/whisper-large-v3
   language: en
   device: cuda
   torch_dtype: float16
@@ -84,15 +84,15 @@ scorer:
   phoneme_low_threshold: 1.2
   calibration:
     enabled: true
-    slope: 1.39
-    offset: -3.20
+    slope: 1.20
+    offset: -1.60
     short_duration_sec: 3.5
-    short_duration_factor: 0.75
+    short_duration_factor: 0.40
     long_duration_sec: 4.0
-    long_duration_factor: 0.28
-    long_duration_max_boost: 2.5
-    phone_slope: 7.0
-    phone_offset: -4.0
+    long_duration_factor: 0.15
+    long_duration_max_boost: 1.5
+    phone_slope: 6.0
+    phone_offset: -3.0
 
 sentence_split:
   min_silence_sec: 0.35

@@ -14,7 +14,7 @@ STEPS: List[StepDef] = [
     ("pronunciation", "Chấm điểm: WavLM + Transformer", 55),
     ("pronunciation_ckpt", "Checkpoint pronunciation.pt", 18),
     ("whisper_proc", "Whisper: tokenizer + processor", 8),
-    ("whisper_model", "Whisper: tải weights (small.en)", 16),
+    ("whisper_model", "Whisper: tải weights ASR", 16),
 ]
 
 

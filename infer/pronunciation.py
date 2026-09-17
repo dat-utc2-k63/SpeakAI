@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 from pathlib import Path
@@ -18,7 +17,6 @@ from models.checkpoint_utils import load_model_weights, resolve_checkpoint
 from models.pronunciation_model import PronunciationAssessmentModel
 from models.pronunciation_scorer import PronunciationScorer
 from paths import PRONUNCIATION_CONFIG
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -372,6 +370,7 @@ class L2MDDPredictor:
 
 
 def main():
+    import argparse
     p = argparse.ArgumentParser(description="Pronunciation scoring only")
     p.add_argument("--audio", required=True)
     p.add_argument("--transcript", required=True)

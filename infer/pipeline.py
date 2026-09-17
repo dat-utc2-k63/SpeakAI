@@ -231,6 +231,7 @@ class SpeakingPipeline:
         get_transcriber(load_progress, device=self.asr_device)
         
         self.enable_feedback = enable_feedback
+        self.feedback_mode = "local"
         self._lang_id_cfg = (self.config.get("asr") or {}).get("lang_id") or {}
 
     def _diarize_two_speakers(
