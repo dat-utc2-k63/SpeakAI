@@ -224,8 +224,8 @@ class SpeakingPipeline:
             min_segment_sec=0.3,
             merge_gap_sec=0.5,
             consecutive_merge_gap_sec=consec_gap,
-            step_sec=0.25,
-            boundary_step_sec=0.05,
+            step_sec=0.50,
+            boundary_step_sec=0.15,
             min_similarity_threshold=min_sim_thresh,
         )
         

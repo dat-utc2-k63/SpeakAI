@@ -21,6 +21,7 @@ import shutil
 import json
 import numpy as np
 import subprocess
+import threading
 import time
 import re
 import os
@@ -103,6 +104,7 @@ def _get_global(name):
 
 # ── FastAPI App ────────────────────────────────────────────────────────
 PUBLIC_URL = None  # Set at startup when tunnel is active
+SERVER_START_TIME = time.time()
 
 app = FastAPI()
 app.add_middleware(
@@ -118,6 +120,13 @@ os.makedirs('/tmp/SpeakAI_Audio', exist_ok=True)
 app.mount('/audio', StaticFiles(directory='/tmp/SpeakAI_Audio'), name='audio')
 
 tasks = {}
+
+# ── GPU Concurrency Control ────────────────────────────────────────────
+# Chỉ cho phép 1 task GPU chạy tại 1 thời điểm để tránh tràn VRAM (CUDA OOM)
+# Các task khác sẽ nằm trong hàng đợi, đảm bảo ổn định cho trung tâm nhiều học viên
+_gpu_semaphore = threading.Semaphore(1)
+_gpu_active_task = None  # Track task đang chạy trên GPU
+_gpu_queue_count = 0  # Số task đang chờ trong hàng đợi
 
 
 @app.post('/extract_embedding')
@@ -243,6 +252,22 @@ def process_assessment(
     score_teacher,
     diarize=True, reference_text=None, task_type=None,
 ):
+    global _gpu_active_task, _gpu_queue_count
+    task_start_time = time.time()
+
+    # Đợi GPU semaphore — nếu có task khác đang chạy, task này sẽ xếp hàng
+    _gpu_queue_count += 1
+    queue_pos = _gpu_queue_count
+    if not _gpu_semaphore.acquire(blocking=False):
+        tasks[task_id]['step'] = f'Đang chờ GPU (vị trí {queue_pos} trong hàng đợi)...'
+        print(f'[Queue] Task {task_id[:8]} đang chờ GPU (vị trí {queue_pos})...')
+        _gpu_semaphore.acquire()  # Block đợi tới lượt
+    _gpu_active_task = task_id
+    _gpu_queue_count = max(0, _gpu_queue_count - 1)
+    gpu_wait_time = time.time() - task_start_time
+    if gpu_wait_time > 0.5:
+        print(f'[Queue] Task {task_id[:8]} đã chờ GPU {gpu_wait_time:.1f}s')
+
     try:
         pipe = _get_global('pipeline')
         if pipe is None:
@@ -325,14 +350,27 @@ def process_assessment(
 
         tasks[task_id]['result'] = raw_result
         tasks[task_id]['llm_feedback'] = None
-        tasks[task_id]['step'] = 'Hoàn tất phân tích âm học.'
+        total_time = time.time() - task_start_time
+        tasks[task_id]['step'] = f'Hoàn tất phân tích âm học ({total_time:.1f}s).'
+        tasks[task_id]['processing_time_sec'] = round(total_time, 2)
         tasks[task_id]['status'] = 'completed'
+        print(f'[Perf] Task {task_id[:8]} hoàn tất trong {total_time:.1f}s')
     except Exception as e:
         print(f'API Error in task {task_id}: {e}')
         import traceback
         traceback.print_exc()
         tasks[task_id]['status'] = 'error'
         tasks[task_id]['error'] = str(e)
+    finally:
+        # Giải phóng GPU semaphore và dọn VRAM cache
+        _gpu_active_task = None
+        _gpu_semaphore.release()
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
 
 
 @app.get('/assess_status/{task_id}')
@@ -340,6 +378,42 @@ def assess_status(task_id: str):
     if task_id not in tasks:
         return JSONResponse({'success': False, 'error': 'Task not found'}, status_code=404)
     return JSONResponse({'success': True, 'data': jsonable_encoder(tasks[task_id])})
+
+
+@app.get('/health')
+def health_check():
+    """Server health check — monitoring uptime, GPU status, queue."""
+    uptime_sec = time.time() - SERVER_START_TIME
+    gpu_info = {'available': False}
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu_info = {
+                'available': True,
+                'device_name': torch.cuda.get_device_name(0),
+                'memory_allocated_mb': round(torch.cuda.memory_allocated(0) / 1024 / 1024, 1),
+                'memory_reserved_mb': round(torch.cuda.memory_reserved(0) / 1024 / 1024, 1),
+                'memory_total_mb': round(torch.cuda.get_device_properties(0).total_mem / 1024 / 1024, 1),
+            }
+    except Exception:
+        pass
+    
+    active_tasks = sum(1 for t in tasks.values() if t.get('status') == 'processing')
+    completed_tasks = sum(1 for t in tasks.values() if t.get('status') == 'completed')
+    error_tasks = sum(1 for t in tasks.values() if t.get('status') == 'error')
+    
+    return JSONResponse({
+        'status': 'healthy',
+        'uptime_sec': round(uptime_sec, 1),
+        'uptime_human': f'{int(uptime_sec // 3600)}h {int((uptime_sec % 3600) // 60)}m',
+        'gpu': gpu_info,
+        'gpu_queue_waiting': _gpu_queue_count,
+        'gpu_active_task': _gpu_active_task[:8] if _gpu_active_task else None,
+        'tasks_active': active_tasks,
+        'tasks_completed': completed_tasks,
+        'tasks_error': error_tasks,
+        'public_url': PUBLIC_URL,
+    })
 
 
 if __name__ == '__main__':
