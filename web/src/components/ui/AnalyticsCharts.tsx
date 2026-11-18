@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Pause, Play, Volume2 } from 'lucide-react';
 import { formatTimestamp } from '@/lib/utils';
 import type { ClassroomSegment } from '@/lib/types';
 
@@ -145,7 +146,7 @@ export function VoiceRecSphere({
   onClick: () => void;
 }) {
   const dims = size === 'lg' ? 'size-24 sm:size-28' : 'size-20';
-  const textSz = size === 'lg' ? 'text-xl' : 'text-base';
+  const textSz = size === 'lg' ? 'text-base sm:text-lg' : 'text-sm';
 
   return (
     <div className="relative inline-flex items-center justify-center">
@@ -171,7 +172,7 @@ export function VoiceRecSphere({
           </>
         ) : (
           <>
-            <span className={`font-bold ${textSz}`}>REC</span>
+            <span className={`font-bold ${textSz}`}>Ghi âm</span>
             <span className="mt-0.5 text-[10px] font-medium text-white/80">
               {hasRecorded ? 'Ghi lại' : 'Nhấn nói'}
             </span>
@@ -903,21 +904,113 @@ export function RatioDonutChart({
   );
 }
 
+function resolveClassroomSegLang(seg: ClassroomSegment): 'en' | 'vi' | 'unknown' {
+  if (seg.language === 'unknown') return 'unknown';
+  if (seg.language === 'vi') return 'vi';
+  if (seg.language === 'en') return 'en';
+  return Number(seg.vi_percent || 0) >= 50 ? 'vi' : 'en';
+}
+
 /* ── CLASSROOM TIMELINE SEGMENTATION STRIP ──────────────── */
 export function ClassroomTimelineStrip({
   segments,
   totalAudioSec,
+  audioUrl,
 }: {
   segments: ClassroomSegment[];
   totalAudioSec: number;
+  audioUrl?: string | null;
 }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const activeBoundsRef = useRef<{ index: number; start: number; end: number } | null>(null);
+
   const [selectedSeg, setSelectedSeg] = useState<ClassroomSegment | null>(
     segments.length > 0 ? segments[0] : null,
   );
+  const [playingSegIdx, setPlayingSegIdx] = useState<number | null>(null);
+  const [playheadSec, setPlayheadSec] = useState<number | null>(null);
 
   useEffect(() => {
     setSelectedSeg(segments.length > 0 ? segments[0] : null);
-  }, [segments]);
+    setPlayingSegIdx(null);
+    setPlayheadSec(null);
+    activeBoundsRef.current = null;
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+  }, [segments, audioUrl]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    return () => {
+      if (audio) audio.pause();
+    };
+  }, []);
+
+  const stopPlayback = () => {
+    const audio = audioRef.current;
+    if (audio) audio.pause();
+    activeBoundsRef.current = null;
+    setPlayingSegIdx(null);
+    setPlayheadSec(null);
+  };
+
+  const handlePlayOrToggleSegment = (seg: ClassroomSegment) => {
+    setSelectedSeg(seg);
+    const audio = audioRef.current;
+    if (!audioUrl || !audio) return;
+
+    // Clicking the currently playing segment toggles pause
+    if (playingSegIdx === seg.index && !audio.paused) {
+      stopPlayback();
+      return;
+    }
+
+    const start = Math.max(0, Number(seg.start_sec || 0));
+    const end = Math.max(start + 0.1, Number(seg.end_sec || start + Number(seg.duration_sec || 0)));
+    activeBoundsRef.current = { index: seg.index, start, end };
+    setPlayingSegIdx(seg.index);
+    setPlayheadSec(start);
+
+    const startFromOffset = () => {
+      try {
+        audio.currentTime = start;
+      } catch {
+        // Ignore seek error if metadata is still loading
+      }
+      const p = audio.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          setPlayingSegIdx(null);
+        });
+      }
+    };
+
+    if (audio.readyState >= 1) {
+      startFromOffset();
+    } else {
+      const onMeta = () => {
+        audio.removeEventListener('loadedmetadata', onMeta);
+        startFromOffset();
+      };
+      audio.addEventListener('loadedmetadata', onMeta);
+      audio.load();
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    const audio = audioRef.current;
+    const bounds = activeBoundsRef.current;
+    if (!audio || !bounds) return;
+    const now = audio.currentTime;
+    setPlayheadSec(now);
+    if (now >= bounds.end - 0.04) {
+      audio.pause();
+      activeBoundsRef.current = null;
+      setPlayingSegIdx(null);
+      setPlayheadSec(null);
+    }
+  };
 
   const safeTotal = Math.max(
     totalAudioSec || 0,
@@ -925,12 +1018,40 @@ export function ClassroomTimelineStrip({
     1,
   );
 
+  const hasUnknown = segments.some((s) => resolveClassroomSegLang(s) === 'unknown');
+
   if (!segments || segments.length === 0) return null;
+
+  const selectedLang = selectedSeg ? resolveClassroomSegLang(selectedSeg) : null;
+  const isSelectedPlaying =
+    selectedSeg != null && playingSegIdx === selectedSeg.index;
+  const playheadPct =
+    playheadSec != null ? Math.max(0, Math.min(100, (playheadSec / safeTotal) * 100)) : null;
 
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      {audioUrl && (
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          preload="metadata"
+          onTimeUpdate={handleTimeUpdate}
+          onEnded={stopPlayback}
+          className="hidden"
+        />
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span className="font-semibold text-slate-800">Language Timeline toàn tiết học (EN / VI)</span>
+        <div>
+          <div className="font-semibold text-slate-800">
+            Diễn biến ngôn ngữ trong tiết học (Tiếng Anh / Tiếng Việt)
+          </div>
+          <div className="mt-0.5 text-[11px] text-slate-500">
+            {audioUrl
+              ? 'Nhấn vào từng đoạn màu trên thanh để nghe trực tiếp đúng đoạn đó'
+              : 'Nhấn vào từng đoạn màu để xem nội dung (tải lại tệp ghi âm để nghe trực tiếp)'}
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-slate-600">
           <span className="inline-flex items-center gap-1.5">
             <span className="size-2.5 rounded-sm bg-blue-600" /> Tiếng Anh (EN)
@@ -938,42 +1059,70 @@ export function ClassroomTimelineStrip({
           <span className="inline-flex items-center gap-1.5">
             <span className="size-2.5 rounded-sm bg-amber-500" /> Tiếng Việt (VI)
           </span>
+          {hasUnknown && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2.5 rounded-sm bg-slate-400" /> Không xác định
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5">
             <span className="size-2.5 rounded-sm bg-slate-200 border border-slate-300" /> Khoảng lặng
           </span>
         </div>
       </div>
 
-      <div className="relative h-9 w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
+      <div className="relative h-10 w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
         {segments.map((seg) => {
           const leftPct = Math.max(0, Math.min(100, (Number(seg.start_sec) / safeTotal) * 100));
           const widthPct = Math.max(
             0.6,
             Math.min(100 - leftPct, (Number(seg.duration_sec) / safeTotal) * 100),
           );
-          const isVi =
-            seg.language === 'vi' || (seg.language !== 'en' && Number(seg.vi_percent || 0) >= 50);
-          const bgCls = isVi
-            ? 'bg-amber-500 hover:bg-amber-600'
-            : 'bg-blue-600 hover:bg-blue-700';
+          const segLang = resolveClassroomSegLang(seg);
+          const bgCls =
+            segLang === 'unknown'
+              ? 'bg-slate-400 hover:bg-slate-500'
+              : segLang === 'vi'
+                ? 'bg-amber-500 hover:bg-amber-600'
+                : 'bg-blue-600 hover:bg-blue-700';
           const isActive = selectedSeg?.index === seg.index;
-          const segTitle = `${isVi ? 'Tiếng Việt (VI)' : 'Tiếng Anh (EN)'} (${formatTimestamp(seg.start_sec)} - ${formatTimestamp(seg.end_sec)})`;
+          const isThisPlaying = playingSegIdx === seg.index;
+          const langLabel =
+            segLang === 'unknown'
+              ? 'Không xác định'
+              : segLang === 'vi'
+                ? 'Tiếng Việt (VI)'
+                : 'Tiếng Anh (EN)';
+          const segTitle = `${langLabel} (${formatTimestamp(seg.start_sec)} - ${formatTimestamp(seg.end_sec)})${audioUrl ? ' — Nhấn để nghe' : ''}`;
 
           return (
             <button
               key={seg.index}
               type="button"
-              onMouseEnter={() => setSelectedSeg(seg)}
-              onClick={() => setSelectedSeg(seg)}
+              onMouseEnter={() => {
+                if (playingSegIdx === null) setSelectedSeg(seg);
+              }}
+              onClick={() => handlePlayOrToggleSegment(seg)}
               title={segTitle}
               aria-label={segTitle}
-              className={`absolute top-0 bottom-0 transition-opacity duration-150 ${bgCls} ${
-                isActive ? 'ring-2 ring-slate-900 z-10' : 'opacity-90'
+              className={`absolute top-0 bottom-0 cursor-pointer transition-opacity duration-150 ${bgCls} ${
+                isThisPlaying
+                  ? 'ring-2 ring-slate-900 z-20 opacity-100'
+                  : isActive
+                    ? 'ring-2 ring-slate-800/80 z-10 opacity-100'
+                    : 'opacity-90'
               }`}
               style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
             />
           );
         })}
+
+        {playheadPct != null && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute top-0 bottom-0 z-30 w-0.5 bg-slate-900"
+            style={{ left: `${playheadPct}%` }}
+          />
+        )}
       </div>
 
       <div className="flex justify-between text-[10px] font-mono text-slate-500 tabular-nums">
@@ -982,22 +1131,24 @@ export function ClassroomTimelineStrip({
         <span>{formatTimestamp(safeTotal)}</span>
       </div>
 
-      {selectedSeg && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-xs">
-          <div className="min-w-0 flex-1 space-y-1">
+      {selectedSeg && selectedLang && (
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-xs">
+          <div className="min-w-0 flex-1 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <span
                 className={`rounded-md px-2 py-0.5 text-[10px] font-semibold border ${
-                  selectedSeg.language === 'vi' ||
-                  (selectedSeg.language !== 'en' && Number(selectedSeg.vi_percent || 0) >= 50)
-                    ? 'bg-amber-50 text-amber-800 border-amber-200'
-                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                  selectedLang === 'unknown'
+                    ? 'bg-slate-100 text-slate-700 border-slate-300'
+                    : selectedLang === 'vi'
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : 'bg-blue-50 text-blue-700 border-blue-200'
                 }`}
               >
-                {selectedSeg.language === 'vi' ||
-                (selectedSeg.language !== 'en' && Number(selectedSeg.vi_percent || 0) >= 50)
-                  ? 'VI · Tiếng Việt'
-                  : 'EN · Tiếng Anh'}
+                {selectedLang === 'unknown'
+                  ? 'Không xác định'
+                  : selectedLang === 'vi'
+                    ? 'VI · Tiếng Việt'
+                    : 'EN · Tiếng Anh'}
               </span>
               <span className="font-mono text-slate-500 tabular-nums">
                 {formatTimestamp(selectedSeg.start_sec)} – {formatTimestamp(selectedSeg.end_sec)} (
@@ -1006,9 +1157,39 @@ export function ClassroomTimelineStrip({
               <span className="text-slate-500 font-medium tabular-nums">
                 {selectedSeg.word_count ?? selectedSeg.total_words ?? 0} từ
               </span>
+              {isSelectedPlaying && playheadSec != null && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 tabular-nums">
+                  <Volume2 className="size-3" />
+                  Đang phát {formatTimestamp(playheadSec)}
+                </span>
+              )}
             </div>
             <p className="text-slate-700 leading-relaxed text-pretty">&ldquo;{selectedSeg.transcript}&rdquo;</p>
           </div>
+
+          {audioUrl && (
+            <button
+              type="button"
+              onClick={() => handlePlayOrToggleSegment(selectedSeg)}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors duration-150 ${
+                isSelectedPlaying
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'border border-slate-200 bg-slate-900 text-white hover:bg-slate-800'
+              }`}
+            >
+              {isSelectedPlaying ? (
+                <>
+                  <Pause className="size-3.5" />
+                  Tạm dừng
+                </>
+              ) : (
+                <>
+                  <Play className="size-3.5" />
+                  Nghe đoạn này
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
     </div>

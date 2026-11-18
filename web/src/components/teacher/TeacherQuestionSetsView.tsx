@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Copy,
   Edit3,
@@ -116,6 +118,7 @@ export function TeacherQuestionSetsView({ currentUser, onChanged }: TeacherQuest
   const [qText, setQText] = useState('');
   const [qRefText, setQRefText] = useState('');
   const [qImageUrl, setQImageUrl] = useState('');
+  const [qAdvancedOpen, setQAdvancedOpen] = useState(false);
   const [savingQuestion, setSavingQuestion] = useState(false);
   const [deletingQuestion, setDeletingQuestion] = useState<Question | null>(null);
   const [deletingQuestionBusy, setDeletingQuestionBusy] = useState(false);
@@ -353,6 +356,7 @@ export function TeacherQuestionSetsView({ currentUser, onChanged }: TeacherQuest
     setQText('');
     setQRefText('');
     setQImageUrl('');
+    setQAdvancedOpen(false);
     setQModalOpen(true);
   };
 
@@ -366,6 +370,7 @@ export function TeacherQuestionSetsView({ currentUser, onChanged }: TeacherQuest
     setQText(q.question_text || '');
     setQRefText(q.reference_text || '');
     setQImageUrl(q.image_url || '');
+    setQAdvancedOpen(false);
     setQModalOpen(true);
   };
 
@@ -661,70 +666,19 @@ export function TeacherQuestionSetsView({ currentUser, onChanged }: TeacherQuest
           title={editingQuestion ? `Sửa Câu ${editingQuestion.order_num}` : 'Thêm Câu hỏi Speaking'}
         >
           <form onSubmit={handleSaveQuestion} className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">Dạng bài</label>
-                <select
-                  value={qTaskType}
-                  onChange={(e) => handleTaskTypeChange(e.target.value as TaskType)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
-                >
-                  {availableTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Phần (VD: Part 1, Task 2)
-                </label>
-                <input
-                  type="text"
-                  value={qPartTitle}
-                  onChange={(e) => setQPartTitle(e.target.value)}
-                  placeholder="VD: Phần 1 / Part 1"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">Thứ tự</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={qOrderNum}
-                  onChange={(e) => setQOrderNum(Number(e.target.value))}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Chuẩn bị (giây)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={qPrepTime}
-                  onChange={(e) => setQPrepTime(Number(e.target.value))}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Trả lời (giây)
-                </label>
-                <input
-                  type="number"
-                  min={5}
-                  value={qResponseTime}
-                  onChange={(e) => setQResponseTime(Number(e.target.value))}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
-                />
-              </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-600">Dạng bài</label>
+              <select
+                value={qTaskType}
+                onChange={(e) => handleTaskTypeChange(e.target.value as TaskType)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
+              >
+                {availableTypes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -741,6 +695,82 @@ export function TeacherQuestionSetsView({ currentUser, onChanged }: TeacherQuest
                 placeholder="Nhập đề bài Speaking..."
                 className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
               />
+            </div>
+
+            {/* Collapsible Advanced Options (Part Title, Order, Prep/Response Time) */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setQAdvancedOpen((v) => !v)}
+                className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-xs font-semibold text-slate-700 hover:text-slate-900 transition-colors duration-150"
+              >
+                <span>
+                  Tùy chọn nâng cao{' '}
+                  <span className="font-normal text-slate-500 tabular-nums">
+                    (Câu {qOrderNum} · Chuẩn bị {qPrepTime}s · Trả lời {qResponseTime}s
+                    {qPartTitle.trim() ? ` · ${qPartTitle.trim()}` : ''})
+                  </span>
+                </span>
+                {qAdvancedOpen ? (
+                  <ChevronUp className="size-4 shrink-0 text-slate-500" />
+                ) : (
+                  <ChevronDown className="size-4 shrink-0 text-slate-500" />
+                )}
+              </button>
+
+              {qAdvancedOpen && (
+                <div className="space-y-3 border-t border-slate-200 px-3.5 py-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">
+                      Phần thi (không bắt buộc, VD: Part 1, Task 2)
+                    </label>
+                    <input
+                      type="text"
+                      value={qPartTitle}
+                      onChange={(e) => setQPartTitle(e.target.value)}
+                      placeholder="VD: Phần 1 / Part 1"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-600 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">Thứ tự</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={qOrderNum}
+                        onChange={(e) => setQOrderNum(Number(e.target.value))}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 tabular-nums focus:border-blue-600 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">
+                        Chuẩn bị (giây)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={qPrepTime}
+                        onChange={(e) => setQPrepTime(Number(e.target.value))}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 tabular-nums focus:border-blue-600 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">
+                        Trả lời (giây)
+                      </label>
+                      <input
+                        type="number"
+                        min={5}
+                        value={qResponseTime}
+                        onChange={(e) => setQResponseTime(Number(e.target.value))}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 tabular-nums focus:border-blue-600 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {['information_qa', 'long_turn', 'problem_solution'].includes(qTaskType) && (

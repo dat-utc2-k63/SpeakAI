@@ -125,7 +125,7 @@ def _parse_dtype(name: Optional[str], device: torch.device) -> torch.dtype:
 
 class WhisperTranscriber:
     """
-    Bilingual Whisper ASR (EN/VI) — default: openai/whisper-large-v3 (128-mel).
+    Bilingual Whisper ASR (EN/VI) — default: openai/whisper-large-v3-turbo (128-mel).
     Restricts language detection to allowed_languages (default: ('en', 'vi'))
     and returns both acoustic probabilities and combined Vietnamese percentage.
     """

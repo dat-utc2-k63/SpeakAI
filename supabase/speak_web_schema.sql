@@ -1,8 +1,9 @@
 -- ==============================================================================
--- SpeakAI Web Platform - RBAC & RLS Production Schema (v4.0)
+-- SpeakAI Web Platform - RBAC, RLS & Classroom Management Schema (v5.0)
 -- Project: SpeakAI (configure SUPABASE_URL in `.env`)
--- Mô tả: Cấu trúc DB chuẩn hóa phân quyền 3 vai trò (admin / teacher / student),
---        BẬT RLS 100% trên toàn bộ bảng & Storage, có Trigger chống leo thang quyền.
+-- Mô tả: File SQL duy nhất, idempotent (chạy an toàn nhiều lần trên Supabase SQL Editor).
+--        Bao gồm toàn bộ 13 bảng (7 bảng lõi + 6 bảng quản lý lớp học v5.0),
+--        BẬT RLS 100%, Trigger chống leo thang quyền & backfill từ profiles.teacher_id.
 -- ==============================================================================
 
 -- ==============================================================================
@@ -35,7 +36,15 @@ create table if not exists public.profiles (
 
 -- Đồng bộ cột mới nếu chạy trên database đã tồn tại
 alter table public.profiles
-  add column if not exists status text not null default 'active';
+  add column if not exists status text not null default 'active',
+  add column if not exists student_code text,
+  add column if not exists date_of_birth date,
+  add column if not exists entry_level text,
+  add column if not exists target_band numeric(3,1),
+  add column if not exists guardian_name text,
+  add column if not exists guardian_phone text,
+  add column if not exists enrolled_at timestamp with time zone not null default timezone('utc'::text, now()),
+  add column if not exists enrollment_note text;
 
 do $$
 begin
@@ -46,7 +55,35 @@ begin
     alter table public.profiles
       add constraint profiles_status_check check (status in ('pending', 'active', 'suspended'));
   end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_entry_level_check' and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profiles_entry_level_check
+      check (entry_level is null or entry_level in ('beginner', 'intermediate', 'advanced'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_target_band_check' and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profiles_target_band_check
+      check (target_band is null or (target_band >= 1.0 and target_band <= 9.0));
+  end if;
 end $$;
+
+create unique index if not exists idx_profiles_student_code_unique
+  on public.profiles (lower(student_code))
+  where student_code is not null;
+
+-- Gán mã học viên mặc định cho các học viên đã tồn tại nhưng chưa có mã
+update public.profiles
+set student_code = 'HV-' || to_char(coalesce(created_at, timezone('utc'::text, now())), 'YYYY') || '-' || upper(substring(replace(id::text, '-', ''), 1, 5))
+where role = 'student'
+  and nullif(trim(coalesce(student_code, '')), '') is null;
 
 -- 2.2. TABLE: assessments
 -- Chấm điểm hội thoại Giáo viên - Học viên (Two-Speaker Diarization)
@@ -359,29 +396,26 @@ begin
     new.voice_enrolled := true;
   end if;
 
+  -- Chuẩn hóa mã học viên & tự sinh nếu tạo mới học viên chưa có mã
+  if tg_op = 'INSERT' then
+    new.student_code := nullif(trim(coalesce(new.student_code, '')), '');
+    if new.role = 'student' and new.student_code is null then
+      new.student_code := 'HV-' || to_char(timezone('utc'::text, now()), 'YYYY') || '-' || upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 5));
+    end if;
+    new.enrolled_at := coalesce(new.enrolled_at, timezone('utc'::text, now()));
+  elsif tg_op = 'UPDATE' then
+    new.student_code := nullif(trim(coalesce(new.student_code, '')), '');
+  end if;
+
   -- Cho phép PostgreSQL SQL Editor / service_role thao tác quản trị hệ thống
   if private.is_service_context() then
     return new;
   end if;
 
   if tg_op = 'INSERT' then
+    -- Khóa hoàn toàn tự đăng ký công khai: chỉ Admin/Giáo vụ mới có quyền tạo hồ sơ người dùng
     if not private.is_admin() then
-      if new.id <> (select auth.uid()) then
-        raise exception 'Không thể tạo hồ sơ cho người dùng khác.';
-      end if;
-      if new.role not in ('student', 'teacher') then
-        raise exception 'Không được phép tự đăng ký vai trò "%".', new.role;
-      end if;
-      if new.role = 'teacher' then
-        -- Giáo viên tự đăng ký luôn ở trạng thái chờ Admin phê duyệt
-        new.status := 'pending';
-        new.teacher_id := null;
-      else
-        new.status := 'active';
-        if new.teacher_id is not null and not private.is_active_teacher_id(new.teacher_id) then
-          raise exception 'Giáo viên được chọn không tồn tại hoặc chưa được kích hoạt.';
-        end if;
-      end if;
+      raise exception 'Chỉ Quản trị viên / Giáo vụ mới có quyền tạo tài khoản người dùng.';
     end if;
     return new;
   end if;
@@ -399,6 +433,16 @@ begin
       end if;
       if new.id is distinct from old.id or new.email is distinct from old.email then
         raise exception 'Không thể thay đổi định danh hoặc email hồ sơ tại đây.';
+      end if;
+      if new.student_code is distinct from old.student_code
+         or new.date_of_birth is distinct from old.date_of_birth
+         or new.entry_level is distinct from old.entry_level
+         or new.target_band is distinct from old.target_band
+         or new.guardian_name is distinct from old.guardian_name
+         or new.guardian_phone is distinct from old.guardian_phone
+         or new.enrolled_at is distinct from old.enrolled_at
+         or new.enrollment_note is distinct from old.enrollment_note then
+        raise exception 'Chỉ Quản trị viên / Giáo vụ mới có quyền chỉnh sửa thông tin ghi danh học viên.';
       end if;
     else
       if old.id = (select auth.uid()) and (new.role is distinct from 'admin' or new.status is distinct from 'active') then
@@ -504,8 +548,8 @@ as $$
   order by p.full_name asc;
 $$;
 
-revoke all on function public.get_signup_teachers() from public;
-grant execute on function public.get_signup_teachers() to anon, authenticated;
+revoke all on function public.get_signup_teachers() from public, anon;
+grant execute on function public.get_signup_teachers() to authenticated;
 
 -- 5.2. Học viên xem thông tin cơ bản Giáo viên phụ trách lớp mình (không lộ embeddings/phone)
 create or replace function public.get_my_teacher_info()
@@ -826,13 +870,11 @@ create policy "profiles_select_authenticated"
   );
 
 drop policy if exists "profiles_insert_own" on public.profiles;
-create policy "profiles_insert_own"
+drop policy if exists "profiles_insert_admin_only" on public.profiles;
+create policy "profiles_insert_admin_only"
   on public.profiles for insert
   to authenticated
-  with check (
-    id = (select auth.uid())
-    and role in ('student', 'teacher')
-  );
+  with check ((select private.is_admin()));
 
 drop policy if exists "profiles_update_own_or_admin" on public.profiles;
 create policy "profiles_update_own_or_admin"
@@ -1247,6 +1289,940 @@ create index if not exists idx_practice_sessions_reviewed_by on public.practice_
 
 create index if not exists idx_practice_answers_session on public.practice_answers(session_id);
 create index if not exists idx_practice_answers_question on public.practice_answers(question_id);
+
+-- ==============================================================================
+-- SpeakAI Web Platform - Classroom Management Migration (v5.0)
+-- Phase 1 + 2 + 3: Classes, Class Members, Lessons, Attendance, Assignments,
+--                  Classroom EN/VI Analyses, Backfill from profiles.teacher_id,
+--                  Upgraded RBAC/RLS Policies & Performance Indexes.
+-- Idempotent: Có thể chạy an toàn nhiều lần trên Supabase SQL Editor.
+-- ==============================================================================
+
+-- ==============================================================================
+-- 1. NEW TABLES
+-- ==============================================================================
+
+-- 1.1. classes (Lớp học — Chỉ Admin tạo/sửa/xóa)
+create table if not exists public.classes (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  code text not null unique,
+  description text,
+  course_type text not null default 'ielts' check (course_type in ('general', 'vstep', 'toeic', 'ielts')),
+  target_band numeric(3,1) check (target_band is null or (target_band >= 1.0 and target_band <= 9.0)),
+  schedule_text text,
+  status text not null default 'active' check (status in ('active', 'completed', 'archived')),
+  start_date date,
+  end_date date,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamp with time zone not null default timezone('utc'::text, now())
+);
+
+-- 1.2. class_members (Thành viên lớp: Giáo viên chính, Trợ giảng, Học viên)
+create table if not exists public.class_members (
+  id uuid primary key default gen_random_uuid(),
+  class_id uuid not null references public.classes(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  member_role text not null default 'student' check (member_role in ('lead_teacher', 'assistant', 'student')),
+  status text not null default 'active' check (status in ('active', 'completed', 'dropped')),
+  joined_at timestamp with time zone not null default timezone('utc'::text, now()),
+  unique (class_id, user_id)
+);
+
+-- 1.3. lessons (Buổi học theo lộ trình lớp)
+create table if not exists public.lessons (
+  id uuid primary key default gen_random_uuid(),
+  class_id uuid not null references public.classes(id) on delete cascade,
+  lesson_no integer not null default 1 check (lesson_no >= 1),
+  title text not null,
+  scheduled_at timestamp with time zone,
+  summary_notes text,
+  status text not null default 'planned' check (status in ('planned', 'completed', 'cancelled')),
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamp with time zone not null default timezone('utc'::text, now())
+);
+
+-- 1.4. lesson_attendance (Điểm danh từng buổi học)
+create table if not exists public.lesson_attendance (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null references public.lessons(id) on delete cascade,
+  student_id uuid not null references public.profiles(id) on delete cascade,
+  status text not null default 'present' check (status in ('present', 'absent', 'late', 'excused')),
+  note text,
+  marked_by uuid references public.profiles(id) on delete set null,
+  updated_at timestamp with time zone not null default timezone('utc'::text, now()),
+  unique (lesson_id, student_id)
+);
+
+-- 1.5. assignments (Bài tập Speaking giao theo lớp có hạn nộp & giới hạn lượt)
+create table if not exists public.assignments (
+  id uuid primary key default gen_random_uuid(),
+  class_id uuid not null references public.classes(id) on delete cascade,
+  lesson_id uuid references public.lessons(id) on delete set null,
+  set_id uuid not null references public.question_sets(id) on delete cascade,
+  title text not null,
+  instructions text,
+  mode text not null default 'practice' check (mode in ('practice', 'exam')),
+  due_at timestamp with time zone,
+  max_attempts integer not null default 0 check (max_attempts >= 0),
+  min_band_target numeric(3,1) check (min_band_target is null or (min_band_target >= 1.0 and min_band_target <= 9.0)),
+  assigned_by uuid references public.profiles(id) on delete set null,
+  created_at timestamp with time zone not null default timezone('utc'::text, now())
+);
+
+-- 1.6. classroom_analyses (Lưu kết quả phân tích EN/VI + timeline JSON theo tiết dạy)
+create table if not exists public.classroom_analyses (
+  id uuid primary key default gen_random_uuid(),
+  class_id uuid references public.classes(id) on delete set null,
+  lesson_id uuid references public.lessons(id) on delete set null,
+  teacher_id uuid references public.profiles(id) on delete set null,
+  file_name text not null,
+  en_percent double precision not null default 0,
+  vi_percent double precision not null default 0,
+  en_time_percent double precision,
+  vi_time_percent double precision,
+  speech_ratio_percent double precision,
+  total_audio_sec double precision,
+  total_words integer not null default 0,
+  result_json jsonb,
+  created_at timestamp with time zone not null default timezone('utc'::text, now())
+);
+
+-- ==============================================================================
+-- 2. ADDITIVE COLUMNS ON EXISTING TABLES (NON-BREAKING)
+-- ==============================================================================
+alter table public.assessments
+  add column if not exists class_id uuid references public.classes(id) on delete set null,
+  add column if not exists lesson_id uuid references public.lessons(id) on delete set null;
+
+alter table public.practice_sessions
+  add column if not exists assignment_id uuid references public.assignments(id) on delete set null,
+  add column if not exists class_id uuid references public.classes(id) on delete set null,
+  add column if not exists is_late boolean not null default false;
+
+-- ==============================================================================
+-- 3. IDEMPOTENT BACKFILL FROM LEGACY profiles.teacher_id
+--    Tự động gom học viên đã gắn teacher_id vào 1 lớp mặc định cho mỗi giáo viên
+-- ==============================================================================
+do $$
+declare
+  rec record;
+  v_code text;
+  v_class_id uuid;
+begin
+  for rec in
+    select distinct t.id as teacher_id, t.full_name as teacher_name
+    from public.profiles s
+    join public.profiles t on t.id = s.teacher_id
+    where s.role = 'student'
+      and t.role = 'teacher'
+  loop
+    v_code := 'LEGACY-' || upper(substr(replace(rec.teacher_id::text, '-', ''), 1, 6));
+
+    select id into v_class_id
+    from public.classes
+    where code = v_code
+    limit 1;
+
+    if v_class_id is null then
+      insert into public.classes (
+        name, code, description, course_type, status, created_by
+      )
+      values (
+        'Lớp mặc định - ' || rec.teacher_name,
+        v_code,
+        'Lớp tự động chuyển đổi từ danh sách học viên phụ trách trước đây.',
+        'ielts',
+        'active',
+        rec.teacher_id
+      )
+      returning id into v_class_id;
+    end if;
+
+    insert into public.class_members (class_id, user_id, member_role, status)
+    values (v_class_id, rec.teacher_id, 'lead_teacher', 'active')
+    on conflict (class_id, user_id) do nothing;
+
+    insert into public.class_members (class_id, user_id, member_role, status)
+    select v_class_id, s.id, 'student', 'active'
+    from public.profiles s
+    where s.role = 'student'
+      and s.teacher_id = rec.teacher_id
+    on conflict (class_id, user_id) do nothing;
+  end loop;
+end $$;
+
+-- ==============================================================================
+-- 4. UPGRADED PRIVATE RBAC HELPERS (SECURITY DEFINER, NON-EXPOSED SCHEMA)
+-- ==============================================================================
+create or replace function private.is_class_teacher(p_class_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.class_members cm
+    join public.profiles p on p.id = cm.user_id
+    where cm.class_id = p_class_id
+      and cm.user_id = (select auth.uid())
+      and cm.member_role in ('lead_teacher', 'assistant')
+      and cm.status = 'active'
+      and p.status = 'active'
+      and p.role in ('teacher', 'admin')
+  );
+$$;
+
+create or replace function private.is_class_student(p_class_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.class_members cm
+    join public.profiles p on p.id = cm.user_id
+    where cm.class_id = p_class_id
+      and cm.user_id = (select auth.uid())
+      and cm.member_role = 'student'
+      and cm.status = 'active'
+      and p.status = 'active'
+  );
+$$;
+
+create or replace function private.is_class_member(p_class_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.class_members cm
+    join public.profiles p on p.id = cm.user_id
+    where cm.class_id = p_class_id
+      and cm.user_id = (select auth.uid())
+      and cm.status in ('active', 'completed')
+      and p.status = 'active'
+  );
+$$;
+
+-- Nâng cấp is_teacher_of: hỗ trợ đồng thời class_members (đa lớp + trợ giảng) & legacy teacher_id
+create or replace function private.is_teacher_of(p_student_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles t
+    where t.id = (select auth.uid())
+      and t.role = 'teacher'
+      and t.status = 'active'
+      and (
+        exists (
+          select 1
+          from public.class_members cm_t
+          join public.class_members cm_s
+            on cm_s.class_id = cm_t.class_id
+          where cm_t.user_id = t.id
+            and cm_t.member_role in ('lead_teacher', 'assistant')
+            and cm_t.status = 'active'
+            and cm_s.user_id = p_student_id
+            and cm_s.member_role = 'student'
+            and cm_s.status in ('active', 'completed')
+        )
+        or exists (
+          select 1
+          from public.profiles s
+          where s.id = p_student_id
+            and s.teacher_id = t.id
+        )
+      )
+  );
+$$;
+
+-- Kiểm tra giáo viên có cùng lớp với thành viên khác (để xem tên giáo viên/trợ giảng cùng lớp)
+create or replace function private.shares_class_as_teacher(p_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.class_members cm_me
+    join public.class_members cm_other on cm_other.class_id = cm_me.class_id
+    join public.profiles me on me.id = cm_me.user_id
+    where cm_me.user_id = (select auth.uid())
+      and cm_me.member_role in ('lead_teacher', 'assistant')
+      and cm_me.status = 'active'
+      and me.status = 'active'
+      and cm_other.user_id = p_user_id
+  );
+$$;
+
+-- Kiểm tra học viên có được giao bộ đề p_set_id trong bất kỳ lớp nào đang học hay không
+create or replace function private.is_question_set_assigned_to_me(p_set_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.assignments a
+    join public.class_members cm on cm.class_id = a.class_id
+    join public.profiles me on me.id = cm.user_id
+    where a.set_id = p_set_id
+      and cm.user_id = (select auth.uid())
+      and cm.member_role = 'student'
+      and cm.status in ('active', 'completed')
+      and me.status = 'active'
+  );
+$$;
+
+-- Nâng cấp can_read_question_set để bao gồm cả bộ đề riêng được giao qua assignment
+create or replace function private.can_read_question_set(p_set_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.question_sets qs
+    join public.profiles me on me.id = (select auth.uid())
+    where qs.id = p_set_id
+      and me.status = 'active'
+      and (
+        me.role = 'admin'
+        or qs.teacher_id = me.id
+        or (me.role = 'teacher' and me.id = any(qs.allowed_teacher_ids))
+        or qs.is_published = true
+        or private.is_question_set_assigned_to_me(qs.id)
+      )
+  );
+$$;
+
+revoke all on all functions in schema private from public, anon;
+grant execute on all functions in schema private to authenticated, service_role;
+
+-- ==============================================================================
+-- 5. INTEGRITY TRIGGERS (ASSIGNMENT ATTEMPTS, MODE LOCK & SERVER-SIDE is_late)
+-- ==============================================================================
+create or replace function private.protect_practice_sessions_write()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_asg public.assignments%rowtype;
+  v_used_attempts integer;
+begin
+  if private.is_service_context() or private.is_admin() then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.assignment_id is not null then
+      select * into v_asg from public.assignments where id = new.assignment_id;
+      if not found then
+        raise exception 'Bài tập được giao không tồn tại.';
+      end if;
+
+      if not private.is_class_student(v_asg.class_id) then
+        raise exception 'Bạn không phải học viên đang theo học lớp của bài tập này.';
+      end if;
+
+      -- Ép đúng thông tin lớp, bộ đề và chế độ theo cấu hình bài tập
+      new.class_id := v_asg.class_id;
+      new.set_id := v_asg.set_id;
+      new.mode := v_asg.mode;
+
+      -- Kiểm tra số lượt làm tối đa (chỉ đếm các lượt đã hoàn thành / đã duyệt)
+      if v_asg.max_attempts > 0 then
+        select count(*) into v_used_attempts
+        from public.practice_sessions ps
+        where ps.assignment_id = v_asg.id
+          and ps.student_id = new.student_id
+          and ps.status in ('completed', 'reviewed');
+
+        if v_used_attempts >= v_asg.max_attempts then
+          raise exception 'Bạn đã dùng hết %/% lượt làm cho bài tập này.', v_used_attempts, v_asg.max_attempts;
+        end if;
+      end if;
+
+      new.is_late := (v_asg.due_at is not null and timezone('utc'::text, now()) > v_asg.due_at);
+    end if;
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if old.student_id = (select auth.uid()) then
+      if old.status <> 'in_progress' then
+        raise exception 'Bài làm đã hoàn thành, không thể chỉnh sửa điểm số hoặc trạng thái.';
+      end if;
+      if new.status not in ('in_progress', 'completed') then
+        raise exception 'Học viên không được phép chuyển trạng thái bài làm sang "%".', new.status;
+      end if;
+      new.teacher_comment := old.teacher_comment;
+      new.reviewed_by := old.reviewed_by;
+      new.reviewed_at := old.reviewed_at;
+      new.assignment_id := old.assignment_id;
+      new.class_id := old.class_id;
+
+      -- Tính cờ nộp trễ chính xác theo thời điểm hoàn tất trên server
+      if new.status = 'completed' and old.assignment_id is not null then
+        select * into v_asg from public.assignments where id = old.assignment_id;
+        if found and v_asg.due_at is not null then
+          new.is_late := (coalesce(new.completed_at, timezone('utc'::text, now())) > v_asg.due_at);
+        end if;
+      end if;
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_protect_practice_sessions_write on public.practice_sessions;
+create trigger trg_protect_practice_sessions_write
+before insert or update on public.practice_sessions
+for each row execute function private.protect_practice_sessions_write();
+
+-- ==============================================================================
+-- 6. SAFE PUBLIC RPCs FOR CLASSROOM MANAGEMENT
+-- ==============================================================================
+
+-- 6.1. Học viên / Giáo viên lấy danh sách Giáo viên & Trợ giảng của một lớp (không lộ phone/embeddings)
+create or replace function public.get_class_teachers(p_class_id uuid)
+returns table (
+  user_id uuid,
+  full_name text,
+  email text,
+  member_role text
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select p.id as user_id, p.full_name, p.email, cm.member_role
+  from public.class_members cm
+  join public.profiles p on p.id = cm.user_id
+  where cm.class_id = p_class_id
+    and cm.member_role in ('lead_teacher', 'assistant')
+    and cm.status = 'active'
+    and (
+      private.is_admin()
+      or private.is_class_member(p_class_id)
+    )
+  order by case when cm.member_role = 'lead_teacher' then 0 else 1 end, p.full_name asc;
+$$;
+
+revoke all on function public.get_class_teachers(uuid) from public, anon;
+grant execute on function public.get_class_teachers(uuid) to authenticated;
+
+-- 6.2. Cập nhật teacher_review_session: hỗ trợ duyệt bài của học viên thuộc lớp giáo viên/trợ giảng phụ trách
+create or replace function public.teacher_review_session(
+  p_session_id uuid,
+  p_comment text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_sess public.practice_sessions%rowtype;
+  v_is_set_owner boolean;
+  v_is_cls_teacher boolean := false;
+  v_now timestamp with time zone := timezone('utc'::text, now());
+begin
+  if not (private.is_active_teacher() or private.is_admin()) then
+    raise exception 'Chỉ Giáo viên hoặc Quản trị viên mới có quyền duyệt bài.';
+  end if;
+
+  select * into v_sess from public.practice_sessions where id = p_session_id;
+  if not found then
+    raise exception 'Không tìm thấy phiên làm bài.';
+  end if;
+
+  if v_sess.status not in ('completed', 'reviewed') then
+    raise exception 'Học viên chưa hoàn thành phiên làm bài này.';
+  end if;
+
+  select exists (
+    select 1 from public.question_sets qs
+    where qs.id = v_sess.set_id and qs.teacher_id = (select auth.uid())
+  ) into v_is_set_owner;
+
+  if v_sess.class_id is not null then
+    v_is_cls_teacher := private.is_class_teacher(v_sess.class_id);
+  end if;
+
+  if not (private.is_admin() or v_is_cls_teacher or private.is_teacher_of(v_sess.student_id) or v_is_set_owner) then
+    raise exception 'Bạn không có quyền nhận xét bài làm của học viên lớp khác.';
+  end if;
+
+  update public.practice_sessions
+  set status = 'reviewed',
+      teacher_comment = nullif(trim(coalesce(p_comment, '')), ''),
+      reviewed_by = (select auth.uid()),
+      reviewed_at = v_now
+  where id = p_session_id
+  returning * into v_sess;
+
+  return jsonb_build_object(
+    'id', v_sess.id,
+    'status', v_sess.status,
+    'teacher_comment', v_sess.teacher_comment,
+    'reviewed_by', v_sess.reviewed_by,
+    'reviewed_at', v_sess.reviewed_at
+  );
+end;
+$$;
+
+revoke all on function public.teacher_review_session(uuid, text) from public, anon;
+grant execute on function public.teacher_review_session(uuid, text) to authenticated;
+
+-- ==============================================================================
+-- 7. EXPLICIT GRANTS + ROW LEVEL SECURITY ON ALL NEW & UPDATED TABLES
+-- ==============================================================================
+revoke all on table
+  public.classes,
+  public.class_members,
+  public.lessons,
+  public.lesson_attendance,
+  public.assignments,
+  public.classroom_analyses
+from anon;
+
+grant select, insert, update, delete on table
+  public.classes,
+  public.class_members,
+  public.lessons,
+  public.lesson_attendance,
+  public.assignments,
+  public.classroom_analyses
+to authenticated;
+
+-- 7.1. classes (Chỉ Admin tạo/sửa/xóa; thành viên lớp được xem)
+alter table public.classes enable row level security;
+
+drop policy if exists "classes_select" on public.classes;
+create policy "classes_select"
+  on public.classes for select
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (select private.is_class_member(id))
+  );
+
+drop policy if exists "classes_insert_admin" on public.classes;
+create policy "classes_insert_admin"
+  on public.classes for insert
+  to authenticated
+  with check ((select private.is_admin()));
+
+drop policy if exists "classes_update_admin" on public.classes;
+create policy "classes_update_admin"
+  on public.classes for update
+  to authenticated
+  using ((select private.is_admin()))
+  with check ((select private.is_admin()));
+
+drop policy if exists "classes_delete_admin" on public.classes;
+create policy "classes_delete_admin"
+  on public.classes for delete
+  to authenticated
+  using ((select private.is_admin()));
+
+-- 7.2. class_members (Chỉ Admin thêm/sửa/gỡ; học viên xem bản ghi của mình; GV/Trợ giảng xem danh sách lớp mình)
+alter table public.class_members enable row level security;
+
+drop policy if exists "class_members_select" on public.class_members;
+create policy "class_members_select"
+  on public.class_members for select
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (user_id = (select auth.uid()) and (select private.is_active_user()))
+    or (select private.is_class_teacher(class_id))
+  );
+
+drop policy if exists "class_members_insert_admin" on public.class_members;
+create policy "class_members_insert_admin"
+  on public.class_members for insert
+  to authenticated
+  with check ((select private.is_admin()));
+
+drop policy if exists "class_members_update_admin" on public.class_members;
+create policy "class_members_update_admin"
+  on public.class_members for update
+  to authenticated
+  using ((select private.is_admin()))
+  with check ((select private.is_admin()));
+
+drop policy if exists "class_members_delete_admin" on public.class_members;
+create policy "class_members_delete_admin"
+  on public.class_members for delete
+  to authenticated
+  using ((select private.is_admin()));
+
+-- 7.3. lessons (Admin & GV/Trợ giảng lớp quản lý; thành viên lớp xem)
+alter table public.lessons enable row level security;
+
+drop policy if exists "lessons_select" on public.lessons;
+create policy "lessons_select"
+  on public.lessons for select
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (select private.is_class_member(class_id))
+  );
+
+drop policy if exists "lessons_insert" on public.lessons;
+create policy "lessons_insert"
+  on public.lessons for insert
+  to authenticated
+  with check (
+    (select private.is_admin())
+    or (select private.is_class_teacher(class_id))
+  );
+
+drop policy if exists "lessons_update" on public.lessons;
+create policy "lessons_update"
+  on public.lessons for update
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (select private.is_class_teacher(class_id))
+  )
+  with check (
+    (select private.is_admin())
+    or (select private.is_class_teacher(class_id))
+  );
+
+drop policy if exists "lessons_delete" on public.lessons;
+create policy "lessons_delete"
+  on public.lessons for delete
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (select private.is_class_teacher(class_id))
+  );
+
+-- 7.4. lesson_attendance (Admin & GV/Trợ giảng điểm danh; học viên xem điểm danh của chính mình)
+alter table public.lesson_attendance enable row level security;
+
+drop policy if exists "lesson_attendance_select" on public.lesson_attendance;
+create policy "lesson_attendance_select"
+  on public.lesson_attendance for select
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (student_id = (select auth.uid()) and (select private.is_active_user()))
+    or exists (
+      select 1 from public.lessons l
+      where l.id = lesson_id
+        and (select private.is_class_teacher(l.class_id))
+    )
+  );
+
+drop policy if exists "lesson_attendance_insert" on public.lesson_attendance;
+create policy "lesson_attendance_insert"
+  on public.lesson_attendance for insert
+  to authenticated
+  with check (
+    (select private.is_admin())
+    or exists (
+      select 1 from public.lessons l
+      where l.id = lesson_id
+        and (select private.is_class_teacher(l.class_id))
+    )
+  );
+
+drop policy if exists "lesson_attendance_update" on public.lesson_attendance;
+create policy "lesson_attendance_update"
+  on public.lesson_attendance for update
+  to authenticated
+  using (
+    (select private.is_admin())
+    or exists (
+      select 1 from public.lessons l
+      where l.id = lesson_id
+        and (select private.is_class_teacher(l.class_id))
+    )
+  )
+  with check (
+    (select private.is_admin())
+    or exists (
+      select 1 from public.lessons l
+      where l.id = lesson_id
+        and (select private.is_class_teacher(l.class_id))
+    )
+  );
+
+drop policy if exists "lesson_attendance_delete" on public.lesson_attendance;
+create policy "lesson_attendance_delete"
+  on public.lesson_attendance for delete
+  to authenticated
+  using (
+    (select private.is_admin())
+    or exists (
+      select 1 from public.lessons l
+      where l.id = lesson_id
+        and (select private.is_class_teacher(l.class_id))
+    )
+  );
+
+-- 7.5. assignments (Admin & GV/Trợ giảng giao/sửa/xóa; thành viên lớp xem)
+alter table public.assignments enable row level security;
+
+drop policy if exists "assignments_select" on public.assignments;
+create policy "assignments_select"
+  on public.assignments for select
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (select private.is_class_member(class_id))
+  );
+
+drop policy if exists "assignments_insert" on public.assignments;
+create policy "assignments_insert"
+  on public.assignments for insert
+  to authenticated
+  with check (
+    (select private.is_admin())
+    or (
+      (select private.is_class_teacher(class_id))
+      and (select private.can_read_question_set(set_id))
+    )
+  );
+
+drop policy if exists "assignments_update" on public.assignments;
+create policy "assignments_update"
+  on public.assignments for update
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (select private.is_class_teacher(class_id))
+  )
+  with check (
+    (select private.is_admin())
+    or (select private.is_class_teacher(class_id))
+  );
+
+drop policy if exists "assignments_delete" on public.assignments;
+create policy "assignments_delete"
+  on public.assignments for delete
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (select private.is_class_teacher(class_id))
+  );
+
+-- 7.6. classroom_analyses (Lưu lịch sử phân tích EN/VI — Admin & GV/Trợ giảng lớp)
+alter table public.classroom_analyses enable row level security;
+
+drop policy if exists "classroom_analyses_select" on public.classroom_analyses;
+create policy "classroom_analyses_select"
+  on public.classroom_analyses for select
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (teacher_id = (select auth.uid()) and (select private.is_active_teacher()))
+    or (class_id is not null and (select private.is_class_teacher(class_id)))
+  );
+
+drop policy if exists "classroom_analyses_insert" on public.classroom_analyses;
+create policy "classroom_analyses_insert"
+  on public.classroom_analyses for insert
+  to authenticated
+  with check (
+    (select private.is_admin())
+    or (
+      (select private.is_active_teacher())
+      and teacher_id = (select auth.uid())
+      and (class_id is null or (select private.is_class_teacher(class_id)))
+    )
+  );
+
+drop policy if exists "classroom_analyses_update" on public.classroom_analyses;
+create policy "classroom_analyses_update"
+  on public.classroom_analyses for update
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (teacher_id = (select auth.uid()) and (select private.is_active_teacher()))
+  )
+  with check (
+    (select private.is_admin())
+    or (teacher_id = (select auth.uid()) and (select private.is_active_teacher()))
+  );
+
+drop policy if exists "classroom_analyses_delete" on public.classroom_analyses;
+create policy "classroom_analyses_delete"
+  on public.classroom_analyses for delete
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (teacher_id = (select auth.uid()) and (select private.is_active_teacher()))
+  );
+
+-- 7.7. Nâng cấp policies các bảng hiện có để tương thích đa lớp & bài tập lớp
+drop policy if exists "profiles_select_authenticated" on public.profiles;
+create policy "profiles_select_authenticated"
+  on public.profiles for select
+  to authenticated
+  using (
+    id = (select auth.uid())
+    or (select private.is_admin())
+    or (select private.is_teacher_of(id))
+    or (select private.shares_class_as_teacher(id))
+  );
+
+drop policy if exists "question_sets_select" on public.question_sets;
+create policy "question_sets_select"
+  on public.question_sets for select
+  to authenticated
+  using (
+    (select private.is_active_user())
+    and (
+      (select private.is_admin())
+      or teacher_id = (select auth.uid())
+      or ((select private.is_active_teacher()) and (select auth.uid()) = any(allowed_teacher_ids))
+      or is_published = true
+      or (select private.is_question_set_assigned_to_me(id))
+    )
+  );
+
+drop policy if exists "assessments_select" on public.assessments;
+create policy "assessments_select"
+  on public.assessments for select
+  to authenticated
+  using (
+    (select private.is_admin())
+    or (teacher_id = (select auth.uid()) and (select private.is_active_teacher()))
+    or (class_id is not null and (select private.is_class_teacher(class_id)))
+    or (student_id = (select auth.uid()) and saved = true and (select private.is_active_user()))
+  );
+
+drop policy if exists "practice_sessions_select" on public.practice_sessions;
+create policy "practice_sessions_select"
+  on public.practice_sessions for select
+  to authenticated
+  using (
+    (student_id = (select auth.uid()) and (select private.is_active_user()))
+    or (select private.is_admin())
+    or (class_id is not null and (select private.is_class_teacher(class_id)))
+    or (select private.is_teacher_of(student_id))
+    or exists (
+      select 1 from public.question_sets qs
+      where qs.id = set_id
+        and qs.teacher_id = (select auth.uid())
+        and (select private.is_active_teacher())
+    )
+  );
+
+drop policy if exists "practice_sessions_insert" on public.practice_sessions;
+create policy "practice_sessions_insert"
+  on public.practice_sessions for insert
+  to authenticated
+  with check (
+    (select private.current_user_role()) = 'student'
+    and (select private.is_active_user())
+    and student_id = (select auth.uid())
+    and (
+      exists (
+        select 1 from public.question_sets qs
+        where qs.id = set_id and qs.is_published = true
+      )
+      or (
+        assignment_id is not null
+        and exists (
+          select 1 from public.assignments a
+          where a.id = assignment_id
+            and a.set_id = set_id
+            and (select private.is_class_student(a.class_id))
+        )
+      )
+    )
+  );
+
+drop policy if exists "practice_answers_select" on public.practice_answers;
+create policy "practice_answers_select"
+  on public.practice_answers for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.practice_sessions ps
+      where ps.id = session_id
+        and (
+          (ps.student_id = (select auth.uid()) and (select private.is_active_user()))
+          or (select private.is_admin())
+          or (ps.class_id is not null and (select private.is_class_teacher(ps.class_id)))
+          or (select private.is_teacher_of(ps.student_id))
+          or exists (
+            select 1 from public.question_sets qs
+            where qs.id = ps.set_id
+              and qs.teacher_id = (select auth.uid())
+              and (select private.is_active_teacher())
+          )
+        )
+    )
+  );
+
+-- ==============================================================================
+-- 8. PERFORMANCE & RLS INDEXES
+-- ==============================================================================
+create index if not exists idx_classes_status on public.classes(status);
+create index if not exists idx_classes_course_type on public.classes(course_type);
+create index if not exists idx_classes_created_at on public.classes(created_at desc);
+
+create index if not exists idx_class_members_class_role_status
+  on public.class_members(class_id, member_role, status);
+create index if not exists idx_class_members_user_status
+  on public.class_members(user_id, status);
+
+create index if not exists idx_lessons_class_scheduled
+  on public.lessons(class_id, scheduled_at desc, lesson_no desc);
+
+create index if not exists idx_lesson_attendance_lesson on public.lesson_attendance(lesson_id);
+create index if not exists idx_lesson_attendance_student on public.lesson_attendance(student_id);
+
+create index if not exists idx_assignments_class_due on public.assignments(class_id, due_at desc);
+create index if not exists idx_assignments_set_id on public.assignments(set_id);
+create index if not exists idx_assignments_lesson_id on public.assignments(lesson_id);
+
+create index if not exists idx_classroom_analyses_class_created
+  on public.classroom_analyses(class_id, created_at desc);
+create index if not exists idx_classroom_analyses_teacher_created
+  on public.classroom_analyses(teacher_id, created_at desc);
+create index if not exists idx_classroom_analyses_lesson
+  on public.classroom_analyses(lesson_id);
+
+create index if not exists idx_assessments_class_created
+  on public.assessments(class_id, created_at desc);
+create index if not exists idx_assessments_lesson
+  on public.assessments(lesson_id);
+
+create index if not exists idx_practice_sessions_assignment_student
+  on public.practice_sessions(assignment_id, student_id, status);
+create index if not exists idx_practice_sessions_class_status
+  on public.practice_sessions(class_id, status);
 
 -- ==============================================================================
 -- 9. RELOAD POSTGREST SCHEMA CACHE

@@ -27,6 +27,8 @@ export interface AdminOverviewStats {
 
 const PROFILE_LIST_FIELDS =
   'id, role, status, full_name, email, phone, teacher_id, voice_enrolled, created_at';
+const PROFILE_EXTENDED_FIELDS =
+  'id, role, status, full_name, email, phone, teacher_id, voice_enrolled, student_code, date_of_birth, entry_level, target_band, guardian_name, guardian_phone, enrolled_at, enrollment_note, created_at';
 
 export async function fetchAdminOverviewStats(): Promise<AdminOverviewStats> {
   const client = getSupabaseClient();
@@ -166,27 +168,38 @@ export async function fetchAdminUsersPage({
   const client = getSupabaseClient();
   const { from, to, safePage, safeSize } = getRangeForPage(page, pageSize);
 
-  let query = client
-    .from('profiles')
-    .select(PROFILE_LIST_FIELDS, { count: 'exact' })
-    .order('created_at', { ascending: false });
+  const runQuery = async (withExtended: boolean) => {
+    let query = client
+      .from('profiles')
+      .select(withExtended ? PROFILE_EXTENDED_FIELDS : PROFILE_LIST_FIELDS, { count: 'exact' })
+      .order('created_at', { ascending: false });
 
-  if (role) query = query.eq('role', role);
-  if (status) query = query.eq('status', status);
-  if (voice === 'ready') query = query.eq('voice_enrolled', true);
-  if (voice === 'missing') query = query.eq('voice_enrolled', false);
+    if (role) query = query.eq('role', role);
+    if (status) query = query.eq('status', status);
+    if (voice === 'ready') query = query.eq('voice_enrolled', true);
+    if (voice === 'missing') query = query.eq('voice_enrolled', false);
 
-  const term = sanitizePostgrestFilterTerm(search);
-  if (term) {
-    query = query.or(`full_name.ilike.%${term}%,email.ilike.%${term}%`);
+    const term = sanitizePostgrestFilterTerm(search);
+    if (term) {
+      query = query.or(
+        withExtended
+          ? `full_name.ilike.%${term}%,email.ilike.%${term}%,student_code.ilike.%${term}%`
+          : `full_name.ilike.%${term}%,email.ilike.%${term}%`,
+      );
+    }
+
+    return query.range(from, to);
+  };
+
+  let res = await runQuery(true);
+  if (res.error && (res.error.code === '42703' || res.error.message?.includes('student_code'))) {
+    res = await runQuery(false);
   }
-
-  const { data, count, error } = await query.range(from, to);
-  if (error) throw error;
+  if (res.error) throw res.error;
 
   return {
-    items: (data as Profile[]) || [],
-    total: count || 0,
+    items: (res.data as unknown as Profile[]) || [],
+    total: res.count || 0,
     page: safePage,
     pageSize: safeSize,
   };

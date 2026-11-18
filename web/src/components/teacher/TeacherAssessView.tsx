@@ -16,6 +16,11 @@ import {
 import { getAuthHeaders } from '@/lib/auth';
 import { evaluateConversationWithAi } from '@/lib/aiEval';
 import {
+  fetchClassLessons,
+  fetchClassMembers,
+  fetchMyManagedClasses,
+} from '@/lib/classes';
+import {
   createAssessment,
   deleteAssessment,
   fetchSavedAssessmentsPage,
@@ -44,7 +49,9 @@ import type {
   AiEvalResult,
   Assessment,
   AssessmentResultJson,
+  ClassRecord,
   DialogueTurn,
+  LessonRecord,
   Profile,
   PronunciationScores,
 } from '@/lib/types';
@@ -53,6 +60,8 @@ interface TeacherAssessViewProps {
   currentUser: Profile;
   students: Profile[];
   gpuUrl: string;
+  initialClassId?: string;
+  initialLessonId?: string;
   onNavigateProfile: () => void;
   onChanged?: () => void;
 }
@@ -63,6 +72,8 @@ export function TeacherAssessView({
   currentUser,
   students,
   gpuUrl,
+  initialClassId = '',
+  initialLessonId = '',
   onNavigateProfile,
   onChanged,
 }: TeacherAssessViewProps) {
@@ -70,6 +81,53 @@ export function TeacherAssessView({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [subTab, setSubTab] = useState<'new' | 'history'>('new');
+
+  // Optional Class & Lesson context
+  const [myClasses, setMyClasses] = useState<ClassRecord[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState(initialClassId);
+  const [classLessons, setClassLessons] = useState<LessonRecord[]>([]);
+  const [selectedLessonId, setSelectedLessonId] = useState(initialLessonId);
+  const [classStudentIds, setClassStudentIds] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    fetchMyManagedClasses(currentUser.id, currentUser.role === 'admin' ? 'admin' : 'teacher')
+      .then((list) => setMyClasses(list))
+      .catch(() => setMyClasses([]));
+  }, [currentUser.id, currentUser.role]);
+
+  useEffect(() => {
+    if (!selectedClassId) {
+      setClassLessons([]);
+      setSelectedLessonId('');
+      setClassStudentIds(null);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([fetchClassLessons(selectedClassId), fetchClassMembers(selectedClassId)])
+      .then(([lessons, members]) => {
+        if (cancelled) return;
+        setClassLessons(lessons);
+        const sIds = new Set(
+          members
+            .filter((m) => m.member_role === 'student' && m.status !== 'dropped')
+            .map((m) => m.user_id),
+        );
+        setClassStudentIds(sIds);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setClassLessons([]);
+        setClassStudentIds(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedClassId]);
+
+  const visibleStudents = useMemo(() => {
+    if (!classStudentIds) return students;
+    return students.filter((s) => classStudentIds.has(s.id));
+  }, [classStudentIds, students]);
 
   // New Assessment State
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -261,7 +319,10 @@ export function TeacherAssessView({
       }
 
       const uploadedUrl = await uploadAudioPromise;
-      const draft = await createAssessment(currentUser.id, selectedStudent.id, uploadedUrl);
+      const draft = await createAssessment(currentUser.id, selectedStudent.id, uploadedUrl, {
+        classId: selectedClassId || null,
+        lessonId: selectedLessonId || null,
+      });
       setDraftId(draft.id);
 
       setStepLabel('Đang tổng hợp điểm số và nhận xét chi tiết cho Học viên...');
@@ -510,8 +571,8 @@ export function TeacherAssessView({
                   onChange={(e) => handleSelectFile(e.target.files?.[0])}
                 />
                 <CloudUpload className="mx-auto mb-2 h-9 w-9 text-blue-600" />
-                <p className="text-sm font-bold text-slate-900">Kéo thả hoặc chọn file âm thanh</p>
-                <p className="mt-1 text-xs text-slate-500">WAV, MP3, WEBM, M4A (&lt; 300MB)</p>
+                <p className="text-sm font-bold text-slate-900">Kéo thả hoặc chọn tệp ghi âm</p>
+                <p className="mt-1 text-xs text-slate-500">Hỗ trợ các tệp ghi âm phổ biến (dưới 300MB)</p>
               </div>
 
               {audioFile && audioObjectUrl && (
@@ -532,25 +593,75 @@ export function TeacherAssessView({
             </div>
 
             <div className="space-y-4">
+              {myClasses.length > 0 && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold uppercase text-slate-600">
+                      Lớp học (tùy chọn)
+                    </label>
+                    <select
+                      value={selectedClassId}
+                      onChange={(e) => {
+                        setSelectedClassId(e.target.value);
+                        setSelectedLessonId('');
+                        setSelectedStudentId('');
+                      }}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-600 focus:outline-none"
+                    >
+                      <option value="">-- Không gắn lớp (Chấm lẻ) --</option>
+                      {myClasses.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold uppercase text-slate-600">
+                      Buổi học (tùy chọn)
+                    </label>
+                    <select
+                      value={selectedLessonId}
+                      onChange={(e) => setSelectedLessonId(e.target.value)}
+                      disabled={!selectedClassId || classLessons.length === 0}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-600 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                    >
+                      <option value="">
+                        {!selectedClassId
+                          ? '-- Chọn lớp trước --'
+                          : classLessons.length === 0
+                            ? '-- Lớp chưa có buổi học --'
+                            : '-- Không gắn buổi cụ thể --'}
+                      </option>
+                      {classLessons.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          Buổi {l.lesson_no}: {l.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="mb-2 block text-xs font-semibold uppercase text-slate-600">
-                  2. Chọn Học viên trong lớp
+                  2. Chọn Học viên {selectedClassId ? 'của lớp' : 'phụ trách'}
                 </label>
                 <select
                   value={selectedStudentId}
                   onChange={(e) => setSelectedStudentId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/85 px-3.5 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:border-blue-600 focus:outline-none"
                 >
                   <option value="">
-                    {students.length === 0
-                      ? '-- Lớp bạn chưa có học viên được gán --'
+                    {visibleStudents.length === 0
+                      ? '-- Chưa có học viên nào trong phạm vi chọn --'
                       : '-- Chọn học viên --'}
                   </option>
-                  {students.map((s) => {
+                  {visibleStudents.map((s) => {
                     const ready = Boolean(parseVoiceEmbeddings(s));
                     return (
                       <option key={s.id} value={s.id}>
-                        {s.full_name} {ready ? '(Đã có giọng 🎙)' : '(Chưa có giọng ⚠️)'}
+                        {s.full_name} {ready ? '(Đã có giọng)' : '(Chưa có giọng)'}
                       </option>
                     );
                   })}

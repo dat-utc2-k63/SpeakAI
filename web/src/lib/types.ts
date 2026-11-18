@@ -28,19 +28,20 @@ export interface Profile {
   voice_enrolled?: boolean;
   voice_sample_url?: string | null;
   voice_embeddings?: number[] | number[][] | string | null;
+  student_code?: string | null;
+  date_of_birth?: string | null;
+  entry_level?: QuestionLevel | null;
+  target_band?: number | null;
+  guardian_name?: string | null;
+  guardian_phone?: string | null;
+  enrolled_at?: string | null;
+  enrollment_note?: string | null;
   created_at: string;
 }
 
 export interface SignupTeacher {
   id: string;
   full_name: string;
-}
-
-export interface TeacherBasicInfo {
-  id: string;
-  full_name: string;
-  email: string;
-  phone?: string | null;
 }
 
 export interface PublicRuntimeConfig {
@@ -210,6 +211,8 @@ export interface Assessment {
   id: string;
   teacher_id: string;
   student_id: string;
+  class_id?: string | null;
+  lesson_id?: string | null;
   audio_url?: string | null;
   score_total?: number | null;
   score_accuracy?: number | null;
@@ -226,6 +229,7 @@ export interface Assessment {
   created_at: string;
   student?: { id?: string; full_name?: string; email?: string } | null;
   teacher?: { id?: string; full_name?: string; email?: string } | null;
+  class_info?: { id?: string; name?: string; code?: string } | null;
 }
 
 export interface PracticeAnswerRecord {
@@ -256,6 +260,9 @@ export interface PracticeSession {
   id: string;
   student_id?: string;
   set_id?: string;
+  assignment_id?: string | null;
+  class_id?: string | null;
+  is_late?: boolean;
   mode: SessionMode;
   status: SessionStatus;
   score_total?: number | null;
@@ -278,6 +285,17 @@ export interface PracticeSession {
     exam_type?: ExamType;
     description?: string | null;
   } | null;
+  assignment?: {
+    id?: string;
+    title?: string;
+    due_at?: string | null;
+    max_attempts?: number;
+  } | null;
+  class_info?: {
+    id?: string;
+    name?: string;
+    code?: string;
+  } | null;
   student?: {
     id?: string;
     full_name?: string;
@@ -292,7 +310,7 @@ export interface ClassroomSegment {
   start_sec: number;
   end_sec: number;
   duration_sec: number;
-  language: 'en' | 'vi' | string;
+  language: 'en' | 'vi' | 'unknown' | string;
   word_count?: number;
   total_words?: number;
   vi_percent?: number;
@@ -305,16 +323,20 @@ export interface ClassroomAnalysisResult {
     total_speech_sec?: number;
     en_speech_sec?: number;
     vi_speech_sec?: number;
+    unknown_speech_sec?: number;
     silence_sec?: number;
     speech_ratio_percent?: number;
   };
   overall?: {
     en_percent?: number;
     vi_percent?: number;
+    unknown_percent?: number;
     en_time_percent?: number;
     vi_time_percent?: number;
+    unknown_time_percent?: number;
     en_words?: number;
     vi_words?: number;
+    unknown_words?: number;
     total_words?: number;
   };
   timeline?: ClassroomSegment[];
@@ -334,4 +356,159 @@ export interface GpuHealthData {
     memory_total_mb?: number;
   };
 }
+
+/* ── CLASSROOM MANAGEMENT v5.0 TYPES ─────────────────────── */
+export type ClassStatus = 'active' | 'completed' | 'archived';
+export type ClassMemberRole = 'lead_teacher' | 'assistant' | 'student';
+export type ClassMemberStatus = 'active' | 'completed' | 'dropped';
+export type LessonStatus = 'planned' | 'completed' | 'cancelled';
+export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
+
+export interface ClassRecord {
+  id: string;
+  name: string;
+  code: string;
+  description?: string | null;
+  course_type: ExamType;
+  target_band?: number | null;
+  schedule_text?: string | null;
+  status: ClassStatus;
+  start_date?: string | null;
+  end_date?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  // Computed client summaries
+  student_count?: number;
+  teacher_names?: string[];
+  my_member_role?: ClassMemberRole;
+  pending_review_count?: number;
+  avg_band?: number | null;
+  avg_en_percent?: number | null;
+  assignment_count?: number;
+}
+
+export interface ClassMemberRecord {
+  id: string;
+  class_id: string;
+  user_id: string;
+  member_role: ClassMemberRole;
+  status: ClassMemberStatus;
+  joined_at: string;
+  profile?: Profile | null;
+}
+
+export interface ClassTeacherBasic {
+  user_id: string;
+  full_name: string;
+  email: string;
+  member_role: 'lead_teacher' | 'assistant';
+}
+
+export interface LessonRecord {
+  id: string;
+  class_id: string;
+  lesson_no: number;
+  title: string;
+  scheduled_at?: string | null;
+  summary_notes?: string | null;
+  status: LessonStatus;
+  created_by?: string | null;
+  created_at: string;
+}
+
+export interface LessonAttendanceRecord {
+  id: string;
+  lesson_id: string;
+  student_id: string;
+  status: AttendanceStatus;
+  note?: string | null;
+  marked_by?: string | null;
+  updated_at: string;
+}
+
+export interface AssignmentRecord {
+  id: string;
+  class_id: string;
+  lesson_id?: string | null;
+  set_id: string;
+  title: string;
+  instructions?: string | null;
+  mode: SessionMode;
+  due_at?: string | null;
+  max_attempts: number;
+  min_band_target?: number | null;
+  assigned_by?: string | null;
+  created_at: string;
+  question_set?: {
+    id: string;
+    title: string;
+    level: QuestionLevel;
+    exam_type: ExamType;
+    is_published?: boolean;
+  } | null;
+  class_info?: {
+    id: string;
+    name: string;
+    code: string;
+    course_type?: ExamType;
+  } | null;
+  lesson?: {
+    id: string;
+    lesson_no: number;
+    title: string;
+  } | null;
+  // Student-facing computed progress
+  used_attempts?: number;
+  best_score?: number | null;
+  latest_session?: PracticeSession | null;
+  has_late_submission?: boolean;
+}
+
+export interface ClassroomAnalysisRecord {
+  id: string;
+  class_id?: string | null;
+  lesson_id?: string | null;
+  teacher_id?: string | null;
+  file_name: string;
+  en_percent: number;
+  vi_percent: number;
+  en_time_percent?: number | null;
+  vi_time_percent?: number | null;
+  speech_ratio_percent?: number | null;
+  total_audio_sec?: number | null;
+  total_words?: number;
+  result_json?: ClassroomAnalysisResult | null;
+  created_at: string;
+  class_info?: { id?: string; name?: string; code?: string } | null;
+  lesson?: { id?: string; lesson_no?: number; title?: string } | null;
+  teacher?: { id?: string; full_name?: string; email?: string } | null;
+}
+
+export interface AssignmentCellSummary {
+  assignmentId: string;
+  bestSessionId: string | null;
+  bestScore: number | null;
+  attemptsUsed: number;
+  status: 'not_submitted' | 'pending_review' | 'reviewed';
+  isLate: boolean;
+}
+
+export interface ClassStudentSummaryRow {
+  student: Profile;
+  memberStatus: ClassMemberStatus;
+  attendancePresent: number;
+  attendanceTotal: number;
+  attendanceRate: number | null;
+  assignmentsCompleted: number;
+  assignmentsTotal: number;
+  avgBand: number | null;
+  avgP: number | null;
+  avgFC: number | null;
+  avgLR: number | null;
+  avgGRA: number | null;
+  cells: Record<string, AssignmentCellSummary>;
+  isAtRisk: boolean;
+  riskReasons: string[];
+}
+
 

@@ -28,7 +28,6 @@ import {
 import {
   fetchStudentAssessmentsPage,
   fetchStudentOverviewData,
-  fetchStudentProfile,
   type StudentOverviewData,
 } from '@/lib/student';
 import {
@@ -47,17 +46,19 @@ import {
   type ScoreTrendPoint,
 } from '@/components/ui/AnalyticsCharts';
 import { useToast } from '@/components/ToastProvider';
+import { fetchStudentAssignments, fetchStudentClasses, type StudentClassEnrollment } from '@/lib/classes';
 import { AssessmentCard, AssessmentDetailModal } from '@/components/AssessmentDetailModal';
 import { PracticeDetailModal } from '@/components/PracticeDetailModal';
 import { PracticeSessionRunner } from './PracticeSessionRunner';
+import { StudentClassesView } from './StudentClassesView';
 import type {
   Assessment,
+  AssignmentRecord,
   PracticeSession,
   Profile,
   Question,
   QuestionSet,
   SessionMode,
-  TeacherBasicInfo,
 } from '@/lib/types';
 
 interface StudentDashboardProps {
@@ -80,8 +81,20 @@ export function StudentDashboard({
 }: StudentDashboardProps) {
   const { showToast } = useToast();
 
-  // Teacher info (used in overview + results fallback)
-  const [teacherInfo, setTeacherInfo] = useState<TeacherBasicInfo | null>(null);
+  // Enrolled classes & assignments summary
+  const [myEnrollments, setMyEnrollments] = useState<StudentClassEnrollment[]>([]);
+  const [myAssignments, setMyAssignments] = useState<AssignmentRecord[]>([]);
+  const primaryTeacherName = myEnrollments[0]?.teachers?.[0]?.full_name || 'Giáo viên';
+
+  useEffect(() => {
+    Promise.all([
+      fetchStudentClasses(currentUser.id).catch(() => []),
+      fetchStudentAssignments(currentUser.id).catch(() => []),
+    ]).then(([enrs, asgs]) => {
+      setMyEnrollments(enrs);
+      setMyAssignments(asgs);
+    });
+  }, [currentUser.id, activeTab]);
 
   // Overview state
   const [overviewLoading, setOverviewLoading] = useState(false);
@@ -108,12 +121,14 @@ export function StudentDashboard({
   const [resumeDraft, setResumeDraft] = useState<{
     set: QuestionSet & { questions: Question[] };
     draft: PracticeSession;
+    assignment?: AssignmentRecord | null;
   } | null>(null);
 
   // Active Practice/Exam Session
   const [activeRunner, setActiveRunner] = useState<{
     set: QuestionSet & { questions: Question[] };
     mode: SessionMode;
+    assignment?: AssignmentRecord | null;
     initialSession: PracticeSession | null;
   } | null>(null);
 
@@ -140,22 +155,6 @@ export function StudentDashboard({
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
-
-  // ── Profile teacher info ───────────────────────────────────────────────────
-  useEffect(() => {
-    if (activeTab !== 'overview' && activeTab !== 'results') return;
-    let cancelled = false;
-    fetchStudentProfile(currentUser.id)
-      .then((res) => {
-        if (!cancelled && res.teacher) setTeacherInfo(res.teacher);
-      })
-      .catch(() => {
-        // ignore teacher fetch error
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, currentUser.id]);
 
   // ── Overview Loader ────────────────────────────────────────────────────────
   const loadOverview = useCallback(async () => {
@@ -363,11 +362,52 @@ export function StudentDashboard({
     setActiveRunner({ set: chosenSet, mode: 'practice', initialSession: null });
   };
 
+  const handleStartAssignment = async (asg: AssignmentRecord) => {
+    setLoadingSetDetail(true);
+    try {
+      const fullSet = await fetchSetWithQuestions(asg.set_id);
+      if (!fullSet.questions || fullSet.questions.length === 0) {
+        showToast('Bộ đề của bài tập này chưa có câu hỏi nào.', 'danger');
+        return;
+      }
+
+      if (asg.mode === 'exam') {
+        setActiveRunner({
+          set: fullSet,
+          mode: 'exam',
+          assignment: asg,
+          initialSession: null,
+        });
+        return;
+      }
+
+      const draft = await fetchActiveSession(currentUser.id, fullSet.id, 'practice', asg.id);
+      if (draft && draft.practice_answers && draft.practice_answers.length > 0) {
+        setResumeDraft({ set: fullSet, draft, assignment: asg });
+        return;
+      }
+      if (draft?.id) {
+        await cancelSession(draft.id);
+      }
+      setActiveRunner({
+        set: fullSet,
+        mode: 'practice',
+        assignment: asg,
+        initialSession: null,
+      });
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Không thể mở bài tập', 'danger');
+    } finally {
+      setLoadingSetDetail(false);
+    }
+  };
+
   const handleResumeContinue = () => {
     if (!resumeDraft) return;
     setActiveRunner({
       set: resumeDraft.set,
       mode: 'practice',
+      assignment: resumeDraft.assignment || null,
       initialSession: resumeDraft.draft,
     });
     setResumeDraft(null);
@@ -376,13 +416,19 @@ export function StudentDashboard({
   const handleResumeFresh = async () => {
     if (!resumeDraft) return;
     const targetSet = resumeDraft.set;
+    const targetAsg = resumeDraft.assignment || null;
     await cancelSession(resumeDraft.draft.id);
     setResumeDraft(null);
-    setActiveRunner({ set: targetSet, mode: 'practice', initialSession: null });
+    setActiveRunner({
+      set: targetSet,
+      mode: 'practice',
+      assignment: targetAsg,
+      initialSession: null,
+    });
   };
 
   useEffect(() => {
-    if (activeTab !== 'practice' && activeRunner) {
+    if (activeTab !== 'practice' && activeTab !== 'classes' && activeRunner) {
       setActiveRunner(null);
       onPracticeGuardChange(false);
     }
@@ -399,24 +445,26 @@ export function StudentDashboard({
     );
   }
 
-  if (activeTab === 'practice' && activeRunner) {
+  if ((activeTab === 'practice' || activeTab === 'classes') && activeRunner) {
     return (
       <PracticeSessionRunner
         currentUser={currentUser}
         questionSet={activeRunner.set}
         mode={activeRunner.mode}
+        assignment={activeRunner.assignment || null}
         initialSession={activeRunner.initialSession}
         gpuUrl={gpuUrl}
         onSessionGuardChange={onPracticeGuardChange}
         onFinished={() => {
+          const wasAssignment = Boolean(activeRunner.assignment);
           setActiveRunner(null);
           onPracticeGuardChange(false);
-          onNavigate('results');
+          onNavigate(wasAssignment ? 'classes' : 'results');
         }}
         onExit={async () => {
           setActiveRunner(null);
           onPracticeGuardChange(false);
-          await loadPublishedSetsPage();
+          if (activeTab === 'practice') await loadPublishedSetsPage();
         }}
       />
     );
@@ -579,24 +627,73 @@ export function StudentDashboard({
             </div>
           </div>
 
-          {/* Teacher Card + Recent Results */}
+          {/* My Classes & Upcoming Assignments + Recent Results */}
           <div className="grid gap-6 lg:grid-cols-12">
             <div className="section-card lg:col-span-5 space-y-3">
-              <h3 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-base font-bold text-slate-900">
-                <GraduationCap className="h-5 w-5 text-sky-600" />
-                Giáo viên Phụ trách lớp
-              </h3>
-              {teacherInfo ? (
-                <div className="space-y-1.5 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 text-sm">
-                  <div className="font-bold text-slate-900">{teacherInfo.full_name}</div>
-                  <div className="text-xs text-slate-500">{teacherInfo.email}</div>
-                  {teacherInfo.phone && (
-                    <div className="text-xs text-slate-500">SĐT: {teacherInfo.phone}</div>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                  <GraduationCap className="size-5 text-blue-600" />
+                  Lớp học &amp; Bài tập sắp hạn
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('classes')}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                >
+                  Chi tiết →
+                </button>
+              </div>
+              {myEnrollments.length > 0 ? (
+                <div className="space-y-2.5">
+                  {myEnrollments.slice(0, 2).map((enr) => (
+                    <div
+                      key={enr.classInfo.id}
+                      className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-1"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-900 truncate">
+                          {enr.classInfo.name}
+                        </span>
+                        <span className="font-mono text-[10px] text-slate-500 shrink-0">
+                          {enr.classInfo.code}
+                        </span>
+                      </div>
+                      <div className="text-slate-500">
+                        GV:{' '}
+                        {enr.teachers.length > 0
+                          ? enr.teachers.map((t) => t.full_name).join(', ')
+                          : 'Đang cập nhật'}
+                      </div>
+                    </div>
+                  ))}
+                  {myAssignments.filter((a) => (a.used_attempts || 0) === 0).length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="text-[11px] font-semibold uppercase text-slate-500">
+                        Bài tập chưa nộp
+                      </div>
+                      {myAssignments
+                        .filter((a) => (a.used_attempts || 0) === 0)
+                        .slice(0, 3)
+                        .map((a) => (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => {
+                              onNavigate('classes');
+                              void handleStartAssignment(a);
+                            }}
+                            className="flex w-full items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-left text-xs hover:bg-blue-100 transition-colors duration-150"
+                          >
+                            <span className="truncate font-semibold text-slate-900">{a.title}</span>
+                            <span className="shrink-0 font-semibold text-blue-700">Làm ngay →</span>
+                          </button>
+                        ))}
+                    </div>
                   )}
                 </div>
               ) : (
-                <p className="text-xs text-slate-500">
-                  Bạn chưa được gán giáo viên phụ trách lớp. Vui lòng liên hệ Quản trị viên để được phân lớp.
+                <p className="text-xs text-slate-500 text-pretty">
+                  Bạn đang chờ Quản trị viên xếp lớp. Trong lúc chờ, hãy vào mục Kho tự luyện để luyện Speaking ngay.
                 </p>
               )}
             </div>
@@ -650,7 +747,7 @@ export function StudentDashboard({
                     <AssessmentCard
                       key={a.id}
                       assessment={a}
-                      fallbackTeacherName={teacherInfo?.full_name || 'Giáo viên'}
+                      fallbackTeacherName={primaryTeacherName}
                       onSelect={setSelectedAssessment}
                     />
                   ))}
@@ -662,12 +759,22 @@ export function StudentDashboard({
       )}
 
       {/* TAB 2: PRACTICE & EXAM CATALOG (SERVER-PAGINATED) */}
+      {/* TAB: MY CLASSES & ASSIGNMENTS */}
+      {activeTab === 'classes' && (
+        <StudentClassesView
+          currentUser={currentUser}
+          onStartAssignment={handleStartAssignment}
+          onOpenSelfPractice={() => onNavigate('practice')}
+          onViewSessionDetail={setSelectedSessionId}
+        />
+      )}
+
       {activeTab === 'practice' && (
         <div className="space-y-6">
           <PageHeader
-            eyebrow="LUYỆN TẬP & THI THỬ"
-            title="Kho Bộ đề Speaking"
-            subtitle="Chọn bộ đề để luyện từng câu nhận phản hồi AI ngay hoặc thi thử bấm giờ."
+            eyebrow="KHO TỰ LUYỆN CHUNG"
+            title="Kho Bộ đề Tự luyện Speaking"
+            subtitle="Tự chọn bộ đề công khai để luyện tập từng câu hoặc thi thử bấm giờ ngoài bài tập bắt buộc của lớp."
             pill={<span>{setsData.total} bộ đề khả dụng</span>}
           />
 
@@ -820,7 +927,7 @@ export function StudentDashboard({
           <div key={resultsTab}>
             {resultsTab === 'practice' ? (
               <div className="space-y-4">
-                <div className="section-card flex flex-wrap gap-3">
+                <div className="section-card flex flex-wrap items-center gap-3">
                   <div className="relative flex-1 min-w-[220px]">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
@@ -831,18 +938,31 @@ export function StudentDashboard({
                       className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
                     />
                   </div>
-                  <select
-                    value={resultsModeFilter}
-                    onChange={(e) => {
-                      setResultsModeFilter(e.target.value as 'all' | 'practice' | 'exam');
-                      setSessionsPage(1);
-                    }}
-                    className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
-                  >
-                    <option value="all">Tất cả hình thức</option>
-                    <option value="practice">Chỉ Luyện tập</option>
-                    <option value="exam">Chỉ Thi thử</option>
-                  </select>
+                  <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1">
+                    {(
+                      [
+                        { id: 'all', label: 'Tất cả' },
+                        { id: 'practice', label: 'Luyện tập' },
+                        { id: 'exam', label: 'Thi thử' },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setResultsModeFilter(opt.id);
+                          setSessionsPage(1);
+                        }}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors duration-150 ${
+                          resultsModeFilter === opt.id
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {sessionsLoading && sessionsData.items.length === 0 ? (
@@ -935,7 +1055,7 @@ export function StudentDashboard({
                     <AssessmentCard
                       key={a.id}
                       assessment={a}
-                      fallbackTeacherName={teacherInfo?.full_name || 'Giáo viên phụ trách'}
+                      fallbackTeacherName={primaryTeacherName}
                       onSelect={setSelectedAssessment}
                     />
                   ))}
@@ -1001,12 +1121,12 @@ export function StudentDashboard({
         open={Boolean(resumeDraft)}
         onClose={() => setResumeDraft(null)}
         maxWidthClass="max-w-md"
-        title="Phát hiện bản nháp luyện tập"
+        title="Tiếp tục bài làm đang dở?"
       >
         <div className="space-y-4 text-sm text-slate-600">
           <p>
-            Bạn đã làm được{' '}
-            <strong className="text-blue-700">
+            Bạn đã hoàn thành{' '}
+            <strong className="text-blue-700 tabular-nums">
               {resumeDraft?.draft.practice_answers?.length || 0}/
               {resumeDraft?.set.questions.length || 0}
             </strong>{' '}
@@ -1027,7 +1147,7 @@ export function StudentDashboard({
               className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-500"
             >
               <Clock className="h-3.5 w-3.5" />
-              Tiếp tục bản nháp
+              Tiếp tục làm bài
             </button>
           </div>
         </div>

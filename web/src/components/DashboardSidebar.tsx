@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   FolderKanban,
   GraduationCap,
+  Inbox,
   Languages,
   LayoutDashboard,
   LogOut,
@@ -14,6 +15,7 @@ import {
   Mic,
   MoreHorizontal,
   Presentation,
+  School,
   ShieldCheck,
   UserCircle2,
   Users,
@@ -28,10 +30,11 @@ export interface NavItem {
   mobileLabel?: string;
   icon:
     | 'overview'
+    | 'classes'
+    | 'review'
     | 'users'
     | 'content'
     | 'classroom'
-    | 'students'
     | 'questionsets'
     | 'assess'
     | 'practice'
@@ -43,7 +46,7 @@ export interface NavItem {
 export function getNavItemsForRole(
   role: UserRole,
   isActive: boolean,
-  pendingTeacherCount = 0,
+  pendingBadgeCount = 0,
 ): NavItem[] {
   if (!isActive) {
     return [
@@ -59,12 +62,12 @@ export function getNavItemsForRole(
         label: 'Tổng quan',
         mobileLabel: 'Tổng quan',
         icon: 'overview',
-        badge: pendingTeacherCount > 0 ? pendingTeacherCount : undefined,
+        badge: pendingBadgeCount > 0 ? pendingBadgeCount : undefined,
       },
-      { id: 'users', label: 'Tài khoản & Lớp học', mobileLabel: 'Tài khoản', icon: 'users' },
-      { id: 'content', label: 'Bộ đề & Luyện thi', mobileLabel: 'Bộ đề', icon: 'content' },
-      { id: 'assessments', label: 'Hội thoại 1-1', mobileLabel: 'Hội thoại', icon: 'assess' },
-      { id: 'classroom', label: 'Phân tích tiết dạy', mobileLabel: 'Tiết dạy', icon: 'classroom' },
+      { id: 'classes', label: 'Quản lý Lớp học', mobileLabel: 'Lớp học', icon: 'classes' },
+      { id: 'users', label: 'Tài khoản', mobileLabel: 'Tài khoản', icon: 'users' },
+      { id: 'content', label: 'Bộ đề & Bài làm', mobileLabel: 'Bộ đề', icon: 'content' },
+      { id: 'monitoring', label: 'Giám sát chấm điểm', mobileLabel: 'Giám sát', icon: 'assess' },
       { id: 'profile', label: 'Hồ sơ cá nhân', mobileLabel: 'Hồ sơ', icon: 'profile' },
     ];
   }
@@ -72,34 +75,44 @@ export function getNavItemsForRole(
   if (role === 'teacher') {
     return [
       { id: 'overview', label: 'Tổng quan', mobileLabel: 'Tổng quan', icon: 'overview' },
-      { id: 'students', label: 'Học viên của tôi', mobileLabel: 'Học viên', icon: 'students' },
+      { id: 'classes', label: 'Lớp học của tôi', mobileLabel: 'Lớp học', icon: 'classes' },
+      {
+        id: 'review',
+        label: 'Hàng đợi duyệt bài',
+        mobileLabel: 'Duyệt bài',
+        icon: 'review',
+        badge: pendingBadgeCount > 0 ? pendingBadgeCount : undefined,
+      },
       { id: 'questionsets', label: 'Bộ đề Speaking', mobileLabel: 'Bộ đề', icon: 'questionsets' },
-      { id: 'assess', label: 'Chấm & Đánh giá', mobileLabel: 'Chấm 1-1', icon: 'assess' },
-      { id: 'classroom', label: 'Phân tích tiết dạy', mobileLabel: 'Tiết dạy', icon: 'classroom' },
+      { id: 'assess', label: 'Chấm hội thoại 1-1', mobileLabel: 'Chấm 1-1', icon: 'assess' },
+      { id: 'classroom', label: 'Tiết dạy EN/VI', mobileLabel: 'Tiết dạy', icon: 'classroom' },
       { id: 'profile', label: 'Hồ sơ cá nhân', mobileLabel: 'Hồ sơ', icon: 'profile' },
     ];
   }
 
   return [
     { id: 'overview', label: 'Tổng quan', mobileLabel: 'Tổng quan', icon: 'overview' },
-    { id: 'practice', label: 'Luyện Speaking', mobileLabel: 'Luyện nói', icon: 'practice' },
+    { id: 'classes', label: 'Lớp học & Bài tập', mobileLabel: 'Lớp học', icon: 'classes' },
+    { id: 'practice', label: 'Kho tự luyện', mobileLabel: 'Tự luyện', icon: 'practice' },
     { id: 'results', label: 'Kết quả học tập', mobileLabel: 'Kết quả', icon: 'results' },
     { id: 'profile', label: 'Hồ sơ cá nhân', mobileLabel: 'Hồ sơ', icon: 'profile' },
   ];
 }
 
-function renderNavIcon(icon: NavItem['icon'], cls = 'h-4 w-4 shrink-0') {
+function renderNavIcon(icon: NavItem['icon'], cls = 'size-4 shrink-0') {
   switch (icon) {
     case 'overview':
       return <LayoutDashboard className={cls} />;
+    case 'classes':
+      return <School className={cls} />;
+    case 'review':
+      return <Inbox className={cls} />;
     case 'users':
       return <Users className={cls} />;
     case 'content':
       return <FolderKanban className={cls} />;
     case 'classroom':
       return <Languages className={cls} />;
-    case 'students':
-      return <GraduationCap className={cls} />;
     case 'questionsets':
       return <BookOpen className={cls} />;
     case 'assess':
@@ -272,7 +285,7 @@ export function DashboardSidebar({
   return (
     <>
       {/* ── MOBILE TOP STICKY BAR (< lg) ───────────────────────── */}
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5 lg:hidden">
+      <header className="no-print sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5 lg:hidden">
         <div className="flex items-center gap-2.5 min-w-0">
           <button
             type="button"
@@ -329,7 +342,7 @@ export function DashboardSidebar({
       {/* ── MOBILE BOTTOM NAVIGATION DOCK (< lg) ───────────────── */}
       <nav
         aria-label="Điều hướng chính trên di động"
-        className="fixed bottom-0 inset-x-0 z-30 border-t border-slate-200 bg-white px-2 pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))] lg:hidden"
+        className="no-print fixed bottom-0 inset-x-0 z-30 border-t border-slate-200 bg-white px-2 pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))] lg:hidden"
       >
         <div className="mx-auto flex max-w-md items-center justify-around gap-1">
           {bottomPrimaryItems.map((item) => {
@@ -384,7 +397,7 @@ export function DashboardSidebar({
       </nav>
 
       {/* ── DESKTOP DOCKED SIDEBAR (lg+) ────────────────────────── */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:flex lg:w-64 lg:flex-col border-r border-slate-200 bg-white">
+      <aside className="no-print hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:flex lg:w-64 lg:flex-col border-r border-slate-200 bg-white">
         {sidebarContent}
       </aside>
     </>

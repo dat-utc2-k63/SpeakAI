@@ -266,7 +266,7 @@ export function VoiceEnrollModal({
     });
 
     if (valid.length === 0) {
-      setModalError('Vui lòng chọn file audio hợp lệ dung lượng dưới 10MB.');
+      setModalError('Vui lòng chọn tệp âm thanh hợp lệ dung lượng dưới 10MB.');
       return;
     }
 
@@ -586,9 +586,9 @@ export function VoiceEnrollModal({
               onChange={(e) => handleFilesSelected(e.target.files)}
             />
             <CloudUpload className="mx-auto mb-2 h-10 w-10 text-blue-500" />
-            <p className="font-semibold text-slate-800">Kéo thả hoặc nhấn chọn file âm thanh</p>
+            <p className="font-semibold text-slate-800">Kéo thả hoặc nhấn chọn tệp âm thanh</p>
             <p className="mt-1 text-xs text-slate-500">
-              Hỗ trợ MP3, WAV, M4A, WEBM, OGG (&lt; 10MB). Có thể chọn nhiều file của cùng một người nói.
+              Hỗ trợ các tệp ghi âm phổ biến (dưới 10MB). Có thể chọn nhiều tệp của cùng một người nói.
             </p>
           </div>
 

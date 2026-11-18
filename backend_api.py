@@ -850,7 +850,7 @@ def process_classroom_analysis(
         )
         total_time = time.time() - task_start_time
         tasks[task_id]["result"] = result
-        tasks[task_id]["step"] = f"Hoàn tất phân tích Language Timeline ({total_time:.1f}s)."
+        tasks[task_id]["step"] = f"Hoàn tất phân tích ngôn ngữ tiết học ({total_time:.1f}s)."
         tasks[task_id]["processing_time_sec"] = round(total_time, 2)
         tasks[task_id]["status"] = "completed"
         print(f"[Classroom] Task {task_id[:8]} hoàn tất trong {total_time:.1f}s")

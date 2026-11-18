@@ -287,3 +287,24 @@ select option {
   border-radius: 0.75rem;
   padding: 1.25rem 1.5rem;
 }
+
+/* ── PRINT / PDF EXPORT STYLESHEET ──────────────────────── */
+@media print {
+  body {
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding-left: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .section-card,
+  .surface-card {
+    box-shadow: none !important;
+    border-color: #CBD5E1 !important;
+    break-inside: avoid;
+  }
+}

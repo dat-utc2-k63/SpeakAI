@@ -53,6 +53,7 @@ import { useToast } from '@/components/ToastProvider';
 import { TaskQuestionCard, TaskTypeBadge } from '@/components/TaskQuestionCard';
 import type {
   AssessmentResultJson,
+  AssignmentRecord,
   PracticeSession,
   Profile,
   Question,
@@ -64,6 +65,7 @@ interface PracticeSessionRunnerProps {
   currentUser: Profile;
   questionSet: QuestionSet & { questions: Question[] };
   mode: SessionMode;
+  assignment?: AssignmentRecord | null;
   initialSession: PracticeSession | null;
   gpuUrl: string;
   onSessionGuardChange: (active: boolean) => void;
@@ -95,6 +97,7 @@ export function PracticeSessionRunner({
   currentUser,
   questionSet,
   mode,
+  assignment = null,
   initialSession,
   gpuUrl,
   onSessionGuardChange,
@@ -393,7 +396,10 @@ export function PracticeSessionRunner({
     try {
       let activeSid = sessionId;
       if (!activeSid) {
-        const created = await startSession(currentUser.id, questionSet.id, 'practice');
+        const created = await startSession(currentUser.id, questionSet.id, 'practice', {
+          assignmentId: assignment?.id || null,
+          classId: assignment?.class_id || null,
+        });
         activeSid = created.id;
         setSessionId(activeSid);
       }
@@ -474,7 +480,10 @@ export function PracticeSessionRunner({
     stopRecorderAndStream();
     try {
       const settled = await Promise.all(examTasksRef.current);
-      const examSession = await startSession(currentUser.id, questionSet.id, 'exam');
+      const examSession = await startSession(currentUser.id, questionSet.id, 'exam', {
+        assignmentId: assignment?.id || null,
+        classId: assignment?.class_id || null,
+      });
       setSessionId(examSession.id);
 
       const newMap: Record<string, LocalAnswerEntry> = {};
@@ -507,7 +516,16 @@ export function PracticeSessionRunner({
       showToast(err instanceof Error ? err.message : 'Lỗi tổng hợp bài thi', 'danger');
       onExit();
     }
-  }, [currentUser.id, onExit, questionSet.exam_type, questionSet.id, showToast, stopRecorderAndStream]);
+  }, [
+    assignment?.class_id,
+    assignment?.id,
+    currentUser.id,
+    onExit,
+    questionSet.exam_type,
+    questionSet.id,
+    showToast,
+    stopRecorderAndStream,
+  ]);
 
   const startExamQuestionRecording = useCallback(
     async (qIdx: number) => {
@@ -946,8 +964,8 @@ export function PracticeSessionRunner({
       : recordedBlob
         ? 'Đã ghi âm xong — Nghe lại hoặc nhấn Chấm câu trả lời này'
         : currentSavedAnswer
-          ? 'Câu này đã chấm · Nhấn REC nếu bạn muốn luyện lại'
-          : 'Nhấn REC để bắt đầu nói câu trả lời';
+          ? 'Câu này đã chấm · Nhấn Ghi âm nếu bạn muốn luyện lại'
+          : 'Nhấn Ghi âm để bắt đầu nói câu trả lời';
 
   return (
     <div className="space-y-5">

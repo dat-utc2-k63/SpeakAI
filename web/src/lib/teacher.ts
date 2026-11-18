@@ -7,100 +7,64 @@ import { getSupabaseClient } from './supabase';
 import type {
   Assessment,
   AssessmentResultJson,
-  PracticeSession,
   Profile,
-  SessionMode,
 } from './types';
 
-export async function fetchMyStudents(teacherId: string): Promise<Profile[]> {
+async function fetchClassStudentIdsForTeacher(teacherId: string): Promise<string[]> {
   const client = getSupabaseClient();
-  const { data, error } = await client
-    .from('profiles')
-    .select('id, role, status, full_name, email, phone, teacher_id, voice_enrolled, voice_embeddings, created_at')
-    .eq('role', 'student')
-    .eq('teacher_id', teacherId)
-    .order('full_name');
-  if (error) throw error;
-  return (data as Profile[]) || [];
+  try {
+    const { data: myClasses } = await client
+      .from('class_members')
+      .select('class_id')
+      .eq('user_id', teacherId)
+      .in('member_role', ['lead_teacher', 'assistant'])
+      .eq('status', 'active');
+
+    const classIds = ((myClasses as Array<{ class_id: string }>) || []).map((c) => c.class_id);
+    if (classIds.length === 0) return [];
+
+    const { data: studentMembers } = await client
+      .from('class_members')
+      .select('user_id')
+      .in('class_id', classIds)
+      .eq('member_role', 'student')
+      .in('status', ['active', 'completed']);
+
+    return Array.from(
+      new Set(((studentMembers as Array<{ user_id: string }>) || []).map((m) => m.user_id)),
+    );
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchMyStudentIds(teacherId: string): Promise<string[]> {
   const client = getSupabaseClient();
-  const { data, error } = await client
-    .from('profiles')
-    .select('id')
-    .eq('role', 'student')
-    .eq('teacher_id', teacherId);
-  if (error) throw error;
-  return ((data as Array<{ id: string }>) || []).map((row) => row.id);
+  const [legacyRes, classIds] = await Promise.all([
+    client.from('profiles').select('id').eq('role', 'student').eq('teacher_id', teacherId),
+    fetchClassStudentIdsForTeacher(teacherId),
+  ]);
+  const legacyIds = ((legacyRes.data as Array<{ id: string }>) || []).map((row) => row.id);
+  return Array.from(new Set([...classIds, ...legacyIds]));
 }
 
 export async function fetchTeacherStudentOptions(teacherId: string): Promise<Profile[]> {
+  const ids = await fetchMyStudentIds(teacherId);
+  if (ids.length === 0) return [];
   const client = getSupabaseClient();
   const { data, error } = await client
     .from('profiles')
-    .select('id, role, status, full_name, email, teacher_id, voice_enrolled, voice_embeddings, created_at')
-    .eq('role', 'student')
-    .eq('teacher_id', teacherId)
+    .select('id, role, status, full_name, email, phone, teacher_id, voice_enrolled, voice_embeddings, created_at')
+    .in('id', ids)
     .order('full_name');
   if (error) throw error;
   return (data as Profile[]) || [];
 }
 
-export async function fetchMyStudentsPage(
-  teacherId: string,
-  {
-    page = 1,
-    pageSize = 10,
-    search = '',
-    voiceFilter = '',
-  }: {
-    page?: number;
-    pageSize?: number;
-    search?: string;
-    voiceFilter?: '' | 'ready' | 'missing';
-  } = {},
-): Promise<PaginatedResult<Profile>> {
-  const client = getSupabaseClient();
-  const { from, to, safePage, safeSize } = getRangeForPage(page, pageSize);
-
-  let query = client
-    .from('profiles')
-    .select(
-      'id, role, status, full_name, email, phone, teacher_id, voice_enrolled, created_at',
-      { count: 'exact' },
-    )
-    .eq('role', 'student')
-    .eq('teacher_id', teacherId)
-    .order('full_name', { ascending: true });
-
-  if (voiceFilter === 'ready') query = query.eq('voice_enrolled', true);
-  if (voiceFilter === 'missing') query = query.eq('voice_enrolled', false);
-
-  const term = sanitizePostgrestFilterTerm(search);
-  if (term) {
-    query = query.or(`full_name.ilike.%${term}%,email.ilike.%${term}%`);
-  }
-
-  const { data, count, error } = await query.range(from, to);
-  if (error) throw error;
-
-  return {
-    items: (data as Profile[]) || [],
-    total: count || 0,
-    page: safePage,
-    pageSize: safeSize,
-  };
-}
-
 export async function fetchTeacherStats(teacherId: string) {
   const client = getSupabaseClient();
-  const [studentsRes, assessmentsCountRes, assessmentScoresRes, qsetsRes] = await Promise.all([
-    client
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('role', 'student')
-      .eq('teacher_id', teacherId),
+  const [studentIds, assessmentsCountRes, assessmentScoresRes, qsetsRes] = await Promise.all([
+    fetchMyStudentIds(teacherId),
     client
       .from('assessments')
       .select('id', { count: 'exact', head: true })
@@ -119,7 +83,7 @@ export async function fetchTeacherStats(teacherId: string) {
       .select('id', { count: 'exact', head: true })
       .eq('teacher_id', teacherId),
   ]);
-  const studentCount = studentsRes.count || 0;
+  const studentCount = studentIds.length;
   const assessmentCount = assessmentsCountRes.count || 0;
   const scoreRows = (assessmentScoresRes.data as Array<{ score_total?: number | null }>) || [];
   const questionSetsCount = qsetsRes.count || 0;
@@ -211,117 +175,11 @@ export async function fetchTeacherClassAnalytics(
   };
 }
 
-export async function fetchStudentAssessmentsForTeacher(studentId: string): Promise<Assessment[]> {
-  const client = getSupabaseClient();
-  const { data, error } = await client
-    .from('assessments')
-    .select(
-      `
-      id, teacher_id, student_id, created_at, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, llm_feedback, teacher_note, status, saved, result_json,
-      student:profiles!student_id(full_name, email)
-    `,
-    )
-    .eq('student_id', studentId)
-    .eq('saved', true)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data as Assessment[]) || [];
-}
-
-export async function fetchStudentAssessmentsForTeacherPage(
-  studentId: string,
-  { page = 1, pageSize = 6 }: { page?: number; pageSize?: number } = {},
-): Promise<PaginatedResult<Assessment>> {
-  const client = getSupabaseClient();
-  const { from, to, safePage, safeSize } = getRangeForPage(page, pageSize);
-
-  const { data, count, error } = await client
-    .from('assessments')
-    .select(
-      `
-      id, teacher_id, student_id, created_at, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, llm_feedback, teacher_note, status, saved, result_json,
-      student:profiles!student_id(full_name, email)
-    `,
-      { count: 'exact' },
-    )
-    .eq('student_id', studentId)
-    .eq('saved', true)
-    .order('created_at', { ascending: false })
-    .range(from, to);
-
-  if (error) throw error;
-  return {
-    items: (data as Assessment[]) || [],
-    total: count || 0,
-    page: safePage,
-    pageSize: safeSize,
-  };
-}
-
-export async function fetchStudentPracticeSessionsForTeacher(studentId: string): Promise<PracticeSession[]> {
-  const client = getSupabaseClient();
-  const { data, error } = await client
-    .from('practice_sessions')
-    .select(
-      `
-      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, exam_band,
-      teacher_comment, reviewed_by, reviewed_at,
-      started_at, completed_at,
-      question_set:question_sets(id, title, level, exam_type)
-    `,
-    )
-    .eq('student_id', studentId)
-    .in('status', ['completed', 'reviewed'])
-    .order('completed_at', { ascending: false, nullsFirst: false });
-  if (error) throw error;
-  return (data as PracticeSession[]) || [];
-}
-
-export async function fetchStudentPracticeSessionsForTeacherPage(
-  studentId: string,
-  {
-    page = 1,
-    pageSize = 6,
-    mode = 'all',
-  }: { page?: number; pageSize?: number; mode?: 'all' | SessionMode } = {},
-): Promise<PaginatedResult<PracticeSession>> {
-  const client = getSupabaseClient();
-  const { from, to, safePage, safeSize } = getRangeForPage(page, pageSize);
-
-  let query = client
-    .from('practice_sessions')
-    .select(
-      `
-      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, exam_band,
-      teacher_comment, reviewed_by, reviewed_at,
-      started_at, completed_at,
-      question_set:question_sets(id, title, level, exam_type)
-    `,
-      { count: 'exact' },
-    )
-    .eq('student_id', studentId)
-    .in('status', ['completed', 'reviewed'])
-    .order('completed_at', { ascending: false, nullsFirst: false });
-
-  if (mode !== 'all') {
-    query = query.eq('mode', mode);
-  }
-
-  const { data, count, error } = await query.range(from, to);
-  if (error) throw error;
-
-  return {
-    items: (data as PracticeSession[]) || [],
-    total: count || 0,
-    page: safePage,
-    pageSize: safeSize,
-  };
-}
-
 export async function createAssessment(
   teacherId: string,
   studentId: string,
   audioUrl: string,
+  options?: { classId?: string | null; lessonId?: string | null },
 ): Promise<Assessment> {
   const client = getSupabaseClient();
   const { data, error } = await client
@@ -332,6 +190,8 @@ export async function createAssessment(
       audio_url: audioUrl,
       status: 'pending',
       saved: false,
+      ...(options?.classId ? { class_id: options.classId } : {}),
+      ...(options?.lessonId ? { lesson_id: options.lessonId } : {}),
     })
     .select()
     .single();
@@ -410,23 +270,6 @@ export async function saveAssessment(
   if (error) throw error;
 }
 
-export async function fetchSavedAssessments(teacherId: string): Promise<Assessment[]> {
-  const client = getSupabaseClient();
-  const { data, error } = await client
-    .from('assessments')
-    .select(
-      `
-      id, teacher_id, student_id, created_at, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, llm_feedback, teacher_note, status, saved, result_json,
-      student:profiles!student_id(full_name, email)
-    `,
-    )
-    .eq('teacher_id', teacherId)
-    .eq('saved', true)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data as Assessment[]) || [];
-}
-
 export async function fetchSavedAssessmentsPage(
   teacherId: string,
   {
@@ -441,14 +284,16 @@ export async function fetchSavedAssessmentsPage(
 
   let matchingStudentIds: string[] = [];
   if (term) {
-    const { data: students } = await client
-      .from('profiles')
-      .select('id')
-      .eq('role', 'student')
-      .eq('teacher_id', teacherId)
-      .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
-      .limit(50);
-    matchingStudentIds = ((students as Array<{ id: string }>) || []).map((s) => s.id);
+    const myStudentIds = await fetchMyStudentIds(teacherId);
+    if (myStudentIds.length > 0) {
+      const { data: students } = await client
+        .from('profiles')
+        .select('id')
+        .in('id', myStudentIds)
+        .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
+        .limit(50);
+      matchingStudentIds = ((students as Array<{ id: string }>) || []).map((s) => s.id);
+    }
   }
 
   const runQuery = (includeJsonTitleSearch: boolean) => {
@@ -498,4 +343,3 @@ export async function deleteAssessment(assessmentId: string): Promise<void> {
   const { error } = await client.from('assessments').delete().eq('id', assessmentId);
   if (error) throw error;
 }
-

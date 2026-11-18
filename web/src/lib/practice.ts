@@ -17,29 +17,6 @@ import type {
   TaskType,
 } from './types';
 
-export async function fetchPublishedSets(): Promise<QuestionSet[]> {
-  const client = getSupabaseClient();
-  const { data, error } = await client
-    .from('question_sets')
-    .select(
-      `
-      id, title, description, level, exam_type, time_limit, created_at,
-      teacher:profiles!teacher_id(full_name),
-      questions(id)
-    `,
-    )
-    .eq('is_published', true)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return ((data as unknown as QuestionSet[]) || []).map((qs) => ({
-    ...qs,
-    exam_type: qs.exam_type || 'general',
-    time_limit: qs.time_limit || 0,
-    teacher_name: qs.teacher?.full_name || 'N/A',
-    question_count: Array.isArray(qs.questions) ? qs.questions.length : 0,
-  }));
-}
-
 export async function fetchPublishedSetsPage({
   page = 1,
   pageSize = 9,
@@ -165,6 +142,7 @@ export async function startSession(
   studentId: string,
   setId: string,
   mode: SessionMode = 'practice',
+  options?: { assignmentId?: string | null; classId?: string | null },
 ): Promise<PracticeSession> {
   const client = getSupabaseClient();
   const { data, error } = await client
@@ -174,6 +152,8 @@ export async function startSession(
       set_id: setId,
       mode: mode || 'practice',
       status: 'in_progress',
+      ...(options?.assignmentId ? { assignment_id: options.assignmentId } : {}),
+      ...(options?.classId ? { class_id: options.classId } : {}),
     })
     .select()
     .single();
@@ -185,14 +165,15 @@ export async function fetchActiveSession(
   studentId: string,
   setId: string,
   mode: SessionMode = 'practice',
+  assignmentId?: string | null,
 ): Promise<PracticeSession | null> {
   try {
     const client = getSupabaseClient();
-    const { data, error } = await client
+    let query = client
       .from('practice_sessions')
       .select(
         `
-        id, mode, status, started_at,
+        id, mode, status, started_at, assignment_id, class_id, is_late,
         practice_answers (
           id, question_id, audio_url, transcript, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, result_json, created_at
         )
@@ -203,8 +184,15 @@ export async function fetchActiveSession(
       .eq('mode', mode)
       .eq('status', 'in_progress')
       .order('started_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+
+    if (assignmentId) {
+      query = query.eq('assignment_id', assignmentId);
+    } else {
+      query = query.is('assignment_id', null);
+    }
+
+    const { data, error } = await query.maybeSingle();
     if (error) return null;
     return (data as PracticeSession) || null;
   } catch {
@@ -473,25 +461,6 @@ export async function completeSession(sessionId: string, examBand: string | null
   };
 }
 
-export async function fetchSessionHistory(studentId: string): Promise<PracticeSession[]> {
-  const client = getSupabaseClient();
-  const { data, error } = await client
-    .from('practice_sessions')
-    .select(
-      `
-      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, exam_band,
-      teacher_comment, reviewed_by, reviewed_at,
-      started_at, completed_at,
-      question_set:question_sets(id, title, level, exam_type)
-    `,
-    )
-    .eq('student_id', studentId)
-    .in('status', ['completed', 'reviewed'])
-    .order('completed_at', { ascending: false, nullsFirst: false });
-  if (error) throw error;
-  return (data as PracticeSession[]) || [];
-}
-
 export async function fetchSessionHistoryPage(
   studentId: string,
   {
@@ -527,7 +496,8 @@ export async function fetchSessionHistoryPage(
     .from('practice_sessions')
     .select(
       `
-      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, exam_band,
+      id, mode, status, assignment_id, class_id, is_late,
+      score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, exam_band,
       teacher_comment, reviewed_by, reviewed_at,
       started_at, completed_at,
       question_set:question_sets(id, title, level, exam_type)
@@ -560,7 +530,8 @@ export async function fetchSessionDetail(sessionId: string): Promise<PracticeSes
     .from('practice_sessions')
     .select(
       `
-      id, mode, status, score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, exam_band,
+      id, mode, status, assignment_id, class_id, is_late,
+      score_total, score_accuracy, score_fluency, score_prosodic, score_grammar, score_context, score_lexical, exam_band,
       teacher_comment, reviewed_by, reviewed_at,
       started_at, completed_at,
       question_set:question_sets(id, title, level, exam_type, description)

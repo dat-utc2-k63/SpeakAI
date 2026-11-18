@@ -6,6 +6,8 @@ import {
   ArrowRight,
   Award,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   ClipboardCheck,
   ExternalLink,
   Lightbulb,
@@ -26,6 +28,10 @@ import type { PracticeSession } from '@/lib/types';
 interface PracticeDetailModalProps {
   sessionId: string | null;
   canReview?: boolean;
+  hasPrev?: boolean;
+  hasNext?: boolean;
+  onPrev?: () => void;
+  onNext?: () => void;
   onClose: () => void;
   onReviewed?: (updated: PracticeSession) => void;
 }
@@ -33,6 +39,10 @@ interface PracticeDetailModalProps {
 export function PracticeDetailModal({
   sessionId,
   canReview = false,
+  hasPrev = false,
+  hasNext = false,
+  onPrev,
+  onNext,
   onClose,
   onReviewed,
 }: PracticeDetailModalProps) {
@@ -153,6 +163,11 @@ export function PracticeDetailModal({
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {detail.is_late && (
+                  <span className="rounded-md border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
+                    Nộp trễ hạn
+                  </span>
+                )}
                 {isExam && (
                   <span className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
                     {bandChip}
@@ -163,6 +178,28 @@ export function PracticeDetailModal({
                 >
                   {getIeltsBandLabel(totalNum).level}
                 </span>
+                {(onPrev || onNext) && (
+                  <div className="inline-flex items-center gap-1 ml-1">
+                    <button
+                      type="button"
+                      disabled={!hasPrev}
+                      onClick={onPrev}
+                      aria-label="Bài trước trong hàng đợi"
+                      className="rounded-md border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-35 transition-colors duration-150"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!hasNext}
+                      onClick={onNext}
+                      aria-label="Bài tiếp theo trong hàng đợi"
+                      className="rounded-md border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-35 transition-colors duration-150"
+                    >
+                      <ChevronRight className="size-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 

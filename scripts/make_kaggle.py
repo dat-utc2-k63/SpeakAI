@@ -281,7 +281,7 @@ run_cells.append(md_cell([
     "- **Pronunciation Scoring**: `SpeechOcean762` (WavLM-Large + Phoneme Graph Attention GAT)\n",
     "- **Phonological Error Diagnosis**: `L2-MDD` (WavLM-Large + CTC Forced Alignment theo chuẩn ASHA)\n",
     "- **ASR Error Correction & Linguistic Scoring**: `deepseek-v4.1-flash` + `spaCy (en_core_web_sm)` + `LanguageTool` + `wordfreq`\n",
-    "- **Classroom Language Timeline**: Diarization-free `Whisper Word Timestamps -> Lingua (EN/VI) -> Language Timeline`\n",
+    "- **Classroom Language Timeline**: `DeepFilterNet3 Denoise -> RmsVad Speech Gate -> Whisper Turbo (num_beams=2, <|nospeech|> gate) -> Lingua+Wordfreq (EN / VI / Unknown)`\n",
     "\n",
     "Mã nguồn, models và checkpoint được đọc trực tiếp từ Kaggle Dataset hoặc tải tự động.\n"
 ]))

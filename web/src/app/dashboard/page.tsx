@@ -127,7 +127,7 @@ export default function DashboardPage() {
       <div className="flex min-h-dvh items-center justify-center bg-slate-50 px-4">
         <div className="section-card max-w-md space-y-4 text-center p-8">
           <AlertTriangle className="mx-auto size-9 text-amber-600" />
-          <h2 className="text-lg font-bold text-slate-900 text-balance">Không thể vào Dashboard</h2>
+          <h2 className="text-lg font-bold text-slate-900 text-balance">Không thể mở trang làm việc</h2>
           <p className="text-sm text-slate-600 text-pretty">
             {bootstrapError || 'Phiên đăng nhập không hợp lệ hoặc thiếu hồ sơ người dùng.'}
           </p>
@@ -199,6 +199,7 @@ export default function DashboardPage() {
               activeTab={activeTab}
               gpuUrl={gpuUrl}
               onNavigate={handleNavigate}
+              onPendingReviewCountChange={setPendingTeacherCount}
             />
           ) : (
             <StudentDashboard

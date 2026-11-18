@@ -192,64 +192,6 @@ function decodeMetaHint(hintValue?: string | null): { task_type: TaskType | null
   return { task_type: null, hint: hintValue || null };
 }
 
-export async function fetchQuestionSets(teacherId: string | null = null): Promise<QuestionSet[]> {
-  const client = getSupabaseClient();
-  try {
-    let query = client
-      .from('question_sets')
-      .select(
-        `
-        id, teacher_id, title, description, level, exam_type, time_limit, is_published, created_at,
-        allowed_teacher_ids,
-        creator:profiles!teacher_id(id, full_name, email),
-        questions(id)
-      `,
-      )
-      .order('created_at', { ascending: false });
-
-    if (teacherId) query = query.eq('teacher_id', teacherId);
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return ((data as unknown as QuestionSet[]) || []).map((qs) => ({
-      ...qs,
-      allowed_teacher_ids: Array.isArray(qs.allowed_teacher_ids) ? qs.allowed_teacher_ids : [],
-      exam_type: (qs.exam_type || 'general') as ExamType,
-      time_limit: qs.time_limit || 0,
-      creator_name: qs.creator?.full_name || 'Giáo viên',
-      creator_email: qs.creator?.email || '',
-      question_count: Array.isArray(qs.questions) ? qs.questions.length : 0,
-    }));
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : '';
-    if (msg.includes('allowed_teacher_ids')) {
-      let query = client
-        .from('question_sets')
-        .select(
-          `
-          id, teacher_id, title, description, level, exam_type, time_limit, is_published, created_at,
-          creator:profiles!teacher_id(id, full_name, email),
-          questions(id)
-        `,
-        )
-        .order('created_at', { ascending: false });
-      if (teacherId) query = query.eq('teacher_id', teacherId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return ((data as unknown as QuestionSet[]) || []).map((qs) => ({
-        ...qs,
-        allowed_teacher_ids: [],
-        exam_type: (qs.exam_type || 'general') as ExamType,
-        time_limit: qs.time_limit || 0,
-        creator_name: qs.creator?.full_name || 'Giáo viên',
-        creator_email: qs.creator?.email || '',
-        question_count: Array.isArray(qs.questions) ? qs.questions.length : 0,
-      }));
-    }
-    throw err;
-  }
-}
-
 export async function fetchQuestionSetsPage({
   currentUserId,
   scope = 'mine',
