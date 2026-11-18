@@ -570,111 +570,6 @@ class SpeakingPipeline:
             "p": r_p,
         }
 
-    def _process_segment(
-        self,
-        seg: Dict[str, Any],
-        *,
-        use_asr: bool,
-        lang: Optional[str],
-        score: bool = True,
-        role: str = "student",
-        prompt: Optional[str] = None,
-    ) -> Tuple[Optional[Dict[str, Any]], bool]:
-        """Returns (sentence_dict, was_vi_filtered)."""
-        if not use_asr:
-            return None, False
-        try:
-            meta = transcribe_audio_with_meta(seg["path"], asr_config=self._asr_cfg, prompt=prompt)
-            clean_tr = meta.get("text", "").strip()
-            raw_tr = meta.get("raw_text", "").strip()
-            detected_lang = meta.get("language", "en")
-            is_vi_from_asr = bool(meta.get("is_vietnamese", False))
-        except ValueError:
-            return None, False
-        if not clean_tr and not raw_tr:
-            return None, False
-
-        display_tr = raw_tr if is_vi_from_asr else clean_tr
-
-        # ── Optional Vietnamese Guard (disabled by default in pure English mode) ──
-        if self._lang_id_cfg.get("enabled", False):
-            is_vi = is_vi_from_asr
-            reason_vi = f"whisper:{detected_lang}" if is_vi_from_asr else "text"
-            if not is_vi:
-                is_vi, reason_vi = is_vietnamese_segment(
-                    seg["path"],
-                    raw_tr or clean_tr,
-                    device=self.asr_device,
-                    cfg=self._lang_id_cfg,
-                    whisper_lang=detected_lang,
-                )
-            if is_vi:
-                print(f"[lang_id] Phát hiện tiếng Việt ({reason_vi}): '{display_tr[:60]}...'. Bảo toàn turn với scored=False.")
-                return _make_unscored_turn(
-                    seg,
-                    display_tr,
-                    role=role,
-                    is_vietnamese=True,
-                    language="vi",
-                    eligibility_reason="vietnamese_speech",
-                ), True
-
-        # ── Check Role Unscored (e.g. Teacher when score_teacher is False) ──
-        if not score:
-            return _make_unscored_turn(
-                seg,
-                clean_tr,
-                role=role,
-                eligibility_reason="role_unscored",
-            ), False
-
-        # ── Check Scoring Eligibility (Filter short backchannel / filler turns) ──
-        elig_cfg = self.config.get("eligibility") or {}
-        is_eligible, elig_reason = check_scoring_eligibility(
-            clean_tr,
-            seg.get("duration_sec", 0.0),
-            config=elig_cfg,
-        )
-        if not is_eligible:
-            print(f"[{role}] Lượt nói không đủ điều kiện chấm ({elig_reason}): '{clean_tr}'. Bảo toàn turn với scored=False.")
-            return _make_unscored_turn(
-                seg,
-                clean_tr,
-                role=role,
-                eligibility_reason=elig_reason,
-            ), False
-
-        # ── Run Phoneme & Pronunciation Models (SpeechOcean762 + L2-MDD) ──
-        try:
-            track = self.assess_track(
-                seg["path"], clean_tr, feedback=False, lang=lang,
-                feedback_mode="local", truncate=False, apply_preprocess=False,
-                duration_sec=seg.get("duration_sec", 0.0),
-            )
-        except Exception as assess_err:
-            print(f"[{role}] assess_track notice for turn {seg['index']} ('{clean_tr[:40]}'): {assess_err}. Bảo toàn turn với scored=False.")
-            return _make_unscored_turn(
-                seg,
-                clean_tr,
-                role=role,
-                eligibility_reason=f"assess_error: {str(assess_err)[:40]}",
-            ), False
-
-        return {
-            "index": seg["index"],
-            "start_sec": seg["start_sec"],
-            "end_sec": seg["end_sec"],
-            "duration_sec": seg["duration_sec"],
-            "audio": seg["path"],
-            "turn_index": seg["index"],
-            "role": role,
-            "scored": True,
-            "is_vietnamese": False,
-            "language": "en",
-            "eligibility_reason": "scored",
-            **track,
-        }, False
-
     def assess_track(
         self,
         audio: Union[str, Path],
@@ -1389,6 +1284,7 @@ class SpeakingPipeline:
             except Exception as e:
                 print(f"[{role}] Read Aloud direct scoring warning: {e}. Fallback to segment-based assessment.", flush=True)
 
+        t_prac_start = time.perf_counter()
         base_dir = Path(output_dir or audio.parent / f"{audio.stem}_single_split")
         sent_dir = base_dir / "sentences"
         sent_dir.mkdir(parents=True, exist_ok=True)
@@ -1401,14 +1297,15 @@ class SpeakingPipeline:
             split_cfg=split_cfg,
             prefix=f"{role.lower()}_turn",
         )
+        t_clip = time.perf_counter() - t_prac_start
 
         if not segments:
             # Fallback nếu audio quá ngắn hoặc không tách được khoảng lặng
             segments = [{
                 "index": 0,
                 "start_sec": 0.0,
-                "end_sec": 0.0,
-                "duration_sec": 0.0,
+                "end_sec": audio_duration_sec,
+                "duration_sec": audio_duration_sec,
                 "path": str(audio),
             }]
 
@@ -1419,29 +1316,63 @@ class SpeakingPipeline:
         elif task_type:
             practice_prompt = build_context_prompt_for_turn(f"Practice topic: {task_type}")
 
-        sentences: List[Dict[str, Any]] = []
+        # ── Step 1: ASR Transcription Only (Single-Pass, no premature WavLM/L2-MDD) ──
+        t_asr_start = time.perf_counter()
+        candidates: List[Dict[str, Any]] = []
         filtered_vi = 0
-        for seg in segments:
-            item, was_vi = self._process_segment(
-                seg, use_asr=use_asr, lang=lang, score=True, role=role, prompt=practice_prompt,
-            )
-            if was_vi:
-                filtered_vi += 1
-            if item:
-                sentences.append(item)
+        if use_asr:
+            for seg in segments:
+                try:
+                    meta = transcribe_audio_with_meta(
+                        seg["path"], asr_config=self._asr_cfg, prompt=practice_prompt
+                    )
+                    clean_tr = meta.get("text", "").strip()
+                    raw_tr = meta.get("raw_text", "").strip()
+                    detected_lang = meta.get("language", "en")
+                    is_vi_from_asr = bool(meta.get("is_vietnamese", False))
+                except Exception:
+                    continue
+                if not clean_tr and not raw_tr:
+                    continue
 
-        # Syntactic Turn Merging for Practice Mode: stitch mid-sentence pauses on incomplete connectors / dependent fragments
-        if len(sentences) >= 2:
+                display_tr = raw_tr if is_vi_from_asr else clean_tr
+                is_vi = is_vi_from_asr
+                if self._lang_id_cfg.get("enabled", False) and not is_vi:
+                    is_vi, _ = is_vietnamese_segment(
+                        seg["path"],
+                        raw_tr or clean_tr,
+                        device=self.asr_device,
+                        cfg=self._lang_id_cfg,
+                        whisper_lang=detected_lang,
+                    )
+                if is_vi:
+                    filtered_vi += 1
+
+                candidates.append({
+                    "index": seg["index"],
+                    "start_sec": seg["start_sec"],
+                    "end_sec": seg["end_sec"],
+                    "duration_sec": seg.get("duration_sec", 0.0),
+                    "audio": str(seg["path"]),
+                    "transcript": display_tr,
+                    "is_vietnamese": is_vi,
+                    "language": "vi" if is_vi else detected_lang,
+                })
+        t_asr = time.perf_counter() - t_asr_start
+
+        # ── Step 2: Syntactic Turn Merging (clean 150ms stitching + re-ASR only) ──
+        t_merge_start = time.perf_counter()
+        if len(candidates) >= 2:
             from data.audio_preprocess import load_waveform, save_audio_file, PreprocessConfig
             p_cfg_m = PreprocessConfig.from_dict(self.config.get("audio_preprocess"))
             p_cfg_m.denoise = False
             sr_m = p_cfg_m.sample_rate
             merged_prac: List[Dict[str, Any]] = []
             idx_m = 0
-            while idx_m < len(sentences):
-                curr_s = sentences[idx_m]
-                while idx_m + 1 < len(sentences):
-                    nxt_s = sentences[idx_m + 1]
+            while idx_m < len(candidates):
+                curr_s = candidates[idx_m]
+                while idx_m + 1 < len(candidates):
+                    nxt_s = candidates[idx_m + 1]
                     gap_s = float(nxt_s.get("start_sec", 0.0)) - float(curr_s.get("end_sec", 0.0))
                     if 0 <= gap_s <= 3.0 and (
                         _is_incomplete_turn(curr_s.get("transcript", ""))
@@ -1458,18 +1389,25 @@ class SpeakingPipeline:
                             stitched = torch.cat([c_wav, sil, n_wav], dim=1)
                             comb_path = sent_dir / f"{role.lower()}_merged_{curr_s['index']:03d}_{nxt_s['index']:03d}.wav"
                             save_audio_file(comb_path, stitched, sr_m)
-                            comb_seg = {
-                                "index": curr_s["index"],
-                                "start_sec": curr_s.get("start_sec", 0.0),
-                                "end_sec": nxt_s.get("end_sec", 0.0),
-                                "duration_sec": round(stitched.shape[1] / sr_m, 3),
-                                "path": str(comb_path),
-                            }
-                            comb_item, _ = self._process_segment(
-                                comb_seg, use_asr=use_asr, lang=lang, score=True, role=role, prompt=practice_prompt,
+
+                            meta = transcribe_audio_with_meta(
+                                comb_path, asr_config=self._asr_cfg, prompt=practice_prompt
                             )
-                            if comb_item:
-                                curr_s = comb_item
+                            m_clean = meta.get("text", "").strip()
+                            m_raw = meta.get("raw_text", "").strip()
+                            m_lang = meta.get("language", "en")
+                            m_is_vi = bool(meta.get("is_vietnamese", False))
+                            if m_clean or m_raw:
+                                curr_s = {
+                                    "index": curr_s["index"],
+                                    "start_sec": curr_s.get("start_sec", 0.0),
+                                    "end_sec": nxt_s.get("end_sec", 0.0),
+                                    "duration_sec": round(stitched.shape[1] / sr_m, 3),
+                                    "audio": str(comb_path),
+                                    "transcript": m_raw if m_is_vi else m_clean,
+                                    "is_vietnamese": m_is_vi,
+                                    "language": "vi" if m_is_vi else m_lang,
+                                }
                                 idx_m += 1
                                 continue
                         except Exception as pm_err:
@@ -1477,51 +1415,145 @@ class SpeakingPipeline:
                     break
                 merged_prac.append(curr_s)
                 idx_m += 1
-            sentences = merged_prac
+            candidates = merged_prac
+        t_merge = time.perf_counter() - t_merge_start
 
-        # Apply ASR Error Correction for practice mode (luyện thi)
-        if sentences and self.config.get("asr_correction", {}).get("enabled", True):
+        # ── Step 3: ASR Error Correction BEFORE Acoustic Scoring (Single Pass!) ──
+        t_asr_corr_start = time.perf_counter()
+        prompt_ctx = (reference_text or "").strip() or (task_type or "") or "Practice"
+        for cand in candidates:
+            cand["teacher_prompt"] = prompt_ctx
+
+        if candidates and self.config.get("asr_correction", {}).get("enabled", True):
             try:
                 corrector = AsrErrorCorrector(enable_llm=True)
-                candidate_turns = [
+                asr_inputs = [
                     {
                         "turn_id": idx + 1,
-                        "raw_transcript": s.get("transcript", ""),
-                        "transcript": s.get("transcript", ""),
-                        "teacher_prompt": reference_text or task_type or "Practice",
+                        "raw_transcript": cand.get("transcript", ""),
+                        "transcript": cand.get("transcript", ""),
+                        "teacher_prompt": prompt_ctx,
                     }
-                    for idx, s in enumerate(sentences)
+                    for idx, cand in enumerate(candidates)
                 ]
-                corrected = corrector.correct_turns(candidate_turns)
-                for s, corr in zip(sentences, corrected):
+                corrected = corrector.correct_turns(asr_inputs)
+                for cand, corr in zip(candidates, corrected):
                     new_tr = corr.get("transcript", "").strip()
-                    old_tr = s.get("transcript", "").strip()
-                    if new_tr and new_tr != old_tr:
-                        s["transcript"] = new_tr
-                        s["raw_transcript"] = old_tr
-                        if s.get("scored", False):
-                            try:
-                                track = self.assess_track(
-                                    s["audio"], new_tr, feedback=False, lang=lang,
-                                    feedback_mode="local", truncate=False, apply_preprocess=False,
-                                    duration_sec=s.get("duration_sec", 0.0),
-                                )
-                                s.update(track)
-                            except Exception as re_err:
-                                print(f"[{role}] Re-assessment with corrected text failed: {re_err}")
+                    if new_tr:
+                        cand["transcript"] = new_tr
             except Exception as asr_corr_err:
                 print(f"[{role}] AsrErrorCorrector practice notice: {asr_corr_err}")
+        t_asr_corr = time.perf_counter() - t_asr_corr_start
 
-        # Holistic FC/LR/GRA evaluation via DeepSeek v4.1 Flash + Local NLP for practice mode
+        # ── Step 4 + 5 (Parallelized): Overlap DeepSeek v4.1 Flash LLM batch with GPU WavLM+L2-MDD ──
+        elig_cfg = self.config.get("eligibility") or {}
+        llm_future = None
+        llm_pool = None
+        if candidates:
+            eligible_for_llm: List[Dict[str, Any]] = []
+            for cand in candidates:
+                tr = cand.get("transcript", "").strip()
+                if self._lang_id_cfg.get("enabled", False) and cand.get("is_vietnamese", False):
+                    continue
+                ok_el, _ = check_scoring_eligibility(tr, cand.get("duration_sec", 0.0), config=elig_cfg)
+                if ok_el and tr:
+                    eligible_for_llm.append({
+                        "index": cand["index"],
+                        "transcript": tr,
+                        "teacher_prompt": prompt_ctx,
+                        "scored": True,
+                    })
+            if eligible_for_llm:
+                try:
+                    from infer.hybrid_nlp_scorer import call_single_llm_assessment
+                    llm_pool = ThreadPoolExecutor(max_workers=1)
+                    llm_future = llm_pool.submit(call_single_llm_assessment, eligible_for_llm)
+                except Exception as llm_spawn_err:
+                    print(f"[{role}] Practice parallel LLM spawn notice: {llm_spawn_err}", flush=True)
+
+        t_gpu_start = time.perf_counter()
+        sentences: List[Dict[str, Any]] = []
+        for cand in candidates:
+            seg_info = {
+                "index": cand["index"],
+                "start_sec": cand["start_sec"],
+                "end_sec": cand["end_sec"],
+                "duration_sec": cand["duration_sec"],
+                "path": cand["audio"],
+            }
+            tr = cand.get("transcript", "").strip()
+
+            if self._lang_id_cfg.get("enabled", False) and cand.get("is_vietnamese", False):
+                u = _make_unscored_turn(
+                    seg_info, tr, role=role, is_vietnamese=True, language="vi", eligibility_reason="vietnamese_speech"
+                )
+                u["teacher_prompt"] = prompt_ctx
+                sentences.append(u)
+                continue
+
+            is_eligible, elig_reason = check_scoring_eligibility(tr, cand.get("duration_sec", 0.0), config=elig_cfg)
+            if not is_eligible:
+                u = _make_unscored_turn(seg_info, tr, role=role, eligibility_reason=elig_reason)
+                u["teacher_prompt"] = prompt_ctx
+                sentences.append(u)
+                continue
+
+            try:
+                track = self.assess_track(
+                    cand["audio"], tr, feedback=False, lang=lang,
+                    feedback_mode="local", truncate=False, apply_preprocess=False,
+                    duration_sec=cand.get("duration_sec", 0.0),
+                )
+                sentences.append({
+                    "index": cand["index"],
+                    "start_sec": cand["start_sec"],
+                    "end_sec": cand["end_sec"],
+                    "duration_sec": cand["duration_sec"],
+                    "audio": cand["audio"],
+                    "role": role,
+                    "scored": True,
+                    "is_vietnamese": False,
+                    "language": "en",
+                    "eligibility_reason": "scored",
+                    "teacher_prompt": prompt_ctx,
+                    **track,
+                })
+            except Exception as assess_err:
+                print(f"[{role}] Practice assess_track notice for turn {cand['index']}: {assess_err}")
+                u = _make_unscored_turn(
+                    seg_info, tr, role=role, eligibility_reason=f"assess_error: {str(assess_err)[:40]}"
+                )
+                u["teacher_prompt"] = prompt_ctx
+                sentences.append(u)
+        t_gpu = time.perf_counter() - t_gpu_start
+
+        # ── Step 6: Holistic FC/LR/GRA Evaluation (collect overlapped LLM + Local NLP) ──
+        t_nlp_start = time.perf_counter()
+        precomputed_llm = None
+        if llm_future is not None:
+            try:
+                precomputed_llm = llm_future.result()
+            except Exception as llm_res_err:
+                print(f"[{role}] Practice parallel LLM result notice: {llm_res_err}", flush=True)
+            finally:
+                if llm_pool is not None:
+                    llm_pool.shutdown(wait=False)
+
         if sentences:
             try:
-                for s in sentences:
-                    if not s.get("teacher_prompt") and (reference_text or task_type):
-                        s["teacher_prompt"] = reference_text or task_type
                 from infer.hybrid_nlp_scorer import evaluate_conversation_linguistics
-                sentences = evaluate_conversation_linguistics(sentences)
+                sentences = evaluate_conversation_linguistics(
+                    sentences, precomputed_llm_results=precomputed_llm
+                )
             except Exception as he:
                 print(f"[{role}] Hybrid NLP/LLM practice scoring notice: {he}", flush=True)
+        t_nlp = time.perf_counter() - t_nlp_start
+        t_prac_total = time.perf_counter() - t_prac_start
+        print(
+            f"[Perf][practice] Clip={t_clip:.2f}s | ASR={t_asr:.2f}s | Merge={t_merge:.2f}s | "
+            f"ASR-Corr={t_asr_corr:.2f}s | WavLM+L2MDD={t_gpu:.2f}s | LLM+NLP-Wait={t_nlp:.2f}s | Total={t_prac_total:.2f}s",
+            flush=True,
+        )
 
         if not sentences:
             print(f"[{role}] Không có lượt nói hợp lệ sau nhận diện", flush=True)
