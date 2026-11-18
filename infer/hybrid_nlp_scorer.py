@@ -342,7 +342,8 @@ def call_single_llm_assessment(
                         {"role": "user", "content": prompt_user},
                     ],
                     "temperature": 0.0,
-                    "max_tokens": 8192,
+                    "max_tokens": 2048,
+                    "enable_thinking": False,
                 },
                 timeout=timeout,
             )

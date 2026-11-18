@@ -225,7 +225,8 @@ export async function handleAiEvalRequest(req: Request, deps: AiEvalDependencies
         body: JSON.stringify({
           model: testModel,
           messages: [{ role: 'user', content: 'Ping test. Reply with "OK".' }],
-          max_tokens: 10,
+          max_tokens: 16,
+          enable_thinking: false,
         }),
         signal: AbortSignal.timeout(20000),
       });
@@ -292,9 +293,10 @@ export async function handleAiEvalRequest(req: Request, deps: AiEvalDependencies
         model: defaultModel,
         messages: safeMessages,
         temperature,
-        max_tokens: 8192,
+        max_tokens: 2048,
+        enable_thinking: false,
       }),
-      signal: AbortSignal.timeout(90000),
+      signal: AbortSignal.timeout(45000),
     });
 
     if (!upstreamRes.ok) {

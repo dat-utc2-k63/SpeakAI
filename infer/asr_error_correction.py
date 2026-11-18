@@ -153,7 +153,8 @@ class AsrErrorCorrector:
                             {"role": "user", "content": json.dumps(items_payload, ensure_ascii=False, separators=(',', ':'))},
                         ],
                         "temperature": 0.0,
-                        "max_tokens": 8192,
+                        "max_tokens": 2048,
+                        "enable_thinking": False,
                     },
                     timeout=self.timeout,
                 )

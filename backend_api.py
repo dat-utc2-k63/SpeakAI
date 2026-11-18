@@ -954,7 +954,8 @@ async def ai_eval_proxy_api(request: Request, user: dict = Depends(require_activ
                 json={
                     "model": test_model,
                     "messages": [{"role": "user", "content": 'Ping test. Reply with "OK".'}],
-                    "max_tokens": 10,
+                    "max_tokens": 16,
+                    "enable_thinking": False,
                 },
                 timeout=20,
             )
@@ -998,8 +999,14 @@ async def ai_eval_proxy_api(request: Request, user: dict = Depends(require_activ
                 "Authorization": f"Bearer {stored_key}",
                 "x-api-key": stored_key,
             },
-            json={"model": model, "messages": safe_messages, "temperature": temp_val, "max_tokens": 8192},
-            timeout=90,
+            json={
+                "model": model,
+                "messages": safe_messages,
+                "temperature": temp_val,
+                "max_tokens": 2048,
+                "enable_thinking": False,
+            },
+            timeout=45,
         )
         if not upstream_resp.ok:
             return JSONResponse(
