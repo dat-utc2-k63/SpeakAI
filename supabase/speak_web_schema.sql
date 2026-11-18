@@ -861,13 +861,23 @@ alter table public.global_settings disable row level security;
 grant all on table public.global_settings to anon, authenticated, service_role;
 
 -- 6.3. question_sets
+-- Lưu ý: Dùng kiểm tra cột trực tiếp (KHÔNG gọi hàm STABLE truy vấn ngược lại bảng question_sets)
+-- để lệnh INSERT ... RETURNING * (.insert(...).select()) nhìn thấy ngay dòng vừa tạo.
 alter table public.question_sets enable row level security;
 
 drop policy if exists "question_sets_select" on public.question_sets;
 create policy "question_sets_select"
   on public.question_sets for select
   to authenticated
-  using ((select private.can_read_question_set(id)));
+  using (
+    (select private.is_active_user())
+    and (
+      (select private.is_admin())
+      or teacher_id = (select auth.uid())
+      or ((select private.is_active_teacher()) and (select auth.uid()) = any(allowed_teacher_ids))
+      or is_published = true
+    )
+  );
 
 drop policy if exists "question_sets_insert" on public.question_sets;
 create policy "question_sets_insert"
@@ -882,14 +892,35 @@ drop policy if exists "question_sets_update" on public.question_sets;
 create policy "question_sets_update"
   on public.question_sets for update
   to authenticated
-  using ((select private.can_edit_question_set(id)))
-  with check ((select private.can_edit_question_set(id)));
+  using (
+    (select private.is_admin())
+    or (
+      (select private.is_active_teacher())
+      and (
+        teacher_id = (select auth.uid())
+        or (select auth.uid()) = any(allowed_teacher_ids)
+      )
+    )
+  )
+  with check (
+    (select private.is_admin())
+    or (
+      (select private.is_active_teacher())
+      and (
+        teacher_id = (select auth.uid())
+        or (select auth.uid()) = any(allowed_teacher_ids)
+      )
+    )
+  );
 
 drop policy if exists "question_sets_delete" on public.question_sets;
 create policy "question_sets_delete"
   on public.question_sets for delete
   to authenticated
-  using ((select private.is_question_set_owner_or_admin(id)));
+  using (
+    (select private.is_admin())
+    or ((select private.is_active_teacher()) and teacher_id = (select auth.uid()))
+  );
 
 -- 6.4. questions
 alter table public.questions enable row level security;

@@ -229,7 +229,13 @@ export function TeacherQuestionSetsView({ currentUser, onChanged }: TeacherQuest
       onChanged?.();
       await handleOpenEditor({ ...created, creator_name: currentUser.full_name, question_count: 0 });
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Lỗi tạo bộ đề', 'danger');
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err !== null && 'message' in err
+            ? String((err as { message?: unknown }).message || 'Lỗi tạo bộ đề')
+            : 'Lỗi tạo bộ đề';
+      showToast(msg, 'danger');
     } finally {
       setCreating(false);
     }
