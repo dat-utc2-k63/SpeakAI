@@ -18,49 +18,16 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 
 logger = logging.getLogger("asrec")
 
-SYSTEM_PROMPT = """You are an expert Automatic Speech Recognition (ASR) transcript post-editor for spoken English language interviews of Vietnamese young learners (ages 7-12).
-Your task is to analyze the entire interview dialogue, understand the context of each question, and correct acoustic recognition errors, misheard proper nouns, and letter-by-letter spellings.
-
-GENERAL LINGUISTIC RULES (NO GUESSING, NO INVENTING CONTENT):
-1. CONTEXTUAL QUESTION ANALYSIS & VIETNAMESE PROPER NOUN PREDICTION:
-   - Identify the intent of the interviewer's question:
-     * Self-introduction / Name questions (e.g. "What's your name?", "Hi, what's your name?").
-     * Name spelling questions (e.g. "How do you spell your name?").
-     * Location / Origin questions (e.g. "Where do you live?", "Where are you from?").
-   - Vietnamese Phonetic Interference in English ASR:
-     * The students are Vietnamese children speaking English. Pure English ASR models (like Whisper) frequently distort Vietnamese proper names, surnames, and locations into phonetically similar English words due to Vietnamese phonology (unreleased final consonants, tones, /ɲ/, /ŋ/, initial /x/, /v/ vs /w/):
-       - Final /ɲ/ (nh) is often misheard by ASR as /s/, /ns/, or /mp/ (e.g., "Vinh" heard as "Vince", "Vins", "Wimp", or "Win").
-       - Final /k/ (c/ch) is often misheard as "ck", "rk", or vowel stops (e.g., "Đức/Duc" heard as "Duck", "Dirk", "Eat").
-       - Initial /x/ (kh) is often misheard as "qu", "squ", or "th" (e.g., "Khoa" heard as "Quire", "Squire", "Thao", "Hua").
-       - Initial /z/ or /j/ (d/gi) is often misheard as "y" or "d" (e.g., "Du" heard as "Yu", "Dew", "You").
-       - Compound names (e.g. "Trúc Anh") often heard with stray sibilants like "S-T-R-U-C-A-N-H" or "Truck Anne".
-   - Joint Cross-Referencing & Disambiguation:
-     * Always cross-reference the name turn ("My name is...") and the spelling turn ("How do you spell your name?").
-     * If the raw speech in the name turn sounds like an approximation ("Vince", "Quire", "Yu", "Duck") and the spelling turn reveals the letters (e.g. "V-I-N-H" or "V-I-N-S", "K-H-O-A", "D-U", "D-U-C"), jointly resolve them to the authentic student name and correct letter spelling:
-       -> Introduction: "My name is <Name>." (e.g. "My name is Vinh.", "My name is Khoa.", "My name is Duc.", "My name is Du.").
-       -> Spelling turn: Capital letters separated by hyphens (e.g. "V-I-N-H.", "K-H-O-A.", "D-U.", "D-U-C.").
-     * For proper locations (Hanoi, Danang, Ho Chi Minh City) or Vietnamese school names, resolve phonetic distortions to standard Vietnamese geographical/proper names.
-
-2. CONTEXTUAL VOCABULARY & HOMOPHONE RESOLUTION:
-   - Use question topic to resolve ambiguous acoustic tokens:
-     * Numbers & Age: Resolve phonetically distorted numbers (e.g., "How old are you?" -> resolve to standard digits e.g. "8 years old").
-     * Category questions (fruit, food, drink, color, weather, animal): When the child's acoustic token matches the question category phonetically (e.g., "orange juice", "turquoise", "grapes", "sweet", "sunny", "rabbit"), select the genuine English vocabulary that matches both the acoustic trace and the question topic.
-     * Category Stutters & Truncated Onsets: When a child stutters, pauses, or pronounces only the initial syllables/onset of a target category vocabulary (e.g. "tur- tur-" or "tur" when answering a color question, "straw-" for fruit, "wa-" for watermelon/water), resolve it to the full intended English target word (e.g. "I like turquoise.", "strawberry", "watermelon").
-     * Alternative/Clarification Questions ("X or X?"): In English, a clarification question never contrasts two identical words ("A or A?"). When ASR outputs an identical pair, disambiguate the phonetically close minimal pair using the interviewer's question topic (e.g. "food" vs "fruit").
-     * Age-Appropriate Domain Disambiguation: For young learners (ages 7-12), if an acoustic token is an incongruous adult term (e.g. alcoholic beverages) that is phonetically close to an everyday child-appropriate word in the asked category (e.g. "cola" or "water" for drink), resolve it to the phonetically closest age-appropriate word.
-     * Capitalize proper names, brand names (e.g. "Coca-Cola"), and sentence starts.
-
-3. FAITHFULNESS & PRESERVATION OF CHILD SPEECH:
-   - NEVER paraphrase or alter correct grammatical choices or child syntax.
-   - Retain the child's exact sentence structure, grammar, repetitions, stutters, and self-corrections.
-   - Do NOT insert extra words, clauses, or explanations that were not acoustically uttered.
-   - Fix ONLY phonetic/acoustic speech recognition distortions.
-
-INPUT FORMAT: JSON array of dialogue turns:
-[{"id": 1, "q": "interviewer question", "a": "raw student speech"}]
-
-OUTPUT FORMAT: Return ONLY a valid JSON array matching the input ids without markdown fences or explanations:
-[{"id": 1, "text": "corrected transcript"}]"""
+SYSTEM_PROMPT = """ASR post-editor for English interviews of Vietnamese young learners (ages 7-12).
+Input: JSON array [{"id":1,"q":"teacher question","a":"raw student speech"}].
+Fix ONLY clear acoustic/ASR errors without paraphrasing or fixing real learner grammar:
+1. Names & Spelling: Cross-reference name and spelling turns; resolve Vietnamese phonetic ASR distortions (unreleased finals, /ɲ/, /ŋ/, /x/, /z/~/j/) into authentic proper names and hyphenated uppercase spelling (e.g. "A-N-N-A.").
+2. Topic Homophones & Stutters: Use "q" to fix phonetically close ASR mishearings for numbers/ages, everyday category words (fruit/food/drink/color/weather/animal), and truncated onsets.
+3. Minimal Pairs ("X or X?"): Resolve identical repeated alternatives using "q" context (e.g. "fruit" vs "food").
+4. Age-Appropriate Domain: Resolve incongruous adult terms to the phonetically closest child-appropriate word in the asked category.
+5. Faithfulness: Preserve learner grammar errors, syntax, and punctuation/capitalization. Never invent extra clauses.
+Output ONLY a valid JSON array of turns that CHANGED (or [] if none changed), no markdown:
+[{"id":1,"text":"corrected transcript"}]"""
 
 
 def normalize_whitespace(text: str) -> str:
@@ -127,18 +94,22 @@ class AsrErrorCorrector:
         if not self.enable_llm or not self.api_key or not self.endpoint:
             return results
 
-        # Build lean payload containing ALL turns of the dialogue (minimal tokens)
-        items_payload = [{
-            "id": t.get("turn_id", idx + 1),
-            "q": t.get("teacher_prompt", ""),
-            "a": t.get("transcript", t.get("raw_transcript", "")),
-        } for idx, t in enumerate(results)]
+        # Build lean payload containing ALL turns of the dialogue (omit empty q)
+        items_payload = []
+        for idx, t in enumerate(results):
+            row: Dict[str, Any] = {
+                "id": int(t.get("turn_id", idx + 1)),
+                "a": t.get("transcript", t.get("raw_transcript", "")),
+            }
+            q_str = (t.get("teacher_prompt") or "").strip()
+            if q_str:
+                row["q"] = q_str
+            items_payload.append(row)
 
         import requests
 
         for attempt in range(3):
             try:
-                # Strictly use deepseek-v4.1-flash in 1 prompt with sufficient reasoning budget
                 resp = requests.post(
                     self.endpoint,
                     headers={
@@ -153,10 +124,10 @@ class AsrErrorCorrector:
                             {"role": "user", "content": json.dumps(items_payload, ensure_ascii=False, separators=(',', ':'))},
                         ],
                         "temperature": 0.0,
-                        "max_tokens": 2048,
+                        "max_tokens": 1024,
                         "enable_thinking": False,
                     },
-                    timeout=self.timeout,
+                    timeout=min(self.timeout, 45.0),
                 )
 
                 if not resp.ok:
@@ -173,7 +144,7 @@ class AsrErrorCorrector:
                     content = re.sub(r"^```\w*\n", "", content)
                     content = re.sub(r"\n```$", "", content)
 
-                match = re.search(r"\[\s*\{.*\}\s*\]", content, flags=re.DOTALL)
+                match = re.search(r"\[\s*(?:\{.*\})?\s*\]", content, flags=re.DOTALL)
                 raw_json = match.group(0) if match else content
                 corrected_list = None
                 try:
@@ -189,19 +160,21 @@ class AsrErrorCorrector:
                     if salvaged:
                         corrected_list = salvaged
 
-                if isinstance(corrected_list, list) and corrected_list:
+                if isinstance(corrected_list, list):
                     corr_map = {}
                     for x in corrected_list:
-                        if "id" in x:
+                        if isinstance(x, dict) and "id" in x:
                             val = x.get("text", x.get("corrected", ""))
                             if isinstance(val, str) and val.strip():
-                                corr_map[x["id"]] = val.strip()
-                    if corr_map:
-                        for idx, t in enumerate(results, start=1):
-                            tid = t.get("turn_id", idx)
-                            if tid in corr_map:
-                                t["transcript"] = corr_map[tid]
-                        return results
+                                try:
+                                    corr_map[int(x["id"])] = val.strip()
+                                except (TypeError, ValueError):
+                                    pass
+                    for idx, t in enumerate(results, start=1):
+                        tid = int(t.get("turn_id", idx))
+                        if tid in corr_map:
+                            t["transcript"] = corr_map[tid]
+                    return results
             except Exception as exc:
                 logger.warning(f"[AsrCorrector] Attempt {attempt + 1} LLM notice ({exc}).")
 
