@@ -356,12 +356,15 @@ export async function uploadAudioUrlToSupabase(
 ): Promise<string> {
   try {
     const client = getSupabaseClient();
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error(`Failed to fetch audio from ${url}`);
     const blob = await response.blob();
     const ext = url.split('.').pop()?.split('?')[0] || 'wav';
     const path = `conversations/${teacherId}/extracted_${Date.now()}_${suffix}.${ext}`;
-    const { error } = await client.storage.from('speakai-audio').upload(path, blob, { upsert: false });
+    const { error } = await client.storage.from('speakai-audio').upload(path, blob, {
+      upsert: false,
+      contentType: blob.type || (ext === 'wav' ? 'audio/wav' : undefined),
+    });
     if (error) throw error;
     const { data: urlData } = client.storage.from('speakai-audio').getPublicUrl(path);
     return urlData.publicUrl;

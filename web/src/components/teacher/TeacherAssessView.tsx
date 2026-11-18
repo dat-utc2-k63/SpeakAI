@@ -206,12 +206,8 @@ export function TeacherAssessView({
     setStepLabel('Đang tải bản ghi hội thoại lên để phân tích...');
 
     try {
-      let uploadedUrl = '';
-      try {
-        uploadedUrl = await uploadConversationAudio(currentUser.id, audioFile);
-      } catch {
-        uploadedUrl = '';
-      }
+      // Upload full conversation audio to Supabase in parallel while GPU processes it
+      const uploadAudioPromise = uploadConversationAudio(currentUser.id, audioFile).catch(() => '');
 
       const formData = new FormData();
       formData.append('audio', audioFile);
@@ -265,6 +261,7 @@ export function TeacherAssessView({
         }
       }
 
+      const uploadedUrl = await uploadAudioPromise;
       const draft = await createAssessment(currentUser.id, selectedStudent.id, uploadedUrl);
       setDraftId(draft.id);
 
@@ -312,10 +309,25 @@ export function TeacherAssessView({
 
       const clonedResult: AssessmentResultJson = JSON.parse(JSON.stringify(analysisResult));
       const turns = clonedResult.dialogue?.turns || clonedResult.turns || [];
-      for (let i = 0; i < turns.length; i++) {
-        if (turns[i].audio) {
-          turns[i].audio = await resolveAudio(turns[i].audio, `turn_${i}`);
-        }
+
+      // Upload all turn audio clips concurrently (6 parallel workers instead of sequential 1-by-1)
+      const audioTurnIndices = turns
+        .map((t, idx) => (t.audio ? idx : -1))
+        .filter((idx) => idx >= 0);
+      if (audioTurnIndices.length > 0) {
+        let cursor = 0;
+        const concurrency = Math.min(6, audioTurnIndices.length);
+        await Promise.all(
+          Array.from({ length: concurrency }, async () => {
+            while (cursor < audioTurnIndices.length) {
+              const turnIdx = audioTurnIndices[cursor++];
+              const rawAudio = turns[turnIdx]?.audio;
+              if (rawAudio) {
+                turns[turnIdx].audio = await resolveAudio(rawAudio, `turn_${turnIdx}`);
+              }
+            }
+          }),
+        );
       }
 
       clonedResult.ai_eval = aiEval;
@@ -345,9 +357,9 @@ export function TeacherAssessView({
       setAiEval(null);
       handleClearAudio();
       showToast('Đã lưu kết quả chấm vào Lịch sử!', 'success');
-      await loadHistory();
-      onChanged?.();
       setSubTab('history');
+      void loadHistory();
+      onChanged?.();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Lỗi lưu kết quả đánh giá', 'danger');
     } finally {
