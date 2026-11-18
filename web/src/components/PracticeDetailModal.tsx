@@ -14,11 +14,10 @@ import {
   MessageSquareQuote,
   MicOff,
   PencilLine,
-  Sparkles,
   Volume2,
 } from 'lucide-react';
 import { Modal } from './ui/Modal';
-import { ScoreRingGauge, SkillRadarChart } from './ui/AnalyticsCharts';
+import { IeltsCriteriaList, ScoreRingGauge, SkillRadarChart } from './ui/AnalyticsCharts';
 import { fetchSessionDetail, submitTeacherReview } from '@/lib/practice';
 import { formatScoreValue, getExamTypeName, getIeltsBandLabel, scoreTextColorClass } from '@/lib/utils';
 import { useToast } from './ToastProvider';
@@ -119,7 +118,7 @@ export function PracticeDetailModal({
     >
       {loading && (
         <div className="flex flex-col items-center justify-center py-14 text-slate-500">
-          <Loader2 className="mb-3 h-7 w-7 animate-spin text-indigo-600" />
+          <Loader2 className="mb-3 h-7 w-7 animate-spin text-blue-600" />
           <p className="text-sm">Đang tải chi tiết bài làm...</p>
         </div>
       )}
@@ -145,8 +144,8 @@ export function PracticeDetailModal({
           <div className="section-card">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h4 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                  <Sparkles className="h-4 w-4 text-indigo-600" />
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <ClipboardCheck className="size-4 text-blue-600" />
                   Tổng quan Kết quả {isExam ? 'Thi thử' : 'Luyện tập'}
                 </h4>
                 <p className="mt-0.5 text-xs text-slate-500">
@@ -155,32 +154,32 @@ export function PracticeDetailModal({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {isExam && (
-                  <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-0.5 text-xs font-semibold text-violet-700">
+                  <span className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
                     {bandChip}
                   </span>
                 )}
                 <span
-                  className={`rounded-full border px-3 py-0.5 text-xs font-semibold ${getIeltsBandLabel(totalNum).badgeClass}`}
+                  className={`rounded-md border px-2.5 py-0.5 text-xs font-semibold ${getIeltsBandLabel(totalNum).badgeClass}`}
                 >
                   {getIeltsBandLabel(totalNum).level}
                 </span>
               </div>
             </div>
 
-            <div className="grid items-center gap-6 md:grid-cols-12">
-              <div className="md:col-span-4 flex flex-col items-center justify-center rounded-2xl border border-slate-100 bg-slate-50/75 p-5">
+            <div className="grid items-center gap-6 lg:grid-cols-12">
+              <div className="lg:col-span-3 flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-5">
                 <ScoreRingGauge
                   score={Number(detail.score_total || 0)}
                   max={9}
-                  size={146}
-                  strokeWidth={13}
+                  size={158}
+                  strokeWidth={14}
                   label="IELTS Band / 9.0"
                 />
               </div>
 
-              <div className="md:col-span-4 flex justify-center">
+              <div className="lg:col-span-5 flex items-center justify-center py-1">
                 <SkillRadarChart
-                  size={215}
+                  size={250}
                   skills={[
                     {
                       label: 'Pronunciation (P)',
@@ -202,31 +201,14 @@ export function PracticeDetailModal({
                 />
               </div>
 
-              <div className="md:col-span-4 space-y-2">
-                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/85 px-3.5 py-2.5 text-xs">
-                  <span className="font-semibold text-slate-600">Pronunciation (P) · Phát âm</span>
-                  <span className="font-extrabold text-emerald-600 tabular-nums">
-                    {Number(detail.score_accuracy ?? detail.score_total ?? 0).toFixed(1)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/85 px-3.5 py-2.5 text-xs">
-                  <span className="font-semibold text-slate-600">Fluency &amp; Coherence (FC)</span>
-                  <span className="font-extrabold text-sky-600 tabular-nums">
-                    {formatScoreValue(detail.score_context)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/85 px-3.5 py-2.5 text-xs">
-                  <span className="font-semibold text-slate-600">Lexical Resource (LR)</span>
-                  <span className="font-extrabold text-amber-600 tabular-nums">
-                    {formatScoreValue(detail.score_lexical)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/85 px-3.5 py-2.5 text-xs">
-                  <span className="font-semibold text-slate-600">Grammatical Range (GRA)</span>
-                  <span className="font-extrabold text-indigo-600 tabular-nums">
-                    {formatScoreValue(detail.score_grammar)}
-                  </span>
-                </div>
+              <div className="lg:col-span-4">
+                <IeltsCriteriaList
+                  compact
+                  pr={Number(detail.score_accuracy ?? detail.score_total ?? 0)}
+                  fc={detail.score_context != null ? Number(detail.score_context) : null}
+                  lr={detail.score_lexical != null ? Number(detail.score_lexical) : null}
+                  gra={detail.score_grammar != null ? Number(detail.score_grammar) : null}
+                />
               </div>
             </div>
           </div>
@@ -256,7 +238,7 @@ export function PracticeDetailModal({
 
           {canReview && ['completed', 'reviewed'].includes(detail.status) && (
             <div className="section-card space-y-3">
-              <h4 className="flex items-center gap-2 text-sm font-bold text-indigo-700">
+              <h4 className="flex items-center gap-2 text-sm font-bold text-blue-700">
                 <PencilLine className="h-4 w-4" />
                 Duyệt bài &amp; Ghi nhận xét cho Học viên
               </h4>
@@ -265,14 +247,14 @@ export function PracticeDetailModal({
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="Nhập nhận xét chi tiết về phát âm, ngữ pháp hoặc hướng cải thiện cho học viên..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
               />
               <div className="flex justify-end">
                 <button
                   type="button"
                   disabled={submitting}
                   onClick={handleSubmitReview}
-                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 hover:bg-indigo-500 disabled:opacity-50 transition"
+                  className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors duration-150"
                 >
                   {submitting ? (
                     <>
@@ -294,7 +276,7 @@ export function PracticeDetailModal({
 
           <div className="space-y-3">
             <h4 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-              <ClipboardCheck className="h-4 w-4 text-indigo-600" />
+              <ClipboardCheck className="h-4 w-4 text-blue-600" />
               Chi tiết từng câu ({detail.answers?.length || 0})
             </h4>
 
@@ -312,15 +294,15 @@ export function PracticeDetailModal({
                   className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 shadow-sm"
                 >
                   <div className="text-sm font-bold text-slate-900">
-                    <span className="text-indigo-600">
+                    <span className="text-blue-600">
                       Câu {a.question?.order_num || idx + 1}:
                     </span>{' '}
                     {a.question?.question_text || ''}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
-                    <div className="rounded-xl border border-indigo-200 bg-indigo-50/75 p-2.5 text-center">
-                      <div className="text-[10px] font-bold uppercase text-indigo-700">Điểm tổng</div>
+                    <div className="rounded-xl border border-blue-200 bg-blue-50/75 p-2.5 text-center">
+                      <div className="text-[10px] font-bold uppercase text-blue-700">Điểm tổng</div>
                       <div className={`text-xl font-extrabold tabular-nums ${scoreTextColorClass(a.score_total)}`}>
                         {Number(a.score_total || 0).toFixed(1)}
                       </div>
@@ -358,7 +340,7 @@ export function PracticeDetailModal({
                   {a.transcript && (
                     <div className="rounded-xl border border-slate-200 bg-slate-50/75 p-3">
                       <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-                        <MessageSquareQuote className="h-3.5 w-3.5 text-indigo-600" />
+                        <MessageSquareQuote className="h-3.5 w-3.5 text-blue-600" />
                         Nội dung bạn đã nói:
                       </div>
                       <p className="text-sm italic text-slate-800">&ldquo;{a.transcript}&rdquo;</p>
@@ -366,10 +348,10 @@ export function PracticeDetailModal({
                   )}
 
                   {gemini?.feedback_summary && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3">
-                      <div className="mb-1 flex items-center gap-1.5 text-xs font-bold text-amber-800">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Nhận xét từ AI:
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-800">
+                        <Lightbulb className="size-3.5" />
+                        Nhận xét chi tiết:
                       </div>
                       <p className="text-xs leading-relaxed text-slate-700">
                         {gemini.feedback_summary}
@@ -424,7 +406,7 @@ export function PracticeDetailModal({
                           href={a.audio_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-slate-500 hover:text-indigo-600 font-medium"
+                          className="inline-flex items-center gap-1 text-slate-500 hover:text-blue-600 font-medium"
                         >
                           Mở file
                           <ExternalLink className="h-3 w-3" />

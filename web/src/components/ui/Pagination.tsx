@@ -54,17 +54,17 @@ export function Pagination({
 
   return (
     <div
-      className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/90 bg-white px-4 py-2.5 text-xs shadow-sm ${
-        compact ? 'rounded-xl px-3 py-2' : ''
+      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs shadow-sm ${
+        compact ? 'rounded-lg px-3 py-2' : ''
       } ${className}`}
     >
       <div className="text-slate-500">
         Hiển thị{' '}
-        <strong className="font-bold text-slate-800 tabular-nums">
+        <strong className="font-semibold text-slate-800 tabular-nums">
           {from}–{to}
         </strong>{' '}
         trong tổng số{' '}
-        <strong className="font-bold text-slate-800 tabular-nums">{totalCount}</strong> {itemLabel}
+        <strong className="font-semibold text-slate-800 tabular-nums">{totalCount}</strong> {itemLabel}
       </div>
 
       {totalPages > 1 && (
@@ -74,9 +74,9 @@ export function Pagination({
             disabled={disabled || currentPage <= 1}
             onClick={() => onPageChange(currentPage - 1)}
             aria-label="Trang trước"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex size-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors duration-150 hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="size-4" />
           </button>
 
           {/* Desktop numbered pages */}
@@ -90,9 +90,9 @@ export function Pagination({
                   onClick={() => onPageChange(token)}
                   aria-label={`Trang ${token}`}
                   aria-current={token === currentPage ? 'page' : undefined}
-                  className={`inline-flex h-8 min-w-[2rem] items-center justify-center rounded-xl px-2 font-semibold tabular-nums transition ${
+                  className={`inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg px-2 font-semibold tabular-nums transition-colors duration-150 ${
                     token === currentPage
-                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
+                      ? 'bg-slate-900 text-white'
                       : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   } disabled:opacity-50`}
                 >
@@ -107,7 +107,7 @@ export function Pagination({
           </div>
 
           {/* Mobile compact indicator */}
-          <span className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-slate-50 px-2.5 font-semibold text-slate-700 tabular-nums sm:hidden">
+          <span className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-slate-50 px-2.5 font-semibold text-slate-700 tabular-nums sm:hidden">
             {currentPage} / {totalPages}
           </span>
 
@@ -116,9 +116,9 @@ export function Pagination({
             disabled={disabled || currentPage >= totalPages}
             onClick={() => onPageChange(currentPage + 1)}
             aria-label="Trang sau"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex size-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors duration-150 hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="size-4" />
           </button>
         </div>
       )}

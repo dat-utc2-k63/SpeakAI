@@ -12,7 +12,6 @@ import {
   Loader2,
   Mic,
   Search,
-  Sparkles,
   Users,
 } from 'lucide-react';
 import {
@@ -278,7 +277,7 @@ export function TeacherDashboard({
   if (activeTab === 'overview' && overviewLoading && previewStudents.length === 0 && stats.studentCount === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-        <Loader2 className="mb-3 h-8 w-8 animate-spin text-indigo-600" />
+        <Loader2 className="mb-3 h-8 w-8 animate-spin text-blue-600" />
         <p className="text-sm">Đang tải không gian Giáo viên...</p>
       </div>
     );
@@ -336,7 +335,7 @@ export function TeacherDashboard({
             </div>
 
             <div className="section-card card-interactive flex items-center gap-3.5 !p-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
                 <BookOpen className="h-5 w-5" />
               </div>
               <div>
@@ -348,8 +347,8 @@ export function TeacherDashboard({
             </div>
 
             <div className="section-card card-interactive flex items-center gap-3.5 !p-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
-                <ClipboardCheck className="h-5 w-5" />
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                <ClipboardCheck className="size-5" />
               </div>
               <div>
                 <div className="text-2xl font-extrabold text-slate-900 tabular-nums">
@@ -377,16 +376,16 @@ export function TeacherDashboard({
             <div className="section-card lg:col-span-5 flex flex-col justify-between space-y-3">
               <div>
                 <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                  <BarChart3 className="h-4 w-4 text-indigo-600" />
+                  <BarChart3 className="h-4 w-4 text-blue-600" />
                   Năng lực 4 kỹ năng TB của lớp
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
                   Tổng hợp từ bài chấm 1-1 và bài luyện tập của học viên trong lớp.
                 </p>
               </div>
-              <div className="flex justify-center py-1">
+              <div className="flex justify-center py-2">
                 <SkillRadarChart
-                  size={232}
+                  size={255}
                   skills={[
                     { label: 'Pronunciation (P)', value: classAnalytics?.avgAccuracy ?? null },
                     { label: 'Fluency (FC)', value: classAnalytics?.avgContext ?? null },
@@ -413,7 +412,7 @@ export function TeacherDashboard({
                 unit=" bài"
                 items={[
                   {
-                    label: 'Xuất sắc (8.0 – 10)',
+                    label: 'Xuất sắc (8.0 – 9.0)',
                     value: classAnalytics?.distribution.excellent || 0,
                     colorClass: 'bg-emerald-500',
                   },
@@ -448,7 +447,7 @@ export function TeacherDashboard({
                 <button
                   type="button"
                   onClick={() => onNavigate('students')}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-500"
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-500"
                 >
                   Xem toàn bộ →
                 </button>
@@ -465,7 +464,7 @@ export function TeacherDashboard({
                       key={s.id}
                       type="button"
                       onClick={() => handleOpenStudentDetail(s)}
-                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/75 p-3 text-left hover:border-indigo-300 hover:bg-white transition"
+                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/75 p-3 text-left hover:border-blue-300 hover:bg-white transition"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <img
@@ -496,20 +495,20 @@ export function TeacherDashboard({
             </div>
 
             <div className="section-card lg:col-span-5 space-y-3">
-              <h3 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-base font-bold text-slate-900">
-                <Sparkles className="h-5 w-5 text-indigo-600" />
+              <h3 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-base font-semibold text-slate-900">
+                <ClipboardCheck className="size-4 text-blue-600" />
                 Lối tắt Nghiệp vụ
               </h3>
               <button
                 type="button"
                 onClick={() => onNavigate('questionsets')}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/75 p-4 text-left hover:border-indigo-300 hover:bg-white transition"
+                className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/75 p-4 text-left hover:border-blue-300 hover:bg-white transition"
               >
                 <div>
                   <div className="text-sm font-bold text-slate-900">Biên soạn &amp; Mở Bộ đề</div>
                   <div className="text-xs text-slate-500">Quản lý đề Speaking cho học viên</div>
                 </div>
-                <BookOpen className="h-5 w-5 text-indigo-600" />
+                <BookOpen className="h-5 w-5 text-blue-600" />
               </button>
 
               <button
@@ -558,7 +557,7 @@ export function TeacherDashboard({
                 value={studentSearch}
                 onChange={(e) => setStudentSearch(e.target.value)}
                 placeholder="Tìm tên hoặc email học viên..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
               />
             </div>
 
@@ -568,7 +567,7 @@ export function TeacherDashboard({
                 setStudentVoiceFilter(e.target.value as '' | 'ready' | 'missing');
                 setStudentPage(1);
               }}
-              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
             >
               <option value="">Mọi mẫu giọng</option>
               <option value="ready">Đã có mẫu giọng</option>
@@ -578,7 +577,7 @@ export function TeacherDashboard({
 
           {studentsLoading && studentsData.items.length === 0 ? (
             <div className="section-card flex items-center justify-center py-12 text-slate-500">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin text-indigo-600" />
+              <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-600" />
               <span className="text-sm">Đang tải danh sách học viên...</span>
             </div>
           ) : (
@@ -649,7 +648,7 @@ export function TeacherDashboard({
                                 <button
                                   type="button"
                                   onClick={() => handleOpenStudentDetail(s)}
-                                  className="inline-flex items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 transition"
+                                  className="inline-flex items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100 transition"
                                 >
                                   Xem hồ sơ →
                                 </button>
@@ -704,7 +703,7 @@ export function TeacherDashboard({
                           <button
                             type="button"
                             onClick={() => handleOpenStudentDetail(s)}
-                            className="rounded-xl bg-indigo-50 px-3 py-1.5 font-semibold text-indigo-700"
+                            className="rounded-xl bg-blue-50 px-3 py-1.5 font-semibold text-blue-700"
                           >
                             Xem hồ sơ →
                           </button>
@@ -737,7 +736,7 @@ export function TeacherDashboard({
       {activeTab === 'assess' &&
         (loadingAssessOptions && assessStudentOptions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-            <Loader2 className="mb-3 h-8 w-8 animate-spin text-indigo-600" />
+            <Loader2 className="mb-3 h-8 w-8 animate-spin text-blue-600" />
             <p className="text-sm">Đang tải danh sách học viên lớp phụ trách...</p>
           </div>
         ) : (
@@ -775,7 +774,7 @@ export function TeacherDashboard({
                 onClick={() => setDetailTab('practice')}
                 className={`rounded-xl px-4 py-1.5 text-xs font-semibold transition ${
                   detailTab === 'practice'
-                    ? 'bg-white text-indigo-700 shadow-sm'
+                    ? 'bg-white text-blue-700 shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -786,7 +785,7 @@ export function TeacherDashboard({
                 onClick={() => setDetailTab('assess')}
                 className={`rounded-xl px-4 py-1.5 text-xs font-semibold transition ${
                   detailTab === 'assess'
-                    ? 'bg-white text-indigo-700 shadow-sm'
+                    ? 'bg-white text-blue-700 shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -801,7 +800,7 @@ export function TeacherDashboard({
                   setDetailModeFilter(e.target.value as 'all' | 'practice' | 'exam');
                   setDetailPracticePage(1);
                 }}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
               >
                 <option value="all">Tất cả hình thức</option>
                 <option value="practice">Chỉ Luyện tập</option>
@@ -810,11 +809,11 @@ export function TeacherDashboard({
             )}
           </div>
 
-          <div key={detailTab} className="space-y-3 animate-tab-in">
+          <div key={detailTab} className="space-y-3">
             {detailTab === 'practice' ? (
               detailPracticeLoading && detailPracticeData.items.length === 0 ? (
                 <div className="flex justify-center py-10">
-                  <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
                 </div>
               ) : detailPracticeData.items.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
@@ -828,7 +827,7 @@ export function TeacherDashboard({
                         key={s.id}
                         type="button"
                         onClick={() => setSelectedSessionId(s.id)}
-                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/75 p-3.5 text-left hover:border-indigo-300 hover:bg-white transition"
+                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/75 p-3.5 text-left hover:border-blue-300 hover:bg-white transition"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
@@ -836,10 +835,10 @@ export function TeacherDashboard({
                               {s.question_set?.title || 'Bộ đề Speaking'}
                             </span>
                             <span
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                              className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${
                                 s.mode === 'exam'
-                                  ? 'border border-violet-200 bg-violet-50 text-violet-700'
-                                  : 'border border-sky-200 bg-sky-50 text-sky-700'
+                                  ? 'border border-amber-200 bg-amber-50 text-amber-800'
+                                  : 'border border-blue-200 bg-blue-50 text-blue-700'
                               }`}
                             >
                               {s.mode === 'exam' ? s.exam_band || 'Thi thử' : 'Luyện tập'}
@@ -877,7 +876,7 @@ export function TeacherDashboard({
               )
             ) : detailAssessLoading && detailAssessData.items.length === 0 ? (
               <div className="flex justify-center py-10">
-                <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
               </div>
             ) : detailAssessData.items.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">

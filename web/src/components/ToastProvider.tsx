@@ -52,14 +52,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const toastOverlay = mounted
     ? createPortal(
-        <div className="fixed bottom-24 lg:bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-[1200] flex sm:max-w-sm flex-col gap-2.5 pointer-events-none">
+        <div className="fixed bottom-[max(5.5rem,env(safe-area-inset-bottom))] lg:bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-50 flex sm:max-w-sm flex-col gap-2 pointer-events-none">
           {toasts.map((t) => {
             const borderCls =
               t.variant === 'success'
-                ? 'border-l-4 border-l-emerald-500'
+                ? 'border-l-4 border-l-emerald-600'
                 : t.variant === 'danger'
-                  ? 'border-l-4 border-l-rose-500'
-                  : 'border-l-4 border-l-indigo-500';
+                  ? 'border-l-4 border-l-rose-600'
+                  : 'border-l-4 border-l-blue-600';
             const Icon =
               t.variant === 'success' ? CheckCircle2 : t.variant === 'danger' ? AlertCircle : Info;
             const iconColor =
@@ -67,22 +67,23 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 ? 'text-emerald-600'
                 : t.variant === 'danger'
                   ? 'text-rose-600'
-                  : 'text-indigo-600';
+                  : 'text-blue-600';
 
             return (
               <div
                 key={t.id}
-                className={`pointer-events-auto flex items-start gap-3 rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-sm text-slate-800 shadow-[0_14px_34px_-8px_rgba(15,23,42,0.16)] backdrop-blur-md animate-slidein ${borderCls}`}
+                role="status"
+                className={`pointer-events-auto flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 shadow-lg ${borderCls}`}
               >
-                <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${iconColor}`} />
-                <span className="flex-1 leading-relaxed font-medium">{t.message}</span>
+                <Icon className={`mt-0.5 size-4 shrink-0 ${iconColor}`} />
+                <span className="flex-1 leading-relaxed font-medium text-pretty">{t.message}</span>
                 <button
                   type="button"
                   onClick={() => removeToast(t.id)}
-                  className="text-slate-400 hover:text-slate-700 transition"
+                  className="text-slate-400 hover:text-slate-700 transition-colors duration-150"
                   aria-label="Đóng thông báo"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="size-4" />
                 </button>
               </div>
             );

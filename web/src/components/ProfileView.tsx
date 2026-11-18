@@ -85,7 +85,7 @@ export function ProfileView({ profile, gpuUrl, onProfileUpdated }: ProfileViewPr
   };
 
   return (
-    <div className="space-y-6 animate-slidein">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="HỒ SƠ CÁ NHÂN"
         title="Thông tin tài khoản & Giọng nói"
@@ -115,12 +115,12 @@ export function ProfileView({ profile, gpuUrl, onProfileUpdated }: ProfileViewPr
             <img
               src={getAvatarUrl(profile.full_name, 128)}
               alt={profile.full_name}
-              className="h-16 w-16 rounded-2xl border border-indigo-100 object-cover shadow-sm"
+              className="h-16 w-16 rounded-2xl border border-blue-100 object-cover shadow-sm"
             />
             <div className="min-w-0">
               <h3 className="truncate text-lg font-bold text-slate-900">{profile.full_name}</h3>
               <p className="truncate text-xs text-slate-500">{profile.email}</p>
-              <span className="mt-1.5 inline-block rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase text-indigo-700">
+              <span className="mt-1.5 inline-block rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase text-blue-700">
                 {profile.role === 'admin'
                   ? 'Quản trị viên'
                   : profile.role === 'teacher'
@@ -140,7 +140,7 @@ export function ProfileView({ profile, gpuUrl, onProfileUpdated }: ProfileViewPr
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
               />
             </div>
 
@@ -153,7 +153,7 @@ export function ProfileView({ profile, gpuUrl, onProfileUpdated }: ProfileViewPr
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="Chưa cập nhật"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
               />
             </div>
           </div>
@@ -178,7 +178,7 @@ export function ProfileView({ profile, gpuUrl, onProfileUpdated }: ProfileViewPr
             <button
               type="submit"
               disabled={saving}
-              className="btn-glow inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 hover:bg-indigo-500 disabled:opacity-50 transition"
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors duration-150"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Lưu thay đổi
@@ -192,7 +192,7 @@ export function ProfileView({ profile, gpuUrl, onProfileUpdated }: ProfileViewPr
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                  <Mic className="h-5 w-5 text-indigo-600" />
+                  <Mic className="h-5 w-5 text-blue-600" />
                   Mẫu Giọng Nói Cá Nhân
                 </h3>
                 <span
@@ -237,10 +237,10 @@ export function ProfileView({ profile, gpuUrl, onProfileUpdated }: ProfileViewPr
             <button
               type="button"
               onClick={() => setVoiceModalOpen(true)}
-              className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+              className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors duration-150 ${
                 voiceReady
-                  ? 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                  : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/20'
+                  ? 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  : 'bg-slate-900 text-white hover:bg-slate-800'
               }`}
             >
               <Mic className="h-4 w-4" />

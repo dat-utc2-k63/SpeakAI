@@ -11,7 +11,6 @@ import {
   Mic,
   Save,
   Search,
-  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { getAuthHeaders } from '@/lib/auth';
@@ -26,7 +25,6 @@ import {
 } from '@/lib/teacher';
 import {
   formatFriendlyStep,
-  formatScoreValue,
   getIeltsBandLabel,
   hasVoiceEnrolled,
   parseVoiceEmbeddings,
@@ -35,6 +33,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/components/ToastProvider';
 import {
+  IeltsCriteriaList,
   PageHeader,
   ScoreRingGauge,
   SkillRadarChart,
@@ -440,7 +439,7 @@ export function TeacherAssessView({
               onClick={() => setSubTab('new')}
               className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition ${
                 subTab === 'new'
-                  ? 'bg-white text-indigo-700 shadow-sm'
+                  ? 'bg-white text-blue-700 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -452,7 +451,7 @@ export function TeacherAssessView({
               onClick={() => setSubTab('history')}
               className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition ${
                 subTab === 'history'
-                  ? 'bg-white text-indigo-700 shadow-sm'
+                  ? 'bg-white text-blue-700 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -464,7 +463,7 @@ export function TeacherAssessView({
       />
 
       {subTab === 'new' ? (
-        <div key="tab-new" className="space-y-6 animate-tab-in">
+        <div key="tab-new" className="space-y-6">
           {!hasVoiceEnrolled(currentUser) && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/90 p-4 text-xs text-amber-900">
               <div className="flex items-center gap-2.5">
@@ -486,7 +485,7 @@ export function TeacherAssessView({
           {/* Setup Card */}
           <div className="section-card grid gap-5 lg:grid-cols-2">
             <div>
-              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600">
+              <label className="mb-2 block text-xs font-semibold uppercase text-slate-600">
                 1. File ghi âm hội thoại 1-1
               </label>
               <div
@@ -510,7 +509,7 @@ export function TeacherAssessView({
                   className="hidden"
                   onChange={(e) => handleSelectFile(e.target.files?.[0])}
                 />
-                <CloudUpload className="mx-auto mb-2 h-9 w-9 text-indigo-600" />
+                <CloudUpload className="mx-auto mb-2 h-9 w-9 text-blue-600" />
                 <p className="text-sm font-bold text-slate-900">Kéo thả hoặc chọn file âm thanh</p>
                 <p className="mt-1 text-xs text-slate-500">WAV, MP3, WEBM, M4A (&lt; 300MB)</p>
               </div>
@@ -534,13 +533,13 @@ export function TeacherAssessView({
 
             <div className="space-y-4">
               <div>
-                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600">
+                <label className="mb-2 block text-xs font-semibold uppercase text-slate-600">
                   2. Chọn Học viên trong lớp
                 </label>
                 <select
                   value={selectedStudentId}
                   onChange={(e) => setSelectedStudentId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/85 px-3.5 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/85 px-3.5 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
                 >
                   <option value="">
                     {students.length === 0
@@ -568,7 +567,7 @@ export function TeacherAssessView({
                   type="checkbox"
                   checked={scoreTeacher}
                   onChange={(e) => setScoreTeacher(e.target.checked)}
-                  className="h-4 w-4 rounded accent-indigo-600"
+                  className="h-4 w-4 rounded accent-blue-600"
                 />
                 <span>Chấm thêm điểm phát âm cho lượt nói của Giáo viên (tùy chọn)</span>
               </label>
@@ -577,17 +576,17 @@ export function TeacherAssessView({
                 type="button"
                 disabled={processing || !audioFile || !teacherEmb || !studentEmb}
                 onClick={handleRunAssessment}
-                className="btn-glow inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-45 transition"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45 transition-colors duration-150"
               >
                 {processing ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="size-4 animate-spin" />
                     Đang xử lý...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="h-4 w-4" />
-                    Bắt đầu Tách giọng &amp; Chấm AI
+                    <Mic className="size-4" />
+                    Bắt đầu Tách giọng &amp; Chấm điểm
                   </>
                 )}
               </button>
@@ -595,18 +594,18 @@ export function TeacherAssessView({
           </div>
 
           {processing && (
-            <div className="section-card flex items-center gap-3 border-indigo-200 bg-indigo-50/75">
-              <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
+            <div className="section-card flex items-center gap-3 border-blue-200 bg-blue-50/75">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
               <div className="text-sm font-medium text-slate-800">{stepLabel}</div>
             </div>
           )}
 
           {analysisResult && activeScores && (
-            <div className="space-y-6 animate-slidein">
+            <div className="space-y-6">
               <div className="section-card space-y-5">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-indigo-600" />
+                    <BarChart3 className="h-5 w-5 text-blue-600" />
                     <h3 className="text-base font-bold text-slate-900">
                       Kết quả Đánh giá Hội thoại 1-1
                     </h3>
@@ -637,7 +636,7 @@ export function TeacherAssessView({
                         onClick={() => setSpeakerView('teacher')}
                         className={`rounded-lg px-3 py-1 font-semibold transition ${
                           speakerView === 'teacher'
-                            ? 'bg-white text-indigo-700 shadow-sm'
+                            ? 'bg-white text-blue-700 shadow-sm'
                             : 'text-slate-600'
                         }`}
                       >
@@ -647,20 +646,20 @@ export function TeacherAssessView({
                   )}
                 </div>
 
-                <div className="grid items-center gap-6 md:grid-cols-12">
-                  <div className="md:col-span-4 flex flex-col items-center justify-center rounded-2xl border border-slate-100 bg-slate-50/75 p-5">
+                <div className="grid items-center gap-6 lg:grid-cols-12">
+                  <div className="lg:col-span-3 flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-5">
                     <ScoreRingGauge
                       score={activeScores.total}
                       max={9}
-                      size={150}
-                      strokeWidth={13}
+                      size={168}
+                      strokeWidth={14}
                       label="IELTS Band / 9.0"
                     />
                   </div>
 
-                  <div className="md:col-span-4 flex justify-center">
+                  <div className="lg:col-span-5 flex items-center justify-center py-1">
                     <SkillRadarChart
-                      size={220}
+                      size={260}
                       skills={[
                         { label: 'Pronunciation (P)', value: activeScores.pr },
                         { label: 'Fluency (FC)', value: activeScores.fc },
@@ -670,31 +669,13 @@ export function TeacherAssessView({
                     />
                   </div>
 
-                  <div className="md:col-span-4 space-y-2">
-                    <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/85 px-3.5 py-2.5 text-xs">
-                      <span className="font-semibold text-slate-600">Pronunciation (P) · Phát âm</span>
-                      <span className="font-extrabold text-emerald-600 tabular-nums">
-                        {activeScores.pr.toFixed(1)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/85 px-3.5 py-2.5 text-xs">
-                      <span className="font-semibold text-slate-600">Fluency &amp; Coherence (FC)</span>
-                      <span className="font-extrabold text-sky-600 tabular-nums">
-                        {formatScoreValue(activeScores.fc)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/85 px-3.5 py-2.5 text-xs">
-                      <span className="font-semibold text-slate-600">Lexical Resource (LR)</span>
-                      <span className="font-extrabold text-amber-600 tabular-nums">
-                        {formatScoreValue(activeScores.lr)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/85 px-3.5 py-2.5 text-xs">
-                      <span className="font-semibold text-slate-600">Grammatical Range (GRA)</span>
-                      <span className="font-extrabold text-indigo-600 tabular-nums">
-                        {formatScoreValue(activeScores.gra)}
-                      </span>
-                    </div>
+                  <div className="lg:col-span-4">
+                    <IeltsCriteriaList
+                      pr={activeScores.pr}
+                      fc={activeScores.fc}
+                      lr={activeScores.lr}
+                      gra={activeScores.gra}
+                    />
                   </div>
                 </div>
 
@@ -758,7 +739,7 @@ export function TeacherAssessView({
         </div>
       ) : (
         /* TAB 2: HISTORY */
-        <div key="tab-history" className="space-y-4 animate-tab-in">
+        <div key="tab-history" className="space-y-4">
           <div className="section-card flex flex-wrap items-center justify-between gap-3">
             <div className="relative flex-1 min-w-[240px]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -767,7 +748,7 @@ export function TeacherAssessView({
                 value={historySearch}
                 onChange={(e) => setHistorySearch(e.target.value)}
                 placeholder="Tìm theo tên học viên hoặc tiêu đề buổi chấm..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
               />
             </div>
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500">
@@ -778,7 +759,7 @@ export function TeacherAssessView({
 
           {loadingHistory && historyData.items.length === 0 ? (
             <div className="flex justify-center py-12">
-              <Loader2 className="h-7 w-7 animate-spin text-indigo-600" />
+              <Loader2 className="h-7 w-7 animate-spin text-blue-600" />
             </div>
           ) : historyData.items.length === 0 ? (
             <div className="section-card py-12 text-center text-sm text-slate-500">

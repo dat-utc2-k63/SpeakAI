@@ -24,7 +24,6 @@ import {
   Search,
   Server,
   ShieldCheck,
-  Sparkles,
   Trash2,
   Unlock,
   UserCheck,
@@ -665,7 +664,7 @@ export function AdminDashboard({
   if (overviewLoading && !overviewStats && activeTab === 'overview') {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-        <Loader2 className="mb-3 h-8 w-8 animate-spin text-indigo-600" />
+        <Loader2 className="mb-3 h-8 w-8 animate-spin text-blue-600" />
         <p className="text-sm">Đang tải dữ liệu quản trị...</p>
       </div>
     );
@@ -709,7 +708,7 @@ export function AdminDashboard({
           {/* 4 KPIs */}
           <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <div className="section-card card-interactive flex items-center gap-3.5 !p-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
                 <Users className="h-5 w-5" />
               </div>
               <div>
@@ -762,7 +761,7 @@ export function AdminDashboard({
             <div className="section-card lg:col-span-5 flex flex-col justify-between space-y-4">
               <div>
                 <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                  <PieChart className="h-4 w-4 text-indigo-600" />
+                  <PieChart className="h-4 w-4 text-blue-600" />
                   Cơ cấu Tài khoản &amp; Mẫu giọng
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
@@ -805,7 +804,7 @@ export function AdminDashboard({
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
                   <div
-                    className="h-full rounded-full bg-emerald-500 transition-all duration-700"
+                    className="h-full rounded-full bg-emerald-600"
                     style={{ width: `${voicePct}%` }}
                   />
                 </div>
@@ -816,7 +815,7 @@ export function AdminDashboard({
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                    <BarChart3 className="h-4 w-4 text-indigo-600" />
+                    <BarChart3 className="h-4 w-4 text-blue-600" />
                     Hoạt động Speaking &amp; Bộ đề toàn hệ thống
                   </h3>
                   <p className="mt-0.5 text-xs text-slate-500">
@@ -826,7 +825,7 @@ export function AdminDashboard({
                 <button
                   type="button"
                   onClick={() => onNavigate('assessments')}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-500"
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-500"
                 >
                   Quản lý Hội thoại 1-1 →
                 </button>
@@ -839,7 +838,7 @@ export function AdminDashboard({
                   {
                     label: 'Chấm hội thoại 1-1',
                     value: overviewStats?.savedAssessmentCount ?? 0,
-                    colorClass: 'bg-indigo-600',
+                    colorClass: 'bg-blue-600',
                   },
                   {
                     label: 'Luyện tập từng câu',
@@ -849,23 +848,23 @@ export function AdminDashboard({
                   {
                     label: 'Thi thử bấm giờ',
                     value: overviewStats?.examSessionCount ?? 0,
-                    colorClass: 'bg-violet-500',
+                    colorClass: 'bg-slate-700',
                   },
                 ]}
               />
 
               <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-[11px]">
                 <span className="font-semibold text-slate-500 mr-1">Kho bộ đề:</span>
-                <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 font-semibold text-indigo-700">
+                <span className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-0.5 font-semibold text-blue-700 tabular-nums">
                   IELTS: {overviewStats?.formatCounts.ielts ?? 0}
                 </span>
-                <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 font-semibold text-sky-700">
+                <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 font-semibold text-emerald-700 tabular-nums">
                   VSTEP: {overviewStats?.formatCounts.vstep ?? 0}
                 </span>
-                <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 font-semibold text-violet-700">
+                <span className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 font-semibold text-amber-800 tabular-nums">
                   TOEIC: {overviewStats?.formatCounts.toeic ?? 0}
                 </span>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 font-semibold text-slate-600">
+                <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-0.5 font-semibold text-slate-600 tabular-nums">
                   Chung: {overviewStats?.formatCounts.general ?? 0}
                 </span>
               </div>
@@ -883,7 +882,7 @@ export function AdminDashboard({
                 <button
                   type="button"
                   onClick={() => onNavigate('users')}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-500"
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-500"
                 >
                   Quản lý tất cả →
                 </button>
@@ -1015,7 +1014,7 @@ export function AdminDashboard({
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
                 placeholder="Tìm theo tên hoặc email..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
               />
             </div>
 
@@ -1025,7 +1024,7 @@ export function AdminDashboard({
                 setUserRoleFilter(e.target.value);
                 setUserPage(1);
               }}
-              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
             >
               <option value="">Tất cả vai trò</option>
               <option value="admin">Quản trị viên</option>
@@ -1039,7 +1038,7 @@ export function AdminDashboard({
                 setUserStatusFilter(e.target.value);
                 setUserPage(1);
               }}
-              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
             >
               <option value="">Tất cả trạng thái</option>
               <option value="active">Đang hoạt động</option>
@@ -1053,7 +1052,7 @@ export function AdminDashboard({
                 setUserVoiceFilter(e.target.value);
                 setUserPage(1);
               }}
-              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
             >
               <option value="">Mọi mẫu giọng</option>
               <option value="ready">Đã đăng ký giọng</option>
@@ -1063,7 +1062,7 @@ export function AdminDashboard({
 
           {usersLoading && usersData.items.length === 0 ? (
             <div className="section-card flex items-center justify-center py-12 text-slate-500">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin text-indigo-600" />
+              <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-600" />
               <span className="text-sm">Đang tải danh sách tài khoản...</span>
             </div>
           ) : (
@@ -1107,7 +1106,7 @@ export function AdminDashboard({
                                     <div className="font-bold text-slate-900">
                                       {u.full_name}
                                       {isSelf && (
-                                        <span className="ml-1.5 rounded-md bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                        <span className="ml-1.5 rounded-md bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
                                           Bạn
                                         </span>
                                       )}
@@ -1122,7 +1121,7 @@ export function AdminDashboard({
                                     <ShieldCheck className="h-3 w-3" /> Quản trị viên
                                   </span>
                                 ) : u.role === 'teacher' ? (
-                                  <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-indigo-700 font-semibold">
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-blue-700 font-semibold">
                                     <Presentation className="h-3 w-3" /> Giáo viên
                                   </span>
                                 ) : (
@@ -1151,7 +1150,7 @@ export function AdminDashboard({
                                   <div className="text-slate-600">
                                     GV:{' '}
                                     {assignedTeacher ? (
-                                      <strong className="text-indigo-700">{assignedTeacher.full_name}</strong>
+                                      <strong className="text-blue-700">{assignedTeacher.full_name}</strong>
                                     ) : (
                                       <span className="text-amber-700 font-medium">Chưa gán lớp</span>
                                     )}
@@ -1232,7 +1231,7 @@ export function AdminDashboard({
                               <div className="truncate text-sm font-bold text-slate-900">
                                 {u.full_name}
                                 {isSelf && (
-                                  <span className="ml-1.5 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                  <span className="ml-1.5 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
                                     Bạn
                                   </span>
                                 )}
@@ -1262,7 +1261,7 @@ export function AdminDashboard({
                           {u.role === 'student' && (
                             <span className="text-slate-600">
                               GV:{' '}
-                              <strong className={assignedTeacher ? 'text-indigo-700' : 'text-amber-700'}>
+                              <strong className={assignedTeacher ? 'text-blue-700' : 'text-amber-700'}>
                                 {assignedTeacher?.full_name || 'Chưa gán lớp'}
                               </strong>
                             </span>
@@ -1334,7 +1333,7 @@ export function AdminDashboard({
               <button
                 type="button"
                 onClick={() => onNavigate('assessments')}
-                className="inline-flex items-center gap-1.5 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition"
+                className="inline-flex items-center gap-1.5 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
               >
                 <ClipboardCheck className="h-4 w-4" />
                 Quản lý Hội thoại 1-1 →
@@ -1357,7 +1356,7 @@ export function AdminDashboard({
                     value={setSearch}
                     onChange={(e) => setSetSearch(e.target.value)}
                     placeholder="Tìm tên bộ đề, giáo viên..."
-                    className="rounded-xl border border-slate-200 bg-slate-50/80 py-2 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                    className="rounded-xl border border-slate-200 bg-slate-50/80 py-2 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
                   />
                 </div>
                 <select
@@ -1366,7 +1365,7 @@ export function AdminDashboard({
                     setSetPublishFilter(e.target.value);
                     setSetsPage(1);
                   }}
-                  className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                  className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
                 >
                   <option value="">Tất cả trạng thái</option>
                   <option value="published">Đang mở</option>
@@ -1377,7 +1376,7 @@ export function AdminDashboard({
 
             {setsLoading && setsData.items.length === 0 ? (
               <div className="flex justify-center py-8 text-slate-500">
-                <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
               </div>
             ) : (
               <>
@@ -1542,7 +1541,7 @@ export function AdminDashboard({
                     value={sessionSearch}
                     onChange={(e) => setSessionSearch(e.target.value)}
                     placeholder="Tìm học viên, tên bộ đề..."
-                    className="rounded-xl border border-slate-200 bg-slate-50/80 py-2 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                    className="rounded-xl border border-slate-200 bg-slate-50/80 py-2 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
                   />
                 </div>
                 <select
@@ -1551,7 +1550,7 @@ export function AdminDashboard({
                     setSessionModeFilter(e.target.value);
                     setSessionsPage(1);
                   }}
-                  className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                  className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
                 >
                   <option value="">Tất cả chế độ</option>
                   <option value="practice">Chỉ Luyện tập</option>
@@ -1562,7 +1561,7 @@ export function AdminDashboard({
 
             {sessionsLoading && sessionsData.items.length === 0 ? (
               <div className="flex justify-center py-8 text-slate-500">
-                <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
               </div>
             ) : (
               <>
@@ -1594,8 +1593,8 @@ export function AdminDashboard({
                               <span
                                 className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
                                   s.mode === 'exam'
-                                    ? 'border border-violet-200 bg-violet-50 text-violet-700'
-                                    : 'border border-sky-200 bg-sky-50 text-sky-700'
+                                    ? 'border border-amber-200 bg-amber-50 text-amber-800'
+                                    : 'border border-blue-200 bg-blue-50 text-blue-700'
                                 }`}
                               >
                                 {s.mode === 'exam' ? 'Thi thử' : 'Luyện tập'}
@@ -1680,8 +1679,8 @@ export function AdminDashboard({
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                                   s.mode === 'exam'
-                                    ? 'border border-violet-200 bg-violet-50 text-violet-700'
-                                    : 'border border-sky-200 bg-sky-50 text-sky-700'
+                                    ? 'border border-amber-200 bg-amber-50 text-amber-800'
+                                    : 'border border-blue-200 bg-blue-50 text-blue-700'
                                 }`}
                               >
                                 {s.mode === 'exam' ? 'Thi thử' : 'Luyện tập'}
@@ -1747,14 +1746,14 @@ export function AdminDashboard({
             pill={<span>{assessmentsData.total} buổi chấm khớp lọc</span>}
             action={
               (overviewStats?.draftAssessmentCount || 0) > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setCleanupDraftsOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800 shadow-sm hover:bg-amber-100 transition"
-                >
-                  <Sparkles className="h-4 w-4 text-amber-600" />
-                  Dọn {overviewStats?.draftAssessmentCount} bản nháp
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setCleanupDraftsOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors duration-150"
+                  >
+                    <Trash2 className="size-3.5 text-amber-700" />
+                    Dọn {overviewStats?.draftAssessmentCount} bản nháp
+                  </button>
               ) : undefined
             }
           />
@@ -1786,11 +1785,11 @@ export function AdminDashboard({
             </div>
 
             <div className="section-card card-interactive flex items-center gap-3.5 !p-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
                 <ClipboardCheck className="h-5 w-5" />
               </div>
               <div>
-                <div className="text-2xl font-extrabold text-indigo-600 tabular-nums">
+                <div className="text-2xl font-extrabold text-blue-600 tabular-nums">
                   {overviewStats?.avgAssessmentScore ?? '0.0'}
                 </div>
                 <div className="text-xs font-medium text-slate-500">Điểm TB Hội thoại 1-1</div>
@@ -1819,7 +1818,7 @@ export function AdminDashboard({
                 value={assessSearch}
                 onChange={(e) => setAssessSearch(e.target.value)}
                 placeholder="Tìm học viên, giáo viên, tiêu đề..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
               />
             </div>
 
@@ -1829,7 +1828,7 @@ export function AdminDashboard({
                 setAssessTeacherFilter(e.target.value);
                 setAssessPage(1);
               }}
-              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
             >
               <option value="">Tất cả giáo viên</option>
               {teacherDirectory
@@ -1847,7 +1846,7 @@ export function AdminDashboard({
                 setAssessSavedFilter(e.target.value as '' | 'saved' | 'draft');
                 setAssessPage(1);
               }}
-              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
             >
               <option value="">Mọi trạng thái</option>
               <option value="saved">Đã công bố (Đã lưu)</option>
@@ -1862,7 +1861,7 @@ export function AdminDashboard({
                 );
                 setAssessPage(1);
               }}
-              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
             >
               <option value="">Mọi mức điểm</option>
               <option value="excellent">Xuất sắc (≥ 8.0)</option>
@@ -1874,7 +1873,7 @@ export function AdminDashboard({
 
           {assessmentsLoading && assessmentsData.items.length === 0 ? (
             <div className="section-card flex items-center justify-center py-12 text-slate-500">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin text-indigo-600" />
+              <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-600" />
               <span className="text-sm">Đang tải danh sách buổi chấm hội thoại 1-1...</span>
             </div>
           ) : (
@@ -1978,7 +1977,7 @@ export function AdminDashboard({
                                   <button
                                     type="button"
                                     onClick={() => handleOpenEditAssessment(a)}
-                                    className="inline-flex items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100"
+                                    className="inline-flex items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
                                   >
                                     <Pencil className="h-3 w-3" />
                                     Sửa
@@ -2033,7 +2032,7 @@ export function AdminDashboard({
                         </span>
                         <span>·</span>
                         <span>
-                          GV: <strong className="text-indigo-700">{a.teacher?.full_name || 'N/A'}</strong>
+                          GV: <strong className="text-blue-700">{a.teacher?.full_name || 'N/A'}</strong>
                         </span>
                         {a.saved ? (
                           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
@@ -2063,7 +2062,7 @@ export function AdminDashboard({
                         <button
                           type="button"
                           onClick={() => handleOpenEditAssessment(a)}
-                          className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 py-2 text-xs font-semibold text-indigo-700"
+                          className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl border border-blue-200 bg-blue-50 py-2 text-xs font-semibold text-blue-700"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                           Sửa
@@ -2098,7 +2097,7 @@ export function AdminDashboard({
       {activeTab === 'classroom' &&
         (classroomLoading && classroomTeachers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-            <Loader2 className="mb-3 h-8 w-8 animate-spin text-indigo-600" />
+            <Loader2 className="mb-3 h-8 w-8 animate-spin text-blue-600" />
             <p className="text-sm">Đang tải danh sách mẫu giọng giáo viên...</p>
           </div>
         ) : (
@@ -2129,7 +2128,7 @@ export function AdminDashboard({
               value={gpuUrlDraft}
               onChange={(e) => setGpuUrlDraft(e.target.value)}
               placeholder="https://..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
             />
           </div>
 
@@ -2144,7 +2143,7 @@ export function AdminDashboard({
             <button
               type="submit"
               disabled={savingGpuUrl}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
             >
               {savingGpuUrl && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Lưu &amp; Kiểm tra
@@ -2160,7 +2159,7 @@ export function AdminDashboard({
         maxWidthClass="max-w-lg"
         title={
           <span className="flex items-center gap-2">
-            <Pencil className="h-5 w-5 text-indigo-600" />
+            <Pencil className="h-5 w-5 text-blue-600" />
             Cập nhật Tài khoản &amp; Phân lớp
           </span>
         }
@@ -2228,7 +2227,7 @@ export function AdminDashboard({
             <button
               type="submit"
               disabled={savingUser}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
             >
               {savingUser && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Lưu thay đổi
@@ -2352,7 +2351,7 @@ export function AdminDashboard({
         maxWidthClass="max-w-lg"
         title={
           <span className="flex items-center gap-2">
-            <Pencil className="h-5 w-5 text-indigo-600" />
+            <Pencil className="h-5 w-5 text-blue-600" />
             Chỉnh sửa Buổi chấm Hội thoại 1-1
           </span>
         }
@@ -2374,7 +2373,7 @@ export function AdminDashboard({
               value={editAssessTitle}
               onChange={(e) => setEditAssessTitle(e.target.value)}
               placeholder="Ví dụ: Hội thoại 1-1 · Tuần 4..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
             />
           </div>
 
@@ -2385,7 +2384,7 @@ export function AdminDashboard({
             <select
               value={editAssessSaved ? 'saved' : 'draft'}
               onChange={(e) => setEditAssessSaved(e.target.value === 'saved')}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
             >
               <option value="saved">Đã công bố (Hiển thị với Giáo viên &amp; Học viên)</option>
               <option value="draft">Bản nháp (Tạm ẩn khỏi Học viên)</option>
@@ -2401,7 +2400,7 @@ export function AdminDashboard({
               value={editAssessNote}
               onChange={(e) => setEditAssessNote(e.target.value)}
               placeholder="Nhập ghi chú bổ sung cho buổi đánh giá..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
             />
           </div>
 
@@ -2416,7 +2415,7 @@ export function AdminDashboard({
             <button
               type="submit"
               disabled={savingAssess}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
             >
               {savingAssess && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Lưu cập nhật

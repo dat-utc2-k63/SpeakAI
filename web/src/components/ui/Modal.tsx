@@ -63,7 +63,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[1050] flex items-end sm:items-center justify-center bg-slate-900/40 p-0 sm:p-6 backdrop-blur-[6px] animate-fadein"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-6"
       onMouseDown={(e) => {
         if (closeOnBackdrop && onClose && e.target === e.currentTarget) {
           onClose();
@@ -73,19 +73,19 @@ export function Modal({
       aria-modal="true"
     >
       <div
-        className={`glass-modal animate-sheet-in flex max-h-[92vh] sm:max-h-[88vh] w-full flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl text-slate-900 ${maxWidthClass}`}
+        className={`flex max-h-[92dvh] sm:max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl sm:rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl ${maxWidthClass}`}
       >
-        <div className="mx-auto mt-2.5 h-1.5 w-11 shrink-0 rounded-full bg-slate-300/80 sm:hidden" />
+        <div className="mx-auto mt-2.5 h-1.5 w-11 shrink-0 rounded-full bg-slate-300 sm:hidden" />
 
         {(title || !hideCloseButton) && (
-          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 bg-white/80 px-5 sm:px-6 py-4">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 sm:px-6 py-4">
             <div className="min-w-0 flex-1">
               {title && (
-                <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                <h3 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug text-balance">
                   {title}
                 </h3>
               )}
-              {subtitle && <div className="mt-0.5 text-xs text-slate-500">{subtitle}</div>}
+              {subtitle && <div className="mt-0.5 text-xs text-slate-500 text-pretty">{subtitle}</div>}
             </div>
             {!hideCloseButton && onClose && (
               <button

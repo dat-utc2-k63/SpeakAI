@@ -30,7 +30,7 @@ export default function RootLayout({
   return (
     <html lang="vi" className={inter.variable} suppressHydrationWarning>
       <body
-        className="min-h-screen bg-[#F8FAFC] text-slate-900 antialiased selection:bg-indigo-100 selection:text-indigo-900"
+        className="min-h-dvh bg-slate-50 text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-900"
         suppressHydrationWarning
       >
         <ToastProvider>{children}</ToastProvider>

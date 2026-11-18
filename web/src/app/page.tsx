@@ -13,7 +13,6 @@ import {
   Mic,
   Presentation,
   ShieldAlert,
-  Sparkles,
   UserPlus,
 } from 'lucide-react';
 import { APP_CONFIG, isSupabaseConfigured, supabase } from '@/lib/supabase';
@@ -229,102 +228,96 @@ export default function AuthLandingPage() {
 
   if (checkingSession) {
     return (
-      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#F8FAFC] px-4">
-        <div className="bg-blob bg-blob-1" />
-        <div className="bg-blob bg-blob-2" />
-        <div className="bg-blob bg-blob-3" />
-        <div className="glass-card relative z-10 flex flex-col items-center gap-3 p-8 text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-          <p className="text-sm font-medium text-slate-600">Đang kiểm tra phiên đăng nhập...</p>
+      <div className="flex min-h-dvh items-center justify-center bg-slate-50 px-4">
+        <div className="surface-card flex flex-col items-center gap-3 p-8 text-center">
+          <Loader2 className="size-7 animate-spin text-blue-600" />
+          <p className="text-sm font-medium text-slate-600 text-pretty">Đang kiểm tra phiên đăng nhập...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#F8FAFC] px-4 py-8 sm:py-12">
-      <div className="bg-blob bg-blob-1" />
-      <div className="bg-blob bg-blob-2" />
-      <div className="bg-blob bg-blob-3" />
-
-      <div className="relative z-10 w-full max-w-6xl grid items-center gap-8 lg:grid-cols-12">
-        {/* Left Hero Branding + Live Voice Studio Preview */}
-        <div className="lg:col-span-6 space-y-6 text-center lg:text-left animate-slidein">
-          <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white/90 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-indigo-700 shadow-sm">
-            <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
-            Luyện nói Tiếng Anh với AI
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-slate-50 px-4 py-10 sm:py-14">
+      <div className="w-full max-w-6xl grid items-center gap-10 lg:grid-cols-12">
+        {/* Left Editorial Column */}
+        <div className="lg:col-span-6 space-y-6 text-center lg:text-left">
+          <div className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm">
+            <span className="size-1.5 rounded-full bg-blue-600" />
+            Hệ thống đánh giá IELTS / VSTEP / TOEIC Speaking
           </div>
 
-          <div className="flex items-center justify-center lg:justify-start gap-3.5">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-sky-500 shadow-lg shadow-indigo-500/25">
-              <Mic className="h-6 w-6 text-white" />
+          <div className="flex items-center justify-center lg:justify-start gap-3">
+            <div className="flex size-11 items-center justify-center rounded-xl bg-slate-900">
+              <Mic className="size-5 text-white" />
             </div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900">
-              Speak<span className="text-indigo-600">AI</span>
+            <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 text-balance">
+              Speak<span className="text-blue-600">AI</span>
             </h1>
           </div>
 
-          <p className="text-sm sm:text-base leading-relaxed text-slate-600 max-w-xl mx-auto lg:mx-0">
-            Nói, nghe phản hồi và lặp lại mỗi ngày. Hỗ trợ luyện thi{' '}
-            <strong className="text-slate-900">TOEIC / VSTEP / IELTS</strong>, chấm hội thoại 1-1 tự động nhận diện giọng nói và phân tích tiết dạy EN / VI.
+          <p className="text-sm sm:text-base leading-relaxed text-slate-600 max-w-xl mx-auto lg:mx-0 text-pretty">
+            Luyện nói, nhận chấm điểm chi tiết theo 4 tiêu chí IELTS Speaking (P · FC · LR · GRA)
+            và quản lý lớp học tập trung. Hỗ trợ{' '}
+            <strong className="font-semibold text-slate-900">TOEIC / VSTEP / IELTS</strong>, chấm hội thoại 1-1 tự động tách giọng và phân tích tiết dạy EN / VI.
           </p>
 
-          {/* Compact Visual Voice Preview Card matching reference aesthetic */}
-          <div className="hidden sm:grid sm:grid-cols-12 gap-4 rounded-3xl border border-slate-200/90 bg-white/90 p-5 shadow-[0_14px_40px_-14px_rgba(15,23,42,0.08)] backdrop-blur-md text-left">
-            <div className="sm:col-span-7 flex flex-col items-center justify-center gap-3 rounded-2xl bg-slate-50/80 p-4 border border-slate-100">
+          {/* Compact Voice Preview Card */}
+          <div className="hidden sm:grid sm:grid-cols-12 gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm text-left">
+            <div className="sm:col-span-7 flex flex-col items-center justify-center gap-3 rounded-lg bg-slate-50 p-4 border border-slate-200">
               <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500 text-sm font-extrabold text-white shadow-lg shadow-fuchsia-500/25">
+                <div className="flex size-12 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
                   REC
                 </div>
-                <LiveAudioVisualizer active={false} mode="ready" barCount={9} height={48} />
+                <LiveAudioVisualizer active={false} mode="ready" barCount={9} height={44} />
               </div>
-              <div className="w-full rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-center text-xs font-medium text-indigo-700">
-                Đang lắng nghe câu trả lời...
+              <div className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-center text-xs font-medium text-slate-600">
+                Sẵn sàng ghi âm &amp; chấm phát âm theo từng từ
               </div>
             </div>
 
-            <div className="sm:col-span-5 flex flex-col items-center justify-center rounded-2xl bg-slate-50/80 p-4 border border-slate-100">
-              <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Phát âm
+            <div className="sm:col-span-5 flex flex-col items-center justify-center rounded-lg bg-slate-50 p-4 border border-slate-200">
+              <div className="mb-1 text-xs font-semibold text-slate-500">
+                IELTS Band
               </div>
               <ScoreRingGauge score={8.0} max={9} size={96} strokeWidth={10} />
-              <span className="mt-2 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
-                Rất tự nhiên
+              <span className="mt-2 rounded-md bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                Very Good User
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2.5 text-left text-xs sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-3.5 shadow-sm">
-              <div className="font-bold text-indigo-700">Học viên</div>
-              <div className="mt-0.5 text-slate-500">
-                Ghi âm trực tiếp, chấm phát âm &amp; gợi ý sửa ngữ pháp.
+          <div className="grid grid-cols-1 gap-3 text-left text-xs sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+              <div className="font-semibold text-slate-900">Học viên</div>
+              <div className="mt-1 text-slate-500 text-pretty">
+                Ghi âm trực tiếp, chấm phát âm IPA &amp; gợi ý sửa ngữ pháp.
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-3.5 shadow-sm">
-              <div className="font-bold text-sky-700">Giáo viên</div>
-              <div className="mt-0.5 text-slate-500">
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+              <div className="font-semibold text-slate-900">Giáo viên</div>
+              <div className="mt-1 text-slate-500 text-pretty">
                 Chấm hội thoại 1-1, duyệt bài và phân tích tiết dạy EN/VI.
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-3.5 shadow-sm">
-              <div className="font-bold text-emerald-700">Quản trị</div>
-              <div className="mt-0.5 text-slate-500">
-                Duyệt giáo viên, phân lớp học viên &amp; theo dõi hoạt động.
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+              <div className="font-semibold text-slate-900">Quản trị</div>
+              <div className="mt-1 text-slate-500 text-pretty">
+                Duyệt giáo viên, phân lớp học viên &amp; theo dõi tiến độ.
               </div>
             </div>
           </div>
         </div>
 
         {/* Right Auth Card */}
-        <div className="lg:col-span-6 animate-slidein">
-          <div className="glass-card p-6 sm:p-8">
+        <div className="lg:col-span-6">
+          <div className="surface-card p-6 sm:p-8 shadow-sm">
             {!isSupabaseConfigured && (
-              <div className="mb-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-800">
-                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <div className="mb-5 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-800">
+                <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-600" />
                 <div>
-                  <div className="font-bold text-amber-900">Hệ thống đang bảo trì kết nối</div>
-                  <p className="mt-1 leading-relaxed">
+                  <div className="font-semibold text-amber-900">Hệ thống đang bảo trì kết nối</div>
+                  <p className="mt-1 leading-relaxed text-pretty">
                     Kết nối dữ liệu hiện đang tạm gián đoạn. Vui lòng quay lại sau ít phút.
                   </p>
                 </div>
@@ -332,7 +325,7 @@ export default function AuthLandingPage() {
             )}
 
             {/* Tabs */}
-            <div className="mb-6 grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-200/80 bg-slate-100/90 p-1">
+            <div className="mb-6 grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1">
               <button
                 type="button"
                 onClick={() => {
@@ -340,9 +333,9 @@ export default function AuthLandingPage() {
                   setPendingNotice(null);
                   setRegError(null);
                 }}
-                className={`rounded-xl py-2.5 text-sm font-semibold transition ${
+                className={`rounded-md py-2 text-sm font-semibold transition-colors duration-150 ${
                   activeTab === 'login'
-                    ? 'bg-white text-indigo-700 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
@@ -354,9 +347,9 @@ export default function AuthLandingPage() {
                   setActiveTab('register');
                   setLoginError(null);
                 }}
-                className={`rounded-xl py-2.5 text-sm font-semibold transition ${
+                className={`rounded-md py-2 text-sm font-semibold transition-colors duration-150 ${
                   activeTab === 'register'
-                    ? 'bg-white text-indigo-700 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
@@ -376,7 +369,7 @@ export default function AuthLandingPage() {
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="name@example.com"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/15 transition"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/15 transition-colors duration-150"
                   />
                 </div>
 
@@ -391,7 +384,7 @@ export default function AuthLandingPage() {
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       placeholder="Nhập mật khẩu"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-2.5 pr-11 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/15 transition"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 pr-11 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/15 transition-colors duration-150"
                     />
                     <button
                       type="button"
@@ -399,14 +392,14 @@ export default function AuthLandingPage() {
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
                       aria-label="Hiện/ẩn mật khẩu"
                     >
-                      {showLoginPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showLoginPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
                   </div>
                 </div>
 
                 {loginError && (
-                  <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+                  <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-rose-600" />
                     <span>{loginError}</span>
                   </div>
                 )}
@@ -414,35 +407,35 @@ export default function AuthLandingPage() {
                 <button
                   type="submit"
                   disabled={loginLoading || !isSupabaseConfigured}
-                  className="btn-glow flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 hover:from-indigo-500 hover:to-violet-500 disabled:cursor-not-allowed disabled:opacity-50 transition"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-150"
                 >
                   {loginLoading ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="size-4 animate-spin" />
                       Đang đăng nhập...
                     </>
                   ) : (
                     <>
                       <span>Đăng nhập hệ thống</span>
-                      <ArrowRight className="h-4 w-4" />
+                      <ArrowRight className="size-4" />
                     </>
                   )}
                 </button>
               </form>
             ) : pendingNotice ? (
-              <div className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-5 text-center">
-                <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
-                <h3 className="text-base font-bold text-slate-900">Hoàn tất bước đăng ký</h3>
-                <p className="text-sm text-slate-700">{pendingNotice.message}</p>
+              <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center">
+                <CheckCircle2 className="mx-auto size-9 text-emerald-600" />
+                <h3 className="text-base font-bold text-slate-900 text-balance">Hoàn tất bước đăng ký</h3>
+                <p className="text-sm text-slate-700 text-pretty">{pendingNotice.message}</p>
                 <div className="flex flex-wrap justify-center gap-3 pt-2">
                   {pendingNotice.kind === 'teacher_pending' && (
                     <button
                       type="button"
                       onClick={() => router.replace('/dashboard')}
-                      className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 transition"
+                      className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors duration-150"
                     >
                       Kiểm tra trạng thái duyệt
-                      <ArrowRight className="h-3.5 w-3.5" />
+                      <ArrowRight className="size-3.5" />
                     </button>
                   )}
                   <button
@@ -451,7 +444,7 @@ export default function AuthLandingPage() {
                       setPendingNotice(null);
                       setActiveTab('login');
                     }}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors duration-150"
                   >
                     Về màn hình Đăng nhập
                   </button>
@@ -467,19 +460,19 @@ export default function AuthLandingPage() {
                     <button
                       type="button"
                       onClick={() => setRegRole('student')}
-                      className={`flex items-center gap-2.5 rounded-2xl border p-3 text-left transition ${
+                      className={`flex items-center gap-2.5 rounded-lg border p-3 text-left transition-colors duration-150 ${
                         regRole === 'student'
-                          ? 'border-indigo-500 bg-indigo-50 text-indigo-950 shadow-sm'
-                          : 'border-slate-200 bg-slate-50/70 text-slate-600 hover:border-slate-300'
+                          ? 'border-blue-600 bg-blue-50 text-slate-900'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                       }`}
                     >
                       <GraduationCap
-                        className={`h-5 w-5 shrink-0 ${
-                          regRole === 'student' ? 'text-indigo-600' : 'text-sky-600'
+                        className={`size-5 shrink-0 ${
+                          regRole === 'student' ? 'text-blue-600' : 'text-slate-400'
                         }`}
                       />
                       <div>
-                        <div className="text-sm font-bold">Học viên</div>
+                        <div className="text-sm font-semibold">Học viên</div>
                         <div className="text-[11px] text-slate-500">Luyện tập &amp; thi thử</div>
                       </div>
                     </button>
@@ -487,19 +480,19 @@ export default function AuthLandingPage() {
                     <button
                       type="button"
                       onClick={() => setRegRole('teacher')}
-                      className={`flex items-center gap-2.5 rounded-2xl border p-3 text-left transition ${
+                      className={`flex items-center gap-2.5 rounded-lg border p-3 text-left transition-colors duration-150 ${
                         regRole === 'teacher'
-                          ? 'border-indigo-500 bg-indigo-50 text-indigo-950 shadow-sm'
-                          : 'border-slate-200 bg-slate-50/70 text-slate-600 hover:border-slate-300'
+                          ? 'border-blue-600 bg-blue-50 text-slate-900'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                       }`}
                     >
                       <Presentation
-                        className={`h-5 w-5 shrink-0 ${
-                          regRole === 'teacher' ? 'text-indigo-600' : 'text-indigo-500'
+                        className={`size-5 shrink-0 ${
+                          regRole === 'teacher' ? 'text-blue-600' : 'text-slate-400'
                         }`}
                       />
                       <div>
-                        <div className="text-sm font-bold">Giáo viên</div>
+                        <div className="text-sm font-semibold">Giáo viên</div>
                         <div className="text-[11px] text-slate-500">Cần duyệt trước khi dạy</div>
                       </div>
                     </button>
@@ -509,7 +502,7 @@ export default function AuthLandingPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-700">
-                      Họ và tên <span className="text-rose-500">*</span>
+                      Họ và tên <span className="text-rose-600">*</span>
                     </label>
                     <input
                       type="text"
@@ -517,7 +510,7 @@ export default function AuthLandingPage() {
                       value={regName}
                       onChange={(e) => setRegName(e.target.value)}
                       placeholder="Nguyễn Văn A"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-600 focus:outline-none"
                     />
                   </div>
                   <div>
@@ -529,7 +522,7 @@ export default function AuthLandingPage() {
                       value={regPhone}
                       onChange={(e) => setRegPhone(e.target.value)}
                       placeholder="0901234567"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-600 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -537,7 +530,7 @@ export default function AuthLandingPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-700">
-                      Email <span className="text-rose-500">*</span>
+                      Email <span className="text-rose-600">*</span>
                     </label>
                     <input
                       type="email"
@@ -545,12 +538,12 @@ export default function AuthLandingPage() {
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
                       placeholder="name@example.com"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-600 focus:outline-none"
                     />
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-700">
-                      Mật khẩu (tối thiểu 6 ký tự) <span className="text-rose-500">*</span>
+                      Mật khẩu (tối thiểu 6 ký tự) <span className="text-rose-600">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -560,14 +553,15 @@ export default function AuthLandingPage() {
                         value={regPassword}
                         onChange={(e) => setRegPassword(e.target.value)}
                         placeholder="••••••"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 pr-10 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 pr-10 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-600 focus:outline-none"
                       />
                       <button
                         type="button"
                         onClick={() => setShowRegPw((v) => !v)}
+                        aria-label="Hiện/ẩn mật khẩu đăng ký"
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
                       >
-                        {showRegPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showRegPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                       </button>
                     </div>
                   </div>
@@ -576,14 +570,14 @@ export default function AuthLandingPage() {
                 {regRole === 'student' ? (
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-700">
-                      Chọn Giáo viên phụ trách lớp <span className="text-rose-500">*</span>
+                      Chọn Giáo viên phụ trách lớp <span className="text-rose-600">*</span>
                     </label>
                     <select
                       required
                       value={regTeacherId}
                       onChange={(e) => setRegTeacherId(e.target.value)}
                       disabled={loadingTeachers}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none disabled:opacity-60"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:border-blue-600 focus:outline-none disabled:opacity-60"
                     >
                       <option value="">
                         {loadingTeachers
@@ -600,14 +594,14 @@ export default function AuthLandingPage() {
                     </select>
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-800">
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 text-pretty">
                     Tài khoản Giáo viên sau khi đăng ký sẽ ở trạng thái <strong>Chờ duyệt</strong>. Quản trị viên sẽ kích hoạt tài khoản cho bạn.
                   </div>
                 )}
 
                 {regError && (
-                  <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+                  <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-rose-600" />
                     <span>{regError}</span>
                   </div>
                 )}
@@ -615,16 +609,16 @@ export default function AuthLandingPage() {
                 <button
                   type="submit"
                   disabled={regLoading || !isSupabaseConfigured}
-                  className="btn-glow flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 hover:from-indigo-500 hover:to-violet-500 disabled:cursor-not-allowed disabled:opacity-50 transition"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-150"
                 >
                   {regLoading ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="size-4 animate-spin" />
                       Đang khởi tạo tài khoản...
                     </>
                   ) : (
                     <>
-                      <UserPlus className="h-4 w-4" />
+                      <UserPlus className="size-4" />
                       {regRole === 'student'
                         ? 'Đăng ký & Tiếp tục tạo mẫu giọng'
                         : 'Gửi đăng ký Giáo viên'}

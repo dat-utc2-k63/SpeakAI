@@ -269,7 +269,7 @@ export function ClassroomAnalysisView({
       <div className="section-card space-y-5">
         <div className="grid gap-5 lg:grid-cols-12 items-start">
           <div className="lg:col-span-8">
-            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600">
+            <label className="mb-2 block text-xs font-semibold uppercase text-slate-600">
               Chọn file ghi âm tiết dạy
             </label>
             <div
@@ -293,7 +293,7 @@ export function ClassroomAnalysisView({
                 className="hidden"
                 onChange={(e) => handleSelectFile(e.target.files?.[0])}
               />
-              <CloudUpload className="mx-auto mb-2 h-9 w-9 text-indigo-600" />
+              <CloudUpload className="mx-auto mb-2 h-9 w-9 text-blue-600" />
               <p className="text-sm font-bold text-slate-900">
                 Kéo thả hoặc nhấn chọn file âm thanh buổi học
               </p>
@@ -328,7 +328,7 @@ export function ClassroomAnalysisView({
           <div className="lg:col-span-4 space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-slate-50/75 p-4 space-y-2 text-xs text-slate-600">
               <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                <Languages className="h-4 w-4 text-indigo-600" />
+                <Languages className="h-4 w-4 text-blue-600" />
                 Quy trình xử lý trực tiếp
               </div>
               <ol className="list-decimal pl-4 space-y-1">
@@ -343,7 +343,7 @@ export function ClassroomAnalysisView({
               type="button"
               disabled={!canRun}
               onClick={handleRunAnalysis}
-              className="btn-glow inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-45 transition"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45 transition-colors duration-150"
             >
               {running ? (
                 <>
@@ -362,8 +362,8 @@ export function ClassroomAnalysisView({
       </div>
 
       {running && (
-        <div className="section-card flex items-center gap-4 border-indigo-200 bg-indigo-50/75">
-          <Loader2 className="h-6 w-6 shrink-0 animate-spin text-indigo-600" />
+        <div className="section-card flex items-center gap-4 border-blue-200 bg-blue-50/75">
+          <Loader2 className="h-6 w-6 shrink-0 animate-spin text-blue-600" />
           <div>
             <div className="text-sm font-bold text-slate-900">Đang phân tích bản ghi âm tiết dạy...</div>
             <div className="text-xs text-slate-600">{loadingStep}</div>
@@ -372,12 +372,12 @@ export function ClassroomAnalysisView({
       )}
 
       {result && (
-        <div className="space-y-6 animate-slidein">
+        <div className="space-y-6">
           <div className="section-card space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
               <div>
-                <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                  <BarChart3 className="h-5 w-5 text-indigo-600" />
+                <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                  <BarChart3 className="size-5 text-blue-600" />
                   Kết quả Language Timeline Tiết học
                 </h3>
                 <p className="text-xs text-slate-500">
@@ -390,49 +390,49 @@ export function ClassroomAnalysisView({
               <button
                 type="button"
                 onClick={handleExportCsv}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors duration-150"
               >
-                <FileSpreadsheet className="h-4 w-4" />
+                <FileSpreadsheet className="size-4" />
                 Tải báo cáo Excel (.csv)
               </button>
             </div>
 
-            {/* Big Hero Ratio Banner: EN: XX% | VI: YY% */}
-            <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-sky-50/80 via-white to-amber-50/80 p-5 space-y-3">
+            {/* Hero Ratio Summary: EN % | VI % */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-sky-700">Tiếng Anh (EN)</span>
-                  <span className="text-2xl font-extrabold text-sky-600 tabular-nums">
+                  <span className="text-xs font-semibold uppercase text-blue-700">Tiếng Anh (EN)</span>
+                  <span className="text-2xl font-bold text-blue-600 tabular-nums">
                     {enPct.toFixed(1)}%
                   </span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-slate-500 tabular-nums">
                     ({enWords} từ · {formatDurationReadable(enSec)})
                   </span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-amber-700">Tiếng Việt (VI)</span>
-                  <span className="text-2xl font-extrabold text-amber-600 tabular-nums">
+                  <span className="text-xs font-semibold uppercase text-amber-700">Tiếng Việt (VI)</span>
+                  <span className="text-2xl font-bold text-amber-600 tabular-nums">
                     {viPct.toFixed(1)}%
                   </span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-slate-500 tabular-nums">
                     ({viWords} từ · {formatDurationReadable(viSec)})
                   </span>
                 </div>
               </div>
-              <div className="flex h-4 w-full overflow-hidden rounded-full bg-slate-200">
+              <div className="flex h-3.5 w-full overflow-hidden rounded-full bg-slate-200">
                 <div
-                  className="bg-sky-500 transition-all duration-500"
+                  className="bg-blue-600"
                   style={{ width: `${enPct}%` }}
                 />
                 <div
-                  className="bg-amber-400 transition-all duration-500"
+                  className="bg-amber-500"
                   style={{ width: `${viPct}%` }}
                 />
               </div>
               <div className="flex flex-wrap items-center justify-between text-xs text-slate-500">
-                <span>Tổng số từ nhận diện: <strong className="text-slate-800">{totalWords}</strong> từ ({timelineSegments.length} khối ngôn ngữ)</span>
-                <span>
-                  Theo thời lượng nói: <strong className="text-sky-700">EN {Number(result.overall?.en_time_percent ?? enPct).toFixed(1)}%</strong> ·{' '}
+                <span>Tổng số từ nhận diện: <strong className="text-slate-800 tabular-nums">{totalWords}</strong> từ ({timelineSegments.length} khối ngôn ngữ)</span>
+                <span className="tabular-nums">
+                  Theo thời lượng nói: <strong className="text-blue-700">EN {Number(result.overall?.en_time_percent ?? enPct).toFixed(1)}%</strong> ·{' '}
                   <strong className="text-amber-700">VI {Number(result.overall?.vi_time_percent ?? viPct).toFixed(1)}%</strong>
                 </span>
               </div>
@@ -440,8 +440,8 @@ export function ClassroomAnalysisView({
 
             {/* 2 Donut Charts + Duration Breakdown */}
             <div className="grid gap-4 lg:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/65 p-4 space-y-3">
-                <div className="text-xs font-bold uppercase tracking-wider text-sky-700">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                <div className="text-xs font-semibold uppercase text-slate-700">
                   Tỷ lệ EN / VI theo số từ
                 </div>
                 <RatioDonutChart
@@ -450,14 +450,14 @@ export function ClassroomAnalysisView({
                   centerValue={`${enPct.toFixed(0)}%`}
                   centerLabel="EN"
                   segments={[
-                    { label: 'Tiếng Anh (EN)', value: enWords, color: '#0EA5E9' },
+                    { label: 'Tiếng Anh (EN)', value: enWords, color: '#2563EB' },
                     { label: 'Tiếng Việt (VI)', value: viWords, color: '#F59E0B' },
                   ]}
                 />
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/65 p-4 space-y-3">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-700">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                <div className="text-xs font-semibold uppercase text-slate-700">
                   Phân bố thời lượng tiết học
                 </div>
                 <RatioDonutChart
@@ -466,20 +466,20 @@ export function ClassroomAnalysisView({
                   centerValue={`${Number(result.duration?.speech_ratio_percent || 0).toFixed(0)}%`}
                   centerLabel="Có lời"
                   segments={[
-                    { label: 'Nói Tiếng Anh', value: enSec, color: '#0EA5E9' },
+                    { label: 'Nói Tiếng Anh', value: enSec, color: '#2563EB' },
                     { label: 'Nói Tiếng Việt', value: viSec, color: '#F59E0B' },
                     { label: 'Khoảng lặng', value: Number(result.duration?.silence_sec || 0), color: '#CBD5E1' },
                   ]}
                 />
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/65 p-4 flex flex-col justify-between">
-                <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-600">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-col justify-between">
+                <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase text-slate-600">
                   <span className="flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5 text-indigo-600" />
+                    <Clock className="size-3.5 text-blue-600" />
                     Thời lượng ghi âm
                   </span>
-                  <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-indigo-700">
+                  <span className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700 tabular-nums">
                     {Number(result.duration?.speech_ratio_percent || 0).toFixed(1)}% nói
                   </span>
                 </div>
@@ -528,13 +528,13 @@ export function ClassroomAnalysisView({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Tìm nội dung..."
-                    className="rounded-xl border border-slate-200 bg-slate-50/80 py-2 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                    className="rounded-xl border border-slate-200 bg-slate-50/80 py-2 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
                   />
                 </div>
                 <select
                   value={langFilter}
                   onChange={(e) => setLangFilter(e.target.value)}
-                  className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                  className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
                 >
                   <option value="">Tất cả ngôn ngữ (EN &amp; VI)</option>
                   <option value="en">Chỉ Tiếng Anh (EN)</option>

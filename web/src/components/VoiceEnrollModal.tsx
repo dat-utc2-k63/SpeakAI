@@ -375,7 +375,7 @@ export function VoiceEnrollModal({
       maxWidthClass="max-w-2xl"
       title={
         <span className="flex items-center gap-2">
-          <Mic className="h-5 w-5 text-indigo-600" />
+          <Mic className="h-5 w-5 text-blue-600" />
           Đăng ký Mẫu Giọng Nói
         </span>
       }
@@ -406,7 +406,7 @@ export function VoiceEnrollModal({
             type="button"
             onClick={handleSave}
             disabled={!canSave || saving}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-45 transition"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45 transition-colors duration-150"
           >
             {saving ? (
               <>
@@ -445,7 +445,7 @@ export function VoiceEnrollModal({
           onClick={() => setActiveTab('record')}
           className={`flex-1 rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 ${
             activeTab === 'record'
-              ? 'bg-white text-indigo-700 shadow-sm'
+              ? 'bg-white text-blue-700 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
@@ -457,7 +457,7 @@ export function VoiceEnrollModal({
           onClick={() => setActiveTab('upload')}
           className={`flex-1 rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 ${
             activeTab === 'upload'
-              ? 'bg-white text-indigo-700 shadow-sm'
+              ? 'bg-white text-blue-700 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
@@ -481,12 +481,12 @@ export function VoiceEnrollModal({
                     : st?.error
                       ? 'border-rose-200 bg-rose-50/75'
                       : isRecThis
-                        ? 'border-indigo-300 bg-indigo-50/50 shadow-sm'
+                        ? 'border-blue-300 bg-blue-50/50 shadow-sm'
                         : 'border-slate-200 bg-slate-50/60'
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
                     {idx + 1}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -501,7 +501,7 @@ export function VoiceEnrollModal({
                             ? 'bg-rose-600 text-white recording-pulse'
                             : recorded
                               ? 'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                              : 'border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                              : 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
                         } disabled:opacity-50`}
                       >
                         {st?.processing ? (
@@ -585,7 +585,7 @@ export function VoiceEnrollModal({
               className="hidden"
               onChange={(e) => handleFilesSelected(e.target.files)}
             />
-            <CloudUpload className="mx-auto mb-2 h-10 w-10 text-indigo-500" />
+            <CloudUpload className="mx-auto mb-2 h-10 w-10 text-blue-500" />
             <p className="font-semibold text-slate-800">Kéo thả hoặc nhấn chọn file âm thanh</p>
             <p className="mt-1 text-xs text-slate-500">
               Hỗ trợ MP3, WAV, M4A, WEBM, OGG (&lt; 10MB). Có thể chọn nhiều file của cùng một người nói.
@@ -639,7 +639,7 @@ export function VoiceEnrollModal({
                     key={i}
                     className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-2.5"
                   >
-                    <FileAudio className="h-4 w-4 shrink-0 text-indigo-600" />
+                    <FileAudio className="h-4 w-4 shrink-0 text-blue-600" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-xs font-semibold text-slate-800">
                         {i + 1}. {item.file.name}

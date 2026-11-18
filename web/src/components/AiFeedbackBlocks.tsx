@@ -12,7 +12,6 @@ import {
   Lightbulb,
   MessageSquareQuote,
   Presentation,
-  Sparkles,
   Volume2,
   Waves,
 } from 'lucide-react';
@@ -82,13 +81,13 @@ export function ComprehensiveAiFeedback({ aiEval, otf, scores }: ComprehensiveAi
             </span>
           </div>
           {hasAi && !isFallback ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
-              <Sparkles className="h-3.5 w-3.5" />
-              Đánh giá AI
+            <span className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+              <CheckCircle2 className="size-3.5" />
+              Nhận xét chi tiết
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-medium text-slate-600">
-              <Cpu className="h-3.5 w-3.5" />
+            <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-medium text-slate-600">
+              <Cpu className="size-3.5" />
               Đánh giá tự động
             </span>
           )}
@@ -103,31 +102,31 @@ export function ComprehensiveAiFeedback({ aiEval, otf, scores }: ComprehensiveAi
       </div>
 
       <div>
-        <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+        <div className="mb-2 text-xs font-semibold uppercase text-slate-500">
           Chi tiết 4 tiêu chí IELTS Speaking (Band 1.0 – 9.0)
         </div>
         <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3 text-center">
-            <div className="text-xl font-extrabold text-emerald-600 tabular-nums">{prScore}</div>
-            <div className="mt-1 text-xs font-bold text-slate-900">Pronunciation (P)</div>
+          <div className="rounded-lg border border-slate-200 bg-white p-3 text-center">
+            <div className="text-xl font-bold text-emerald-700 tabular-nums">{prScore}</div>
+            <div className="mt-1 text-xs font-semibold text-slate-900">Pronunciation (P)</div>
             <div className="text-[11px] text-slate-500">Phát âm &amp; Ngữ điệu</div>
           </div>
 
-          <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-3 text-center">
-            <div className="text-xl font-extrabold text-sky-600 tabular-nums">{fcScore}</div>
-            <div className="mt-1 text-xs font-bold text-slate-900">Fluency &amp; Coherence (FC)</div>
+          <div className="rounded-lg border border-slate-200 bg-white p-3 text-center">
+            <div className="text-xl font-bold text-blue-600 tabular-nums">{fcScore}</div>
+            <div className="mt-1 text-xs font-semibold text-slate-900">Fluency &amp; Coherence (FC)</div>
             <div className="text-[11px] text-slate-500">Độ trôi chảy &amp; Mạch lạc</div>
           </div>
 
-          <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-3 text-center">
-            <div className="text-xl font-extrabold text-amber-600 tabular-nums">{lrScore}</div>
-            <div className="mt-1 text-xs font-bold text-slate-900">Lexical Resource (LR)</div>
+          <div className="rounded-lg border border-slate-200 bg-white p-3 text-center">
+            <div className="text-xl font-bold text-amber-700 tabular-nums">{lrScore}</div>
+            <div className="mt-1 text-xs font-semibold text-slate-900">Lexical Resource (LR)</div>
             <div className="text-[11px] text-slate-500">Từ vựng &amp; Diễn đạt</div>
           </div>
 
-          <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-3 text-center">
-            <div className="text-xl font-extrabold text-indigo-600 tabular-nums">{graScore}</div>
-            <div className="mt-1 text-xs font-bold text-slate-900">Grammatical Range (GRA)</div>
+          <div className="rounded-lg border border-slate-200 bg-white p-3 text-center">
+            <div className="text-xl font-bold text-slate-800 tabular-nums">{graScore}</div>
+            <div className="mt-1 text-xs font-semibold text-slate-900">Grammatical Range (GRA)</div>
             <div className="text-[11px] text-slate-500">Ngữ pháp &amp; Cấu trúc</div>
           </div>
         </div>
@@ -180,8 +179,8 @@ export function ComprehensiveAiFeedback({ aiEval, otf, scores }: ComprehensiveAi
 
       {otfTips.length > 0 && (
         <div className="clean-feedback-box">
-          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-800">
-            <Waves className="h-4 w-4" />
+          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase text-amber-800">
+            <Waves className="size-4" />
             Gợi ý cải thiện phát âm
           </div>
           <ul className="space-y-1 text-xs text-slate-700">
@@ -300,7 +299,7 @@ export function DialogueTimeline({ turns }: { turns: DialogueTurn[] }) {
         return (
           <div key={idx} className="flex items-start gap-2.5 sm:gap-3">
             {isTeacher && (
-              <div className="hidden sm:flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-indigo-200 bg-indigo-50 text-indigo-600">
+              <div className="hidden sm:flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-blue-200 bg-blue-50 text-blue-600">
                 <Presentation className="h-4 w-4" />
               </div>
             )}
@@ -314,7 +313,7 @@ export function DialogueTimeline({ turns }: { turns: DialogueTurn[] }) {
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                   {isTeacher ? (
                     <>
-                      <Presentation className="h-3.5 w-3.5 text-indigo-600" />
+                      <Presentation className="h-3.5 w-3.5 text-blue-600" />
                       <span>Giáo viên</span>
                     </>
                   ) : (
@@ -326,28 +325,28 @@ export function DialogueTimeline({ turns }: { turns: DialogueTurn[] }) {
                 </div>
 
                 {hasScores && sc ? (
-                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] tabular-nums">
                     <span
-                      className="rounded-full bg-gradient-to-r from-indigo-600 to-sky-500 px-2.5 py-0.5 font-bold text-white shadow-sm"
+                      className="rounded-md bg-slate-900 px-2.5 py-0.5 font-semibold text-white"
                       title="Điểm IELTS tổng của câu (Overall)"
                     >
                       Tổng: {Number(totalVal).toFixed(1)}
                     </span>
                     <span
-                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700"
+                      className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700"
                       title="Phát âm (Pronunciation - P)"
                     >
                       P: {Number(pVal ?? totalVal).toFixed(1)}
                     </span>
                     <span
-                      className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-0.5 font-semibold text-sky-700"
+                      className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 font-semibold text-blue-700"
                       title="Lưu loát & Mạch lạc (Fluency & Coherence - FC)"
                     >
                       FC: {Number(fcVal ?? totalVal).toFixed(1)}
                     </span>
                     {lrVal != null && (
                       <span
-                        className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700"
+                        className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700"
                         title="Vốn từ vựng (Lexical Resource - LR)"
                       >
                         LR: {Number(lrVal).toFixed(1)}
@@ -355,7 +354,7 @@ export function DialogueTimeline({ turns }: { turns: DialogueTurn[] }) {
                     )}
                     {graVal != null && (
                       <span
-                        className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-700"
+                        className="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 font-semibold text-slate-700"
                         title="Ngữ pháp & Cấu trúc (Grammar - GRA)"
                       >
                         GRA: {Number(graVal).toFixed(1)}
@@ -396,8 +395,8 @@ export function DialogueTimeline({ turns }: { turns: DialogueTurn[] }) {
 
               {feedbackItems.length > 0 && (
                 <div className="clean-feedback-box mt-2.5">
-                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-800">
-                    <Waves className="h-3.5 w-3.5" />
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-amber-800">
+                    <Waves className="size-3.5" />
                     Gợi ý sửa phát âm
                   </div>
                   <div className="space-y-1 text-xs text-slate-700">

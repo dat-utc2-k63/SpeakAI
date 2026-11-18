@@ -15,7 +15,6 @@ import {
   Play,
   RotateCcw,
   Search,
-  Sparkles,
   Timer,
   TrendingUp,
 } from 'lucide-react';
@@ -394,7 +393,7 @@ export function StudentDashboard({
   if (activeTab === 'overview' && overviewLoading && !overviewData) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-        <Loader2 className="mb-3 h-8 w-8 animate-spin text-indigo-600" />
+        <Loader2 className="mb-3 h-8 w-8 animate-spin text-blue-600" />
         <p className="text-sm">Đang tải không gian học tập...</p>
       </div>
     );
@@ -461,9 +460,9 @@ export function StudentDashboard({
               <button
                 type="button"
                 onClick={() => onNavigate('practice')}
-                className="btn-glow inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 transition"
+                className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors duration-150"
               >
-                <Mic className="h-4 w-4" />
+                <Mic className="size-4" />
                 Luyện Speaking Ngay
               </button>
             }
@@ -490,7 +489,7 @@ export function StudentDashboard({
           {/* 4 KPIs */}
           <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <div className="section-card card-interactive flex items-center gap-3.5 !p-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
                 <ClipboardCheck className="h-5 w-5" />
               </div>
               <div>
@@ -514,11 +513,11 @@ export function StudentDashboard({
             </div>
 
             <div className="section-card card-interactive flex items-center gap-3.5 !p-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-50 text-sky-600">
-                <Sparkles className="h-5 w-5" />
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                <Mic className="size-5" />
               </div>
               <div>
-                <div className="text-2xl font-extrabold text-sky-600 tabular-nums">
+                <div className="text-2xl font-bold text-blue-600 tabular-nums">
                   {stats.avgPR}
                 </div>
                 <div className="text-xs font-medium text-slate-500">Điểm Phát âm TB</div>
@@ -544,7 +543,7 @@ export function StudentDashboard({
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                    <TrendingUp className="h-4 w-4 text-indigo-600" />
+                    <TrendingUp className="h-4 w-4 text-blue-600" />
                     Xu hướng điểm số gần đây
                   </h3>
                   <p className="mt-0.5 text-xs text-slate-500">
@@ -558,7 +557,7 @@ export function StudentDashboard({
             <div className="section-card lg:col-span-5 flex flex-col justify-between space-y-3">
               <div>
                 <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                  <BarChart3 className="h-4 w-4 text-indigo-600" />
+                  <BarChart3 className="h-4 w-4 text-blue-600" />
                   Hồ sơ 4 kỹ năng Speaking
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
@@ -566,9 +565,9 @@ export function StudentDashboard({
                 </p>
               </div>
 
-              <div className="flex justify-center py-1">
+              <div className="flex justify-center py-2">
                 <SkillRadarChart
-                  size={232}
+                  size={255}
                   skills={[
                     { label: 'Pronunciation (P)', value: skillMetrics.acc },
                     { label: 'Fluency (FC)', value: skillMetrics.ctx },
@@ -611,7 +610,7 @@ export function StudentDashboard({
                 <button
                   type="button"
                   onClick={() => onNavigate('results')}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-500"
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-500"
                 >
                   Xem tất cả →
                 </button>
@@ -628,7 +627,7 @@ export function StudentDashboard({
                       key={s.id}
                       type="button"
                       onClick={() => setSelectedSessionId(s.id)}
-                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/75 p-3.5 text-left hover:border-indigo-300 hover:bg-white transition"
+                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/75 p-3.5 text-left hover:border-blue-300 hover:bg-white transition"
                     >
                       <div className="min-w-0">
                         <div className="truncate text-sm font-bold text-slate-900">
@@ -680,7 +679,7 @@ export function StudentDashboard({
                 value={setSearch}
                 onChange={(e) => setSetSearch(e.target.value)}
                 placeholder="Tìm bộ đề hoặc giáo viên..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
               />
             </div>
 
@@ -690,7 +689,7 @@ export function StudentDashboard({
                 setExamFilter(e.target.value);
                 setSetsPage(1);
               }}
-              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
             >
               <option value="">Tất cả định dạng</option>
               <option value="ielts">IELTS Speaking</option>
@@ -705,7 +704,7 @@ export function StudentDashboard({
                 setLevelFilter(e.target.value);
                 setSetsPage(1);
               }}
-              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
             >
               <option value="">Mọi trình độ</option>
               <option value="beginner">Cơ bản</option>
@@ -716,7 +715,7 @@ export function StudentDashboard({
 
           {setsLoading && setsData.items.length === 0 ? (
             <div className="section-card flex items-center justify-center py-12 text-slate-500">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin text-indigo-600" />
+              <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-600" />
               <span className="text-sm">Đang tải danh sách bộ đề...</span>
             </div>
           ) : setsData.items.length === 0 ? (
@@ -737,7 +736,7 @@ export function StudentDashboard({
                   >
                     <div className="space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
+                        <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700">
                           {getExamTypeName(qs.exam_type)}
                         </span>
                         <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
@@ -761,9 +760,9 @@ export function StudentDashboard({
                       type="button"
                       disabled={loadingSetDetail}
                       onClick={() => handleOpenQuestionSet(qs)}
-                      className="btn-glow inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-600/20 hover:bg-indigo-500 disabled:opacity-50 transition"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors duration-150"
                     >
-                      <Play className="h-3.5 w-3.5" />
+                      <Play className="size-3.5" />
                       Bắt đầu Học / Thi thử
                     </button>
                   </div>
@@ -797,7 +796,7 @@ export function StudentDashboard({
                   onClick={() => setResultsTab('practice')}
                   className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
                     resultsTab === 'practice'
-                      ? 'bg-white text-indigo-700 shadow-sm'
+                      ? 'bg-white text-blue-700 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -808,7 +807,7 @@ export function StudentDashboard({
                   onClick={() => setResultsTab('assess')}
                   className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
                     resultsTab === 'assess'
-                      ? 'bg-white text-indigo-700 shadow-sm'
+                      ? 'bg-white text-blue-700 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -818,7 +817,7 @@ export function StudentDashboard({
             }
           />
 
-          <div key={resultsTab} className="animate-tab-in">
+          <div key={resultsTab}>
             {resultsTab === 'practice' ? (
               <div className="space-y-4">
                 <div className="section-card flex flex-wrap gap-3">
@@ -829,7 +828,7 @@ export function StudentDashboard({
                       value={resultsSearch}
                       onChange={(e) => setResultsSearch(e.target.value)}
                       placeholder="Tìm tên bộ đề..."
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
                     />
                   </div>
                   <select
@@ -838,7 +837,7 @@ export function StudentDashboard({
                       setResultsModeFilter(e.target.value as 'all' | 'practice' | 'exam');
                       setSessionsPage(1);
                     }}
-                    className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                    className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none"
                   >
                     <option value="all">Tất cả hình thức</option>
                     <option value="practice">Chỉ Luyện tập</option>
@@ -848,7 +847,7 @@ export function StudentDashboard({
 
                 {sessionsLoading && sessionsData.items.length === 0 ? (
                   <div className="section-card flex items-center justify-center py-12 text-slate-500">
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin text-indigo-600" />
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-600" />
                     <span className="text-sm">Đang tải lịch sử bài làm...</span>
                   </div>
                 ) : sessionsData.items.length === 0 ? (
@@ -871,10 +870,10 @@ export function StudentDashboard({
                                 {s.question_set?.title || 'Bộ đề Speaking'}
                               </span>
                               <span
-                                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
                                   s.mode === 'exam'
-                                    ? 'border border-violet-200 bg-violet-50 text-violet-700'
-                                    : 'border border-sky-200 bg-sky-50 text-sky-700'
+                                    ? 'border border-amber-200 bg-amber-50 text-amber-800'
+                                    : 'border border-blue-200 bg-blue-50 text-blue-700'
                                 }`}
                               >
                                 {s.mode === 'exam' ? s.exam_band || 'Thi thử' : 'Luyện tập'}
@@ -918,7 +917,7 @@ export function StudentDashboard({
               </div>
             ) : assessmentsLoading && assessmentsData.items.length === 0 ? (
               <div className="section-card flex items-center justify-center py-12 text-slate-500">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin text-indigo-600" />
+                <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-600" />
                 <span className="text-sm">Đang tải danh sách buổi chấm 1-1...</span>
               </div>
             ) : assessmentsData.items.length === 0 ? (
@@ -984,10 +983,10 @@ export function StudentDashboard({
           <button
             type="button"
             onClick={() => handleSelectMode('exam')}
-            className="flex flex-col items-start gap-2 rounded-2xl border border-violet-200 bg-violet-50/75 p-4 text-left hover:bg-violet-50 hover:border-violet-300 transition"
+            className="flex flex-col items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-left hover:border-amber-300 transition-colors duration-150"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
-              <Timer className="h-5 w-5" />
+            <div className="flex size-10 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+              <Timer className="size-5" />
             </div>
             <div className="text-sm font-bold text-slate-900">Thi thử bấm giờ</div>
             <p className="text-xs leading-relaxed text-slate-600">
@@ -1007,7 +1006,7 @@ export function StudentDashboard({
         <div className="space-y-4 text-sm text-slate-600">
           <p>
             Bạn đã làm được{' '}
-            <strong className="text-indigo-700">
+            <strong className="text-blue-700">
               {resumeDraft?.draft.practice_answers?.length || 0}/
               {resumeDraft?.set.questions.length || 0}
             </strong>{' '}
@@ -1025,7 +1024,7 @@ export function StudentDashboard({
             <button
               type="button"
               onClick={handleResumeContinue}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-500"
             >
               <Clock className="h-3.5 w-3.5" />
               Tiếp tục bản nháp

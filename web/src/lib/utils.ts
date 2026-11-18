@@ -58,7 +58,7 @@ export function getIeltsBandLabel(score?: number | null): {
     return {
       band: 'IELTS 7.5 - 8.0',
       level: 'C1 Rất tốt',
-      badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
     };
   }
   if (s >= 6.5) {
@@ -100,7 +100,7 @@ export function getExamTypeName(examType = 'general'): string {
 }
 
 export function getAvatarUrl(name?: string | null, size = 128): string {
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=4F46E5&color=fff&size=${size}`;
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=0F172A&color=fff&size=${size}`;
 }
 
 export function formatScoreValue(val?: number | null): string {

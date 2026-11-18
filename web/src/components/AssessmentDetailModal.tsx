@@ -3,9 +3,9 @@
 import React from 'react';
 import { BarChart3, Bot, ChevronRight, MessageSquareText, Trash2 } from 'lucide-react';
 import { Modal } from './ui/Modal';
-import { ScoreRingGauge, SkillRadarChart } from './ui/AnalyticsCharts';
+import { IeltsCriteriaList, ScoreRingGauge, SkillRadarChart } from './ui/AnalyticsCharts';
 import { ComprehensiveAiFeedback, DialogueTimeline } from './AiFeedbackBlocks';
-import { formatScoreValue, getIeltsBandLabel } from '@/lib/utils';
+import { getIeltsBandLabel } from '@/lib/utils';
 import type { Assessment } from '@/lib/types';
 
 interface AssessmentCardProps {
@@ -30,12 +30,12 @@ export function AssessmentCard({
   const totalVal = assessment.score_total != null ? Number(assessment.score_total) : null;
   const badgeColor =
     totalVal != null && totalVal >= 8
-      ? 'bg-emerald-600 text-white shadow-emerald-600/20'
+      ? 'bg-emerald-600 text-white'
       : totalVal != null && totalVal >= 6
-        ? 'bg-sky-600 text-white shadow-sky-600/20'
+        ? 'bg-blue-600 text-white'
         : totalVal != null && totalVal >= 4
-          ? 'bg-amber-500 text-white shadow-amber-500/20'
-          : 'bg-rose-600 text-white shadow-rose-600/20';
+          ? 'bg-amber-600 text-white'
+          : 'bg-rose-600 text-white';
 
   const prScore = assessment.score_accuracy ?? assessment.score_total ?? 0;
   const lrScore = assessment.score_lexical ?? assessment.result_json?.score_lexical;
@@ -57,7 +57,7 @@ export function AssessmentCard({
           <div className="truncate text-sm font-bold text-slate-900">
             {customTitle ? (
               <>
-                <span className="text-indigo-600">{customTitle}</span> — {displayName}
+                <span className="text-blue-600">{customTitle}</span> — {displayName}
               </>
             ) : (
               `Đánh giá của ${displayName}`
@@ -79,7 +79,7 @@ export function AssessmentCard({
               </span>
             )}
             {assessment.score_grammar != null && (
-              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-indigo-700">
+              <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700">
                 Ngữ pháp: {Number(assessment.score_grammar).toFixed(1)}
               </span>
             )}
@@ -133,7 +133,7 @@ export function AssessmentDetailModal({ assessment, onClose }: AssessmentDetailM
       maxWidthClass="max-w-5xl"
       title={
         <span className="flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-indigo-600" />
+          <BarChart3 className="h-5 w-5 text-blue-600" />
           {r.title || 'Chi tiết kết quả đánh giá hội thoại 1-1'}
         </span>
       }
@@ -155,7 +155,7 @@ export function AssessmentDetailModal({ assessment, onClose }: AssessmentDetailM
           <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
             <div>
               <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-indigo-600" />
+                <BarChart3 className="h-4 w-4 text-blue-600" />
                 Điểm Đánh Giá Cuộc Hội Thoại
               </h4>
               <p className="mt-0.5 text-xs text-slate-500">
@@ -167,14 +167,14 @@ export function AssessmentDetailModal({ assessment, onClose }: AssessmentDetailM
             </span>
           </div>
 
-          <div className="grid items-center gap-6 md:grid-cols-12">
-            <div className="md:col-span-4 flex flex-col items-center justify-center rounded-2xl border border-slate-100 bg-slate-50/75 p-5">
-              <ScoreRingGauge score={total} max={9} size={146} strokeWidth={13} label="IELTS Band / 9.0" />
+          <div className="grid items-center gap-6 lg:grid-cols-12">
+            <div className="lg:col-span-3 flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-5">
+              <ScoreRingGauge score={total} max={9} size={158} strokeWidth={14} label="IELTS Band / 9.0" />
             </div>
 
-            <div className="md:col-span-4 flex justify-center">
+            <div className="lg:col-span-5 flex items-center justify-center py-1">
               <SkillRadarChart
-                size={215}
+                size={250}
                 skills={[
                   { label: 'Pronunciation (P)', value: Number(prVal) },
                   { label: 'Fluency (FC)', value: ctxVal != null ? Number(ctxVal) : null },
@@ -184,34 +184,23 @@ export function AssessmentDetailModal({ assessment, onClose }: AssessmentDetailM
               />
             </div>
 
-            <div className="md:col-span-4 space-y-2">
-              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/85 px-3.5 py-2.5 text-xs">
-                <span className="font-semibold text-slate-600">Pronunciation (P) · Phát âm</span>
-                <span className="font-extrabold text-emerald-600 tabular-nums">{Number(prVal).toFixed(1)}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/85 px-3.5 py-2.5 text-xs">
-                <span className="font-semibold text-slate-600">Fluency &amp; Coherence (FC)</span>
-                <span className="font-extrabold text-sky-600 tabular-nums">{formatScoreValue(ctxVal)}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/85 px-3.5 py-2.5 text-xs">
-                <span className="font-semibold text-slate-600">Lexical Resource (LR)</span>
-                <span className="font-extrabold text-amber-600 tabular-nums">
-                  {formatScoreValue(lexVal ?? gramVal)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/85 px-3.5 py-2.5 text-xs">
-                <span className="font-semibold text-slate-600">Grammatical Range (GRA)</span>
-                <span className="font-extrabold text-indigo-600 tabular-nums">{formatScoreValue(gramVal)}</span>
-              </div>
+            <div className="lg:col-span-4">
+              <IeltsCriteriaList
+                compact
+                pr={Number(prVal)}
+                fc={ctxVal != null ? Number(ctxVal) : null}
+                lr={lexVal != null ? Number(lexVal) : gramVal != null ? Number(gramVal) : null}
+                gra={gramVal != null ? Number(gramVal) : null}
+              />
             </div>
           </div>
         </div>
 
         {(aiEval || otf.summary || (otf.tips && otf.tips.length > 0)) && (
-          <div className="section-card border-indigo-100 bg-gradient-to-br from-white to-indigo-50/35">
+          <div className="section-card">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h4 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                <Bot className="h-4 w-4 text-indigo-600" />
+                <Bot className="h-4 w-4 text-blue-600" />
                 Nhận xét chi tiết từ AI
               </h4>
             </div>
@@ -231,7 +220,7 @@ export function AssessmentDetailModal({ assessment, onClose }: AssessmentDetailM
 
         <div className="section-card">
           <h4 className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-900">
-            <MessageSquareText className="h-4 w-4 text-indigo-600" />
+            <MessageSquareText className="h-4 w-4 text-blue-600" />
             Chi tiết từng lượt nói ({turns.length})
           </h4>
           <DialogueTimeline turns={turns} />

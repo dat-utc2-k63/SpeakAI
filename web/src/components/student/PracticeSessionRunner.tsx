@@ -18,7 +18,6 @@ import {
   Play,
   Save,
   SkipForward,
-  Sparkles,
   Timer,
   Trash2,
   Volume2,
@@ -38,12 +37,12 @@ import {
   uploadPracticeAudio,
 } from '@/lib/practice';
 import {
-  formatScoreValue,
   getExamTypeName,
   scoreTextColorClass,
 } from '@/lib/utils';
 import { Modal } from '@/components/ui/Modal';
 import {
+  IeltsCriteriaList,
   LiveAudioVisualizer,
   PageHeader,
   ScoreRingGauge,
@@ -640,13 +639,13 @@ export function PracticeSessionRunner({
     const bandInfo = calculateBandScore(summaryTotals.score_total, questionSet.exam_type);
 
     return (
-      <div className="space-y-6 animate-slidein">
+      <div className="space-y-6">
         <PageHeader
           eyebrow={mode === 'exam' ? 'KẾT QUẢ THI THỬ' : 'TỔNG KẾT LUYỆN TẬP'}
           title={questionSet.title}
           pill={
             <>
-              <Award className="h-3.5 w-3.5 text-emerald-600" />
+              <Award className="size-3.5 text-emerald-600" />
               <span>Hoàn thành {entries.length} câu</span>
             </>
           }
@@ -654,7 +653,7 @@ export function PracticeSessionRunner({
             <button
               type="button"
               onClick={onFinished}
-              className="btn-glow rounded-2xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-600/20 hover:bg-indigo-500 transition"
+              className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors duration-150"
             >
               Về Kho Bộ Đề &amp; Lịch sử
             </button>
@@ -663,26 +662,26 @@ export function PracticeSessionRunner({
 
         <div className="section-card">
           <div className="grid items-center gap-6 lg:grid-cols-12">
-            <div className="lg:col-span-4 flex flex-col items-center justify-center rounded-2xl border border-slate-100 bg-slate-50/75 p-5 text-center">
+            <div className="lg:col-span-3 flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-5 text-center">
               <ScoreRingGauge
                 score={summaryTotals.score_total}
                 max={9}
-                size={164}
+                size={168}
                 strokeWidth={14}
                 label="IELTS Band / 9.0"
               />
-              <div className="mt-3 inline-flex flex-col items-center rounded-2xl border border-indigo-200 bg-indigo-50/70 px-5 py-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+              <div className="mt-3 inline-flex flex-col items-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2">
+                <span className="text-[10px] font-semibold uppercase text-blue-700">
                   {bandInfo.title}
                 </span>
-                <span className="text-xl font-extrabold text-slate-900">{bandInfo.band}</span>
+                <span className="text-lg font-bold text-slate-900 tabular-nums">{bandInfo.band}</span>
                 <span className="text-[11px] text-slate-500">{bandInfo.description}</span>
               </div>
             </div>
 
-            <div className="lg:col-span-4 flex justify-center">
+            <div className="lg:col-span-5 flex items-center justify-center py-1">
               <SkillRadarChart
-                size={235}
+                size={260}
                 skills={[
                   { label: 'Pronunciation (P)', value: summaryTotals.score_accuracy },
                   { label: 'Fluency (FC)', value: summaryTotals.score_context },
@@ -692,31 +691,13 @@ export function PracticeSessionRunner({
               />
             </div>
 
-            <div className="lg:col-span-4 space-y-2.5">
-              <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/85 px-4 py-3 text-xs">
-                <span className="font-semibold text-slate-600">Pronunciation (P) · Phát âm</span>
-                <span className="text-base font-extrabold text-emerald-600 tabular-nums">
-                  {summaryTotals.score_accuracy.toFixed(1)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/85 px-4 py-3 text-xs">
-                <span className="font-semibold text-slate-600">Fluency &amp; Coherence (FC)</span>
-                <span className="text-base font-extrabold text-sky-600 tabular-nums">
-                  {formatScoreValue(summaryTotals.score_context)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/85 px-4 py-3 text-xs">
-                <span className="font-semibold text-slate-600">Lexical Resource (LR)</span>
-                <span className="text-base font-extrabold text-amber-600 tabular-nums">
-                  {formatScoreValue(summaryTotals.score_lexical)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/85 px-4 py-3 text-xs">
-                <span className="font-semibold text-slate-600">Grammatical Range (GRA)</span>
-                <span className="text-base font-extrabold text-indigo-600 tabular-nums">
-                  {formatScoreValue(summaryTotals.score_grammar)}
-                </span>
-              </div>
+            <div className="lg:col-span-4">
+              <IeltsCriteriaList
+                pr={summaryTotals.score_accuracy}
+                fc={summaryTotals.score_context}
+                lr={summaryTotals.score_lexical}
+                gra={summaryTotals.score_grammar}
+              />
             </div>
           </div>
         </div>
@@ -735,7 +716,7 @@ export function PracticeSessionRunner({
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-sm font-semibold text-slate-900">
-                      <span className="text-indigo-600">
+                      <span className="text-blue-600">
                         Câu {entry.question.order_num || i + 1}:
                       </span>{' '}
                       {entry.question.question_text}
@@ -768,7 +749,7 @@ export function PracticeSessionRunner({
   if (phase === 'finalizing') {
     return (
       <div className="section-card mx-auto mt-8 max-w-xl p-8 sm:p-10 text-center space-y-5">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-blue-600">
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
         <h3 className="text-lg font-bold text-slate-900">Đang tổng hợp &amp; chấm điểm bài thi...</h3>
@@ -787,16 +768,16 @@ export function PracticeSessionRunner({
     if (examStep === 'ready') {
       return (
         <div className="section-card mx-auto max-w-2xl p-6 sm:p-10 text-center space-y-5">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-violet-200 bg-violet-50 text-violet-600 shadow-sm">
-            <Timer className="h-8 w-8" />
+          <div className="mx-auto flex size-14 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700">
+            <Timer className="size-7" />
           </div>
           <div>
-            <span className="rounded-full border border-violet-200 bg-violet-50 px-3.5 py-1 text-xs font-semibold text-violet-700">
+            <span className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
               {getExamTypeName(questionSet.exam_type)} · Thi thử bấm giờ
             </span>
-            <h2 className="mt-3 text-2xl font-extrabold text-slate-900">{questionSet.title}</h2>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              Bài thi gồm <strong className="text-slate-900">{questions.length}</strong> câu hỏi nối tiếp tự động
+            <h2 className="mt-3 text-2xl font-bold text-slate-900 text-balance">{questionSet.title}</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600 text-pretty">
+              Bài thi gồm <strong className="text-slate-900 tabular-nums">{questions.length}</strong> câu hỏi nối tiếp tự động
               (Chuẩn bị → Bíp thu âm → Nộp). Hãy kiểm tra micro trước khi bắt đầu.
             </p>
           </div>
@@ -804,16 +785,16 @@ export function PracticeSessionRunner({
             <button
               type="button"
               onClick={onExit}
-              className="rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+              className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors duration-150"
             >
               Quay lại
             </button>
             <button
               type="button"
               onClick={handleStartExam}
-              className="btn-glow inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 hover:bg-indigo-500 transition"
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors duration-150"
             >
-              <Play className="h-4 w-4" />
+              <Play className="size-4" />
               Bắt đầu Thi Ngay
             </button>
           </div>
@@ -825,22 +806,22 @@ export function PracticeSessionRunner({
       <div className="space-y-5">
         <div className="section-card flex flex-wrap items-center justify-between gap-3">
           <div>
-            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-600">
+            <span className="text-xs font-semibold uppercase text-blue-600 tabular-nums">
               {questionSet.title} · Câu {currentIndex + 1}/{questions.length}
             </span>
-            <h3 className="mt-0.5 text-lg font-extrabold text-slate-900">
+            <h3 className="mt-0.5 text-lg font-bold text-slate-900 text-balance">
               {examStep === 'prep' ? 'Thời gian chuẩn bị ý tưởng' : 'Đang ghi âm câu trả lời'}
             </h3>
           </div>
 
           <div
-            className={`flex items-center gap-2 rounded-2xl border px-5 py-2.5 text-xl font-extrabold font-mono shadow-sm ${
+            className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-xl font-bold font-mono tabular-nums ${
               examStep === 'record'
                 ? 'border-rose-200 bg-rose-50 text-rose-600'
                 : 'border-amber-200 bg-amber-50 text-amber-700'
             }`}
           >
-            <Clock className="h-5 w-5" />
+            <Clock className="size-5" />
             <span>{timeLeft}s</span>
           </div>
         </div>
@@ -861,17 +842,17 @@ export function PracticeSessionRunner({
           )}
 
           {/* Exam Studio Wavefront */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5 flex flex-col items-center gap-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 flex flex-col items-center gap-3">
             <LiveAudioVisualizer
               stream={liveStream}
               active={examStep === 'record' && recording}
               mode={examStep === 'record' ? 'recording' : 'idle'}
               height={64}
             />
-            <div className="rounded-full border border-slate-200 bg-white px-5 py-2 text-xs font-semibold text-slate-700 shadow-sm">
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700">
               {examStep === 'record' ? (
                 <span className="inline-flex items-center gap-2 text-rose-600">
-                  <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
+                  <span className="size-2 rounded-full bg-rose-600" />
                   Đang lắng nghe bài nói của bạn...
                 </span>
               ) : (
@@ -880,11 +861,11 @@ export function PracticeSessionRunner({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
             <button
               type="button"
               onClick={() => setExamExitConfirmOpen(true)}
-              className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition"
+              className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition-colors duration-150"
             >
               Thoát bài thi
             </button>
@@ -892,7 +873,7 @@ export function PracticeSessionRunner({
             <button
               type="button"
               onClick={handleAdvanceExamStep}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 hover:bg-indigo-500 transition"
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors duration-150"
             >
               {examStep === 'prep' ? (
                 <>
@@ -1006,12 +987,12 @@ export function PracticeSessionRunner({
               type="button"
               disabled={answeredCount === 0 || finishingSession || submittingAnswer || recording}
               onClick={handleFinishPractice}
-              className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-500 disabled:opacity-45 transition"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-45 transition-colors duration-150"
             >
               {finishingSession ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="size-3.5 animate-spin" />
               ) : (
-                <Flag className="h-3.5 w-3.5" />
+                <Flag className="size-3.5" />
               )}
               Hoàn tất bài
             </button>
@@ -1030,23 +1011,23 @@ export function PracticeSessionRunner({
                 key={q.id}
                 type="button"
                 onClick={() => handleSelectQuestionIndex(idx)}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-2xl border px-3.5 py-2 text-xs font-semibold transition-all active:scale-95 ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors duration-150 ${
                   isCurrent
-                    ? 'border-indigo-600 bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                    ? 'border-slate-900 bg-slate-900 text-white'
                     : isDone
                       ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                       : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                {isDone && <CheckCircle2 className="h-3.5 w-3.5" />}
+                {isDone && <CheckCircle2 className="size-3.5" />}
                 Câu {q.order_num || idx + 1}
               </button>
             );
           })}
         </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200/80">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-emerald-500 transition-all duration-500 ease-out"
+            className="h-full rounded-full bg-blue-600"
             style={{
               width: `${questions.length > 0 ? Math.round((answeredCount / questions.length) * 100) : 0}%`,
             }}
@@ -1054,15 +1035,15 @@ export function PracticeSessionRunner({
         </div>
       </div>
 
-      {/* Main 2-Column HablaYa Voice Studio */}
+      {/* Main 2-Column Practice Studio */}
       {currentQuestion && (
         <div className="grid gap-6 lg:grid-cols-12">
-          {/* Left Studio Card: Question Prompt + REC Sphere + Live Equalizer */}
+          {/* Left Studio Card: Question Prompt + REC + Live Equalizer */}
           <div className="section-card lg:col-span-7 flex flex-col justify-between space-y-5">
-            <div key={currentQuestion.id} className="space-y-4 animate-tab-in">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div key={currentQuestion.id} className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-xl bg-indigo-50 border border-indigo-200 px-2.5 py-1 text-xs font-bold text-indigo-700">
+                  <span className="rounded-md bg-blue-50 border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 tabular-nums">
                     Câu {currentQuestion.order_num || currentIndex + 1}/{questions.length}
                   </span>
                   {currentQuestion.part_title && (
@@ -1078,19 +1059,19 @@ export function PracticeSessionRunner({
                     type="button"
                     disabled={currentIndex === 0 || recording || submittingAnswer}
                     onClick={() => handleSelectQuestionIndex(currentIndex - 1)}
-                    className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition"
+                    className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors duration-150"
                     aria-label="Câu trước"
                   >
-                    <ChevronLeft className="h-4 w-4" />
+                    <ChevronLeft className="size-4" />
                   </button>
                   <button
                     type="button"
                     disabled={currentIndex === questions.length - 1 || recording || submittingAnswer}
                     onClick={() => handleSelectQuestionIndex(currentIndex + 1)}
-                    className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition"
+                    className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors duration-150"
                     aria-label="Câu sau"
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="size-4" />
                   </button>
                 </div>
               </div>
@@ -1098,8 +1079,8 @@ export function PracticeSessionRunner({
               <TaskQuestionCard question={currentQuestion} />
             </div>
 
-            {/* Voice Studio Centerpiece (REC Sphere + Equalizer + Listening Pill Bar) */}
-            <div className="rounded-3xl border border-slate-200/90 bg-gradient-to-b from-slate-50/80 to-white p-5 sm:p-6 flex flex-col items-center gap-4">
+            {/* Voice Studio Centerpiece */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 sm:p-6 flex flex-col items-center gap-4">
               <VoiceRecSphere
                 recording={recording}
                 processing={submittingAnswer}
@@ -1121,13 +1102,13 @@ export function PracticeSessionRunner({
                         : 'idle'
                 }
                 barCount={13}
-                height={68}
+                height={64}
               />
 
-              <div className="w-full max-w-md rounded-full border border-slate-200 bg-white px-4 py-2.5 text-center text-xs font-semibold text-slate-700 shadow-sm">
+              <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white px-4 py-2 text-center text-xs font-medium text-slate-700">
                 {recording ? (
-                  <span className="inline-flex items-center justify-center gap-2 text-rose-600">
-                    <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
+                  <span className="inline-flex items-center justify-center gap-2 font-semibold text-rose-600 tabular-nums">
+                    <span className="size-2 rounded-full bg-rose-600" />
                     {studioStatusText}
                   </span>
                 ) : (
@@ -1136,7 +1117,7 @@ export function PracticeSessionRunner({
               </div>
 
               {recordedUrl && (
-                <div className="w-full max-w-md space-y-3 pt-1 animate-fadein">
+                <div className="w-full max-w-md space-y-3 pt-1">
                   <audio controls src={recordedUrl} className="h-9 w-full" />
                   {!recording && (
                     <div className="flex items-center gap-2">
@@ -1144,16 +1125,16 @@ export function PracticeSessionRunner({
                         type="button"
                         disabled={submittingAnswer}
                         onClick={handleSubmitPracticeAnswer}
-                        className="btn-glow inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 hover:bg-indigo-500 disabled:opacity-50 transition"
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors duration-150"
                       >
                         {submittingAnswer ? (
                           <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            AI đang chấm điểm...
+                            <Loader2 className="size-4 animate-spin" />
+                            Đang chấm điểm...
                           </>
                         ) : (
                           <>
-                            <Sparkles className="h-4 w-4" />
+                            <CheckCircle2 className="size-4" />
                             Chấm câu trả lời này
                           </>
                         )}
@@ -1164,9 +1145,9 @@ export function PracticeSessionRunner({
                         onClick={clearPendingAudio}
                         title="Xóa bản thu âm này"
                         aria-label="Xóa bản thu âm này"
-                        className="shrink-0 rounded-2xl border border-slate-200 bg-white p-3 text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-45 transition"
+                        className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-45 transition-colors duration-150"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="size-4" />
                       </button>
                     </div>
                   )}
@@ -1175,21 +1156,21 @@ export function PracticeSessionRunner({
             </div>
           </div>
 
-          {/* Right Studio Card: Live Pronunciation & 4 Skill Rows (Reference Donut Panel) */}
+          {/* Right Studio Card: Live Pronunciation & 4 Skill Rows */}
           <div className="section-card lg:col-span-5 flex flex-col justify-between space-y-5">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-lg font-extrabold text-slate-900">Đánh giá Phát âm</h3>
+              <h3 className="text-base font-bold text-slate-900">Đánh giá Phát âm</h3>
               <span
-                className={`rounded-full border px-3 py-0.5 text-xs font-semibold transition-colors ${
+                className={`rounded-md border px-2.5 py-0.5 text-xs font-semibold ${
                   submittingAnswer
-                    ? 'border-indigo-200 bg-indigo-50 text-indigo-700 animate-pulse'
+                    ? 'border-blue-200 bg-blue-50 text-blue-700'
                     : currentSavedAnswer
                       ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                       : 'border-slate-200 bg-slate-50 text-slate-500'
                 }`}
               >
                 {submittingAnswer
-                  ? 'Đang chấm AI...'
+                  ? 'Đang chấm...'
                   : currentSavedAnswer
                     ? 'Đã chấm xong'
                     : 'Chờ câu trả lời'}
@@ -1213,52 +1194,33 @@ export function PracticeSessionRunner({
               />
             </div>
 
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/90 px-4 py-3 text-xs">
-                <span className="font-semibold text-slate-600">Pronunciation (P) · Phát âm</span>
-                <span className="font-extrabold text-emerald-600 tabular-nums">
-                  {currentSavedAnswer ? currentSavedAnswer.score_accuracy.toFixed(1) : '--'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/90 px-4 py-3 text-xs">
-                <span className="font-semibold text-slate-600">Fluency &amp; Coherence (FC)</span>
-                <span className="font-extrabold text-sky-600 tabular-nums">
-                  {currentSavedAnswer ? formatScoreValue(currentSavedAnswer.score_context) : '--'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/90 px-4 py-3 text-xs">
-                <span className="font-semibold text-slate-600">Lexical Resource (LR)</span>
-                <span className="font-extrabold text-amber-600 tabular-nums">
-                  {currentSavedAnswer ? formatScoreValue(currentSavedAnswer.score_lexical) : '--'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/90 px-4 py-3 text-xs">
-                <span className="font-semibold text-slate-600">Grammatical Range (GRA)</span>
-                <span className="font-extrabold text-indigo-600 tabular-nums">
-                  {currentSavedAnswer ? formatScoreValue(currentSavedAnswer.score_grammar) : '--'}
-                </span>
-              </div>
-            </div>
+            <IeltsCriteriaList
+              compact
+              pr={submittingAnswer ? null : currentSavedAnswer ? currentSavedAnswer.score_accuracy : null}
+              fc={submittingAnswer ? null : currentSavedAnswer ? currentSavedAnswer.score_context : null}
+              lr={submittingAnswer ? null : currentSavedAnswer ? currentSavedAnswer.score_lexical : null}
+              gra={submittingAnswer ? null : currentSavedAnswer ? currentSavedAnswer.score_grammar : null}
+            />
           </div>
         </div>
       )}
 
-      {/* Detailed Immediate AI Feedback Below Studio */}
+      {/* Detailed Immediate Feedback Below Studio */}
       {currentSavedAnswer && (
-        <div className="section-card space-y-4 border-emerald-200 animate-slidein">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+        <div className="section-card space-y-4 border-emerald-200">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
             <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
-              <Sparkles className="h-5 w-5 text-emerald-600" />
+              <CheckCircle2 className="size-5 text-emerald-600" />
               Nhận xét chi tiết Câu {currentQuestion?.order_num || currentIndex + 1}
             </h3>
             {currentIndex < questions.length - 1 && (
               <button
                 type="button"
                 onClick={() => handleSelectQuestionIndex(currentIndex + 1)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 transition"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors duration-150"
               >
                 Câu tiếp theo
-                <ArrowRight className="h-3.5 w-3.5" />
+                <ArrowRight className="size-3.5" />
               </button>
             )}
           </div>

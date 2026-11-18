@@ -117,23 +117,23 @@ function renderNavIcon(icon: NavItem['icon'], cls = 'h-4 w-4 shrink-0') {
 function getRoleBadge(role: UserRole) {
   if (role === 'admin') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[11px] font-semibold text-rose-700">
-        <ShieldCheck className="h-3 w-3" />
+      <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700">
+        <ShieldCheck className="size-3" />
         Quản trị viên
       </span>
     );
   }
   if (role === 'teacher') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
-        <Presentation className="h-3 w-3" />
+      <span className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+        <Presentation className="size-3" />
         Giáo viên
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700">
-      <GraduationCap className="h-3 w-3" />
+    <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+      <GraduationCap className="size-3" />
       Học viên
     </span>
   );
@@ -168,20 +168,20 @@ export function DashboardSidebar({
   const isMoreActive = secondaryItems.some((item) => item.id === activeTab);
 
   const sidebarContent = (
-    <div className="flex h-full flex-col justify-between p-4 sm:p-5">
-      <div className="space-y-6">
+    <div className="flex h-full flex-col justify-between p-4">
+      <div className="space-y-5">
         {/* Brand */}
-        <div className="flex items-center justify-between px-1.5 pt-1">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-sky-500 shadow-md shadow-indigo-500/25">
-              <Mic className="h-5 w-5 text-white" />
+        <div className="flex items-center justify-between px-1 pt-1">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-slate-900">
+              <Mic className="size-4 text-white" />
             </div>
             <div>
-              <div className="text-lg font-extrabold leading-none tracking-tight text-slate-900">
-                Speak<span className="text-indigo-600">AI</span>
+              <div className="text-base font-bold leading-none text-slate-900">
+                Speak<span className="text-blue-600">AI</span>
               </div>
-              <div className="mt-0.5 text-[11px] font-medium text-slate-400">
-                Luyện nói Tiếng Anh
+              <div className="mt-1 text-[11px] text-slate-500">
+                Đánh giá Speaking
               </div>
             </div>
           </div>
@@ -189,38 +189,38 @@ export function DashboardSidebar({
           <button
             type="button"
             onClick={() => setMobileSheetOpen(false)}
-            className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 lg:hidden"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 lg:hidden"
             aria-label="Đóng menu"
           >
-            <X className="h-5 w-5" />
+            <X className="size-5" />
           </button>
         </div>
 
         {/* User summary card */}
-        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/85 p-3.5">
-          <div className="flex items-center gap-3">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-center gap-2.5">
             <img
               src={getAvatarUrl(profile.full_name, 96)}
               alt={profile.full_name}
-              className="h-10 w-10 rounded-full border border-indigo-100 object-cover shadow-sm"
+              className="size-9 rounded-full border border-slate-200 object-cover"
             />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-bold text-slate-900">{profile.full_name}</div>
+              <div className="truncate text-sm font-semibold text-slate-900">{profile.full_name}</div>
               <div className="truncate text-[11px] text-slate-500">{profile.email}</div>
             </div>
           </div>
           <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
             {getRoleBadge(profile.role)}
             {profile.status !== 'active' && (
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                 {profile.status === 'pending' ? 'Chờ duyệt' : 'Đã khóa'}
               </span>
             )}
           </div>
         </div>
 
-        {/* Navigation Pills (HablaYa reference look) */}
-        <nav className="space-y-1.5">
+        {/* Navigation */}
+        <nav className="space-y-1" aria-label="Điều hướng chính">
           {navItems.map((item) => {
             const active = activeTab === item.id;
             return (
@@ -228,29 +228,22 @@ export function DashboardSidebar({
                 key={item.id}
                 type="button"
                 onClick={() => handleSelect(item.id)}
-                className={`group flex w-full items-center justify-between gap-2.5 rounded-2xl px-3.5 py-2.5 text-sm transition-all duration-200 active:scale-[0.98] ${
+                className={`flex w-full items-center justify-between gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-150 ${
                   active
-                    ? 'bg-indigo-50/95 font-semibold text-indigo-700 shadow-sm shadow-indigo-100/80'
-                    : 'font-medium text-slate-600 hover:bg-slate-100/75 hover:text-slate-900 hover:translate-x-0.5'
+                    ? 'bg-blue-50 font-semibold text-blue-700'
+                    : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
-                <span className="flex items-center gap-3 truncate">
-                  <span
-                    className={`h-2 w-2 rounded-full shrink-0 transition-transform ${
-                      active
-                        ? 'bg-indigo-600 scale-110 shadow-[0_0_8px_rgba(79,70,229,0.55)]'
-                        : 'bg-slate-300 group-hover:bg-slate-400'
-                    }`}
-                  />
-                  {renderNavIcon(item.icon, 'h-4 w-4 shrink-0')}
+                <span className="flex items-center gap-2.5 truncate">
+                  {renderNavIcon(item.icon, `size-4 shrink-0 ${active ? 'text-blue-600' : 'text-slate-400'}`)}
                   <span className="truncate">{item.label}</span>
                 </span>
                 {item.badge != null && (
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                    className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
                       active
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-amber-100 text-amber-700'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-amber-100 text-amber-800'
                     }`}
                   >
                     {item.badge}
@@ -263,13 +256,13 @@ export function DashboardSidebar({
       </div>
 
       {/* Footer Logout */}
-      <div className="border-t border-slate-100 pt-3">
+      <div className="border-t border-slate-200 pt-3">
         <button
           type="button"
           onClick={onLogout}
-          className="flex w-full items-center gap-2.5 rounded-2xl px-3.5 py-2.5 text-sm font-medium text-rose-600 hover:bg-rose-50 transition"
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-700 transition-colors duration-150"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="size-4" />
           <span>Đăng xuất</span>
         </button>
       </div>
@@ -279,22 +272,22 @@ export function DashboardSidebar({
   return (
     <>
       {/* ── MOBILE TOP STICKY BAR (< lg) ───────────────────────── */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 py-2.5 backdrop-blur-xl shadow-sm lg:hidden">
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5 lg:hidden">
         <div className="flex items-center gap-2.5 min-w-0">
           <button
             type="button"
             onClick={() => setMobileSheetOpen(true)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 active:scale-95 transition"
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors duration-150"
             aria-label="Mở menu điều hướng"
           >
-            <Menu className="h-4 w-4" />
+            <Menu className="size-4" />
           </button>
           <div className="flex items-center gap-2 min-w-0">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600">
-              <Mic className="h-3.5 w-3.5 text-white" />
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-slate-900">
+              <Mic className="size-3.5 text-white" />
             </div>
-            <span className="text-base font-extrabold tracking-tight text-slate-900">
-              Speak<span className="text-indigo-600">AI</span>
+            <span className="text-base font-bold text-slate-900">
+              Speak<span className="text-blue-600">AI</span>
             </span>
           </div>
         </div>
@@ -304,29 +297,29 @@ export function DashboardSidebar({
           <button
             type="button"
             onClick={() => handleSelect('profile')}
-            className="rounded-full ring-2 ring-indigo-100 active:scale-95 transition"
+            className="rounded-full border border-slate-200"
             aria-label="Hồ sơ cá nhân"
           >
             <img
               src={getAvatarUrl(profile.full_name, 72)}
               alt={profile.full_name}
-              className="h-8 w-8 rounded-full object-cover"
+              className="size-8 rounded-full object-cover"
             />
           </button>
         </div>
       </header>
 
-      {/* ── MOBILE BOTTOM SHEET / DRAWER MENU (< lg) ────────────── */}
+      {/* ── MOBILE DRAWER MENU (< lg) ───────────────────────────── */}
       {mobileSheetOpen && (
         <div
-          className="fixed inset-0 z-50 bg-slate-900/35 backdrop-blur-sm lg:hidden animate-fadein"
+          className="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
           onClick={() => setMobileSheetOpen(false)}
         />
       )}
 
       <aside
         aria-hidden={!mobileSheetOpen}
-        className={`fixed inset-y-0 left-0 z-50 w-72 border-r border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 ease-out lg:hidden ${
           mobileSheetOpen ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none'
         }`}
       >
@@ -336,7 +329,7 @@ export function DashboardSidebar({
       {/* ── MOBILE BOTTOM NAVIGATION DOCK (< lg) ───────────────── */}
       <nav
         aria-label="Điều hướng chính trên di động"
-        className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200/90 bg-white/95 px-2 pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))] backdrop-blur-xl shadow-[0_-8px_30px_rgba(15,23,42,0.06)] lg:hidden"
+        className="fixed bottom-0 inset-x-0 z-30 border-t border-slate-200 bg-white px-2 pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))] lg:hidden"
       >
         <div className="mx-auto flex max-w-md items-center justify-around gap-1">
           {bottomPrimaryItems.map((item) => {
@@ -346,22 +339,22 @@ export function DashboardSidebar({
                 key={item.id}
                 type="button"
                 onClick={() => handleSelect(item.id)}
-                className={`relative flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl py-1.5 px-1 transition-all active:scale-95 ${
-                  active ? 'text-indigo-700' : 'text-slate-500'
+                className={`relative flex flex-1 flex-col items-center justify-center gap-1 rounded-lg py-1.5 px-1 transition-colors duration-150 ${
+                  active ? 'text-blue-600' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 <div
-                  className={`flex h-8 w-12 items-center justify-center rounded-full transition-colors ${
-                    active ? 'bg-indigo-50 text-indigo-600' : 'bg-transparent'
+                  className={`flex h-7 w-10 items-center justify-center rounded-md ${
+                    active ? 'bg-blue-50 text-blue-600' : 'bg-transparent'
                   }`}
                 >
-                  {renderNavIcon(item.icon, 'h-4 w-4')}
+                  {renderNavIcon(item.icon, 'size-4')}
                 </div>
-                <span className={`truncate max-w-full text-[10px] leading-none ${active ? 'font-bold' : 'font-medium'}`}>
+                <span className={`truncate max-w-full text-[10px] leading-none ${active ? 'font-semibold' : 'font-medium'}`}>
                   {item.mobileLabel || item.label}
                 </span>
                 {item.badge != null && (
-                  <span className="absolute top-1 right-2.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white" />
+                  <span className="absolute top-1 right-2.5 size-2 rounded-full bg-amber-500 ring-2 ring-white" />
                 )}
               </button>
             );
@@ -371,18 +364,18 @@ export function DashboardSidebar({
             <button
               type="button"
               onClick={() => setMobileSheetOpen(true)}
-              className={`relative flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl py-1.5 px-1 transition-all active:scale-95 ${
-                isMoreActive ? 'text-indigo-700' : 'text-slate-500'
+              className={`relative flex flex-1 flex-col items-center justify-center gap-1 rounded-lg py-1.5 px-1 transition-colors duration-150 ${
+                isMoreActive ? 'text-blue-600' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               <div
-                className={`flex h-8 w-12 items-center justify-center rounded-full transition-colors ${
-                  isMoreActive ? 'bg-indigo-50 text-indigo-600' : 'bg-transparent'
+                className={`flex h-7 w-10 items-center justify-center rounded-md ${
+                  isMoreActive ? 'bg-blue-50 text-blue-600' : 'bg-transparent'
                 }`}
               >
-                <MoreHorizontal className="h-4 w-4" />
+                <MoreHorizontal className="size-4" />
               </div>
-              <span className={`text-[10px] leading-none ${isMoreActive ? 'font-bold' : 'font-medium'}`}>
+              <span className={`text-[10px] leading-none ${isMoreActive ? 'font-semibold' : 'font-medium'}`}>
                 Thêm
               </span>
             </button>
@@ -390,8 +383,8 @@ export function DashboardSidebar({
         </div>
       </nav>
 
-      {/* ── DESKTOP FLOATING WHITE SIDEBAR (lg+) ───────────────── */}
-      <aside className="hidden lg:fixed lg:inset-y-4 lg:left-4 lg:z-20 lg:flex lg:w-[17rem] lg:flex-col rounded-3xl border border-slate-200/90 bg-white/95 backdrop-blur-xl shadow-[0_14px_40px_-14px_rgba(15,23,42,0.08)]">
+      {/* ── DESKTOP DOCKED SIDEBAR (lg+) ────────────────────────── */}
+      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:flex lg:w-64 lg:flex-col border-r border-slate-200 bg-white">
         {sidebarContent}
       </aside>
     </>
