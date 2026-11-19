@@ -85,4 +85,4 @@ output/
 scratch/
 docs/
 scripts/
-.agent/skills/baseline-ui/
+.agent/

@@ -530,157 +530,6 @@ class WhisperTranscriber:
         return meta["text"]
 
 
-class Qwen3Transcriber:
-    """ASR transcriber powered by Qwen3-ASR (e.g. Qwen/Qwen3-ASR-1.7B-hf)."""
-
-    def __init__(
-        self,
-        model_name: str = "Qwen/Qwen3-ASR-1.7B-hf",
-        language: str = "English",
-        device: Optional[str] = None,
-        load_progress: Optional[Any] = None,
-        torch_dtype: str = "float16",
-        max_new_tokens: int = 128,
-        asr_config: Optional[Dict[str, Any]] = None,
-        allowed_languages: Optional[Sequence[str]] = None,
-    ):
-        from transformers import AutoProcessor, AutoModelForMultimodalLM
-
-        self.model_name = model_name or "Qwen/Qwen3-ASR-1.7B-hf"
-        self.language = language or "English"
-        if str(self.language).lower() in ("en", "english"):
-            self.language = "English"
-        elif str(self.language).lower() in ("vi", "vietnamese"):
-            self.language = "Vietnamese"
-        self.max_new_tokens = max_new_tokens
-
-        if device is not None:
-            self.device = torch.device(device)
-        else:
-            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-        is_local = bool(self.model_name and os.path.isdir(self.model_name))
-        if load_progress is not None:
-            load_progress.start("qwen3_proc", self.model_name)
-        proc_kw: Dict[str, Any] = {"trust_remote_code": True}
-        if is_local:
-            proc_kw["local_files_only"] = True
-        try:
-            self.processor = AutoProcessor.from_pretrained(self.model_name, **proc_kw)
-        except Exception as e:
-            if "qwen3_asr" in str(e) or "model type" in str(e) or isinstance(e, KeyError):
-                raise RuntimeError(
-                    "Transformers phiên bản hiện tại chưa hỗ trợ kiến trúc 'qwen3_asr'. "
-                    "Vui lòng nâng cấp thư viện bằng lệnh: pip install -U 'transformers>=5.0.0'"
-                ) from e
-            raise
-
-        if load_progress is not None:
-            load_progress.finish("qwen3_proc", self.model_name)
-            load_progress.start("qwen3_model", self.model_name)
-
-        target_dtype = torch.float16 if str(torch_dtype).lower() in ("float16", "fp16") else torch.float32
-        load_kw: Dict[str, Any] = {
-            "torch_dtype": target_dtype,
-            "trust_remote_code": True,
-        }
-        if is_local:
-            load_kw["local_files_only"] = True
-        if self.device.type == "cuda":
-            load_kw["device_map"] = {"": self.device}
-        else:
-            load_kw["device_map"] = "cpu"
-
-        try:
-            self.model = AutoModelForMultimodalLM.from_pretrained(
-                self.model_name,
-                **load_kw,
-            )
-        except Exception as e:
-            if "qwen3_asr" in str(e) or "model type" in str(e) or isinstance(e, KeyError):
-                raise RuntimeError(
-                    "Transformers phiên bản hiện tại chưa hỗ trợ kiến trúc 'qwen3_asr'. "
-                    "Vui lòng nâng cấp thư viện bằng lệnh: pip install -U 'transformers>=5.0.0'"
-                ) from e
-            raise
-
-        if load_progress is not None:
-            load_progress.finish("qwen3_model", self.model_name)
-
-    @torch.inference_mode()
-    def transcribe_waveform(
-        self,
-        waveform: torch.Tensor,
-        sample_rate: int = 16000,
-        *,
-        language: Optional[str] = None,
-        prompt: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Transcribe waveform tensor and return metadata matching evaluation format."""
-        if waveform.dim() > 1:
-            waveform = waveform.mean(0)
-
-        if sample_rate != 16000:
-            import torchaudio.transforms as T
-            resampler = T.Resample(orig_freq=sample_rate, new_freq=16000)
-            waveform = resampler(waveform)
-            sample_rate = 16000
-
-        wav_np = waveform.detach().cpu().numpy()
-        duration_sec = float(len(wav_np) / sample_rate)
-
-        target_lang = language or self.language
-        if target_lang and str(target_lang).lower() in ("en", "english"):
-            target_lang = "English"
-        elif target_lang and str(target_lang).lower() in ("vi", "vietnamese"):
-            target_lang = "Vietnamese"
-        elif target_lang and str(target_lang).lower() in ("auto", "none"):
-            target_lang = None
-
-        req_kw: Dict[str, Any] = {
-            "audio": wav_np,
-            "language": target_lang,
-        }
-        if prompt:
-            req_kw["prompt"] = prompt
-
-        inputs = self.processor.apply_transcription_request(**req_kw).to(self.model.device, self.model.dtype)
-
-        output_ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens)
-        generated_ids = output_ids[:, inputs["input_ids"].shape[1]:]
-
-        raw_text = self.processor.decode(generated_ids, return_format="transcription_only")[0].strip()
-        normalized_text = _normalize_transcript(raw_text, is_vietnamese=False)
-
-        return {
-            "text": normalized_text,
-            "raw_text": raw_text,
-            "language": "en" if target_lang == "English" else (str(target_lang).lower() if target_lang else "en"),
-            "is_vietnamese": False,
-            "duration_sec": duration_sec,
-            "vi_percent": 0.0,
-            "char_count": len(raw_text),
-            "word_count": len(raw_text.split()),
-        }
-
-    @torch.inference_mode()
-    def transcribe_with_meta(
-        self,
-        audio_path: PathLike,
-        *,
-        language: Optional[str] = None,
-        prompt: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        wav, sr = load_audio_file(audio_path)
-        wav = wav.mean(0)
-        return self.transcribe_waveform(wav, sample_rate=sr, language=language, prompt=prompt)
-
-    @torch.inference_mode()
-    def transcribe(self, audio_path: PathLike, prompt: Optional[str] = None) -> str:
-        meta = self.transcribe_with_meta(audio_path, prompt=prompt)
-        return meta["text"]
-
-
 def reset_transcriber() -> None:
     """Clear cached transcriber instance and free GPU memory."""
     global _transcriber, _transcriber_error
@@ -697,7 +546,7 @@ def get_transcriber(
     load_progress: Optional[Any] = None,
     device: Optional[str] = None,
     asr_config: Optional[Dict[str, Any]] = None,
-) -> Union[WhisperTranscriber, Qwen3Transcriber]:
+) -> WhisperTranscriber:
     global _transcriber, _transcriber_error
     if _transcriber is not None:
         return _transcriber
@@ -714,28 +563,16 @@ def get_transcriber(
             engine = str(asr.get("engine", "")).strip().lower()
             model_name = str(asr.get("model_name", "")).strip()
 
-            if engine == "qwen3" or "qwen3" in model_name.lower():
-                _transcriber = Qwen3Transcriber(
-                    model_name=model_name or "Qwen/Qwen3-ASR-1.7B-hf",
-                    language=asr.get("language", "English"),
-                    device=target_device,
-                    load_progress=load_progress,
-                    torch_dtype=asr.get("torch_dtype", "float16"),
-                    max_new_tokens=int(asr.get("max_new_tokens", 128)),
-                    asr_config=asr,
-                    allowed_languages=asr.get("allowed_languages"),
-                )
-            else:
-                _transcriber = WhisperTranscriber(
-                    model_name=model_name or WHISPER_DEFAULT_MODEL,
-                    language=asr.get("language", "auto"),
-                    device=target_device,
-                    load_progress=load_progress,
-                    torch_dtype=asr.get("torch_dtype", "float16"),
-                    max_new_tokens=int(asr.get("max_new_tokens", 440)),
-                    asr_config=asr,
-                    allowed_languages=asr.get("allowed_languages"),
-                )
+            _transcriber = WhisperTranscriber(
+                model_name=model_name or WHISPER_DEFAULT_MODEL,
+                language=asr.get("language", "auto"),
+                device=target_device,
+                load_progress=load_progress,
+                torch_dtype=asr.get("torch_dtype", "float16"),
+                max_new_tokens=int(asr.get("max_new_tokens", 440)),
+                asr_config=asr,
+                allowed_languages=asr.get("allowed_languages"),
+            )
         except Exception as exc:
             _transcriber_error = str(exc)
             if load_progress is not None:

@@ -14,8 +14,8 @@ numpy>=1.24.0
 scipy>=1.10.0
 soundfile>=0.12.1
 
-# --- ASR (Qwen3-ASR), WavLM & NLP ---
-transformers>=5.0.0
+# --- ASR (Whisper), WavLM & NLP ---
+transformers>=4.45.0
 peft>=0.7.0
 accelerate>=0.26.0
 safetensors>=0.4.0
