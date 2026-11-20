@@ -89,20 +89,20 @@ class ClassroomAnalysisConfig:
     enable_denoise: bool = True
     denoise_chunk_sec: float = 60.0
     chunk_sec: float = 24.0
-    silence_rms_threshold: float = 0.006
-    speech_band_min_ratio: float = 0.48
-    max_spectral_flatness: float = 0.42
-    no_speech_threshold: float = 0.55
-    min_en_vi_acoustic_share: float = 0.35
+    silence_rms_threshold: float = 0.0048
+    speech_band_min_ratio: float = 0.25
+    max_spectral_flatness: float = 0.48
+    no_speech_threshold: float = 0.70
+    min_en_vi_acoustic_share: float = 0.05
     vi_route_threshold: float = 0.35
     lingua_confidence_threshold: float = 0.65
     group_max_gap_sec: float = 1.5
     group_max_duration_sec: float = 30.0
     phrase_pause_sec: float = 0.9
-    batch_size_cuda: int = 6
-    lang_id_batch_size_cuda: int = 16
-    num_beams: int = 2
-    max_new_tokens: int = 220
+    batch_size_cuda: int = 12
+    lang_id_batch_size_cuda: int = 32
+    num_beams: int = 1
+    max_new_tokens: int = 150
     compression_ratio_threshold: float = 2.4
 
 
@@ -132,12 +132,11 @@ def _denoise_classroom_audio(
     chunk_samples = max(sample_rate * 10, int(chunk_sec * sample_rate))
     total_chunks = max(1, int(np.ceil(mono.size / chunk_samples)))
 
-    # 1. Reuse existing DeepFilterNet3 singleton & leveling from speaker_diarize.denoise
+    # 1. Reuse existing DeepFilterNet3 singleton from speaker_diarize.denoise
     try:
         from speaker_diarize.denoise import (
             _get_df_model,
             denoise_with_deepfilternet,
-            level_audio_to_target,
         )
 
         # Verify shared DeepFilterNet3 model is available before chunk loop
@@ -158,10 +157,6 @@ def _denoise_classroom_audio(
             out_parts.append(enhanced.astype(np.float32))
 
         denoised = np.concatenate(out_parts) if out_parts else mono
-        try:
-            denoised = level_audio_to_target(denoised, sample_rate)
-        except Exception:
-            pass
         return denoised.astype(np.float32)
     except Exception as exc:
         logging.warning("DeepFilterNet unavailable for classroom denoise (%s); reusing audio_preprocess._denoise.", exc)
@@ -243,7 +238,7 @@ def _sanitize_en_vi_text(text: str, compression_threshold: float = 2.4) -> Tuple
     non_latin_hits = _NON_LATIN_SCRIPT_RE.findall(non_ws)
     if non_latin_hits:
         # Reject hallucinated foreign scripts (Japanese/CJK/Korean/etc.) completely
-        if len(non_latin_hits) / max(1, len(non_ws)) >= 0.2:
+        if len(non_latin_hits) / max(1, len(non_ws)) >= 0.10:
             return "", True
         stripped = _NON_LATIN_SCRIPT_RE.sub(" ", stripped)
 
@@ -260,9 +255,9 @@ def _detect_speech_windows(
     *,
     sample_rate: int = SAMPLE_RATE,
     max_chunk_sec: float = 24.0,
-    silence_rms_threshold: float = 0.006,
-    speech_band_min_ratio: float = 0.48,
-    max_spectral_flatness: float = 0.42,
+    silence_rms_threshold: float = 0.0048,
+    speech_band_min_ratio: float = 0.25,
+    max_spectral_flatness: float = 0.48,
 ) -> List[Tuple[int, int]]:
     """Extract strictly human-speech windows (<= max_chunk_sec) reusing speaker_diarize.denoise/segmentation + voice-band gate."""
     total_samples = int(mono.shape[0])
@@ -279,8 +274,8 @@ def _detect_speech_windows(
     trimmed = mono[: n_frames * frame_len].reshape(n_frames, frame_len)
 
     # Adaptive RMS floor passed into existing RmsVad
-    noise_floor = float(np.percentile(rms, 15))
-    effective_rms_thresh = max(silence_rms_threshold, min(0.018, noise_floor * 2.4))
+    noise_floor = float(np.percentile(rms, 20))
+    effective_rms_thresh = max(silence_rms_threshold, min(0.015, noise_floor * 1.5))
     thresh_db = float(20.0 * np.log10(max(effective_rms_thresh, 1e-6)))
     vad = RmsVad(threshold_db=thresh_db)
 
@@ -324,8 +319,8 @@ def _detect_speech_windows(
     if not np.any(speech_frame):
         return []
 
-    pad_frames = 4  # 200ms padding
-    merge_gap_frames = 20  # 1.0s
+    pad_frames = 5  # 250ms padding
+    merge_gap_frames = 24  # 1.2s clause gap
     islands_f: List[Tuple[int, int]] = []
     in_seg = False
     seg_start = 0
@@ -350,7 +345,7 @@ def _detect_speech_windows(
     islands_samples = [
         (s_f * frame_len, min(total_samples, e_f * frame_len))
         for s_f, e_f in islands_f
-        if (e_f - s_f) >= 5  # >= 250ms minimum speech island
+        if (e_f - s_f) >= 6  # >= 300ms minimum speech island
     ]
 
     # Split any speech island longer than max_chunk_sec at its quietest internal pause point
@@ -729,15 +724,18 @@ class ClassroomLanguageAnalyzer:
         mono: np.ndarray,
         windows: List[Tuple[int, int]],
     ) -> List[Dict[str, Any]]:
-        """Slice verified speech windows with conservative peak leveling."""
+        """Slice verified speech windows with conservative peak leveling and energy filtering."""
         items: List[Dict[str, Any]] = []
         for s_samp, e_samp in windows:
             chunk = mono[s_samp:e_samp]
-            if chunk.size < int(0.25 * SAMPLE_RATE):
+            if chunk.size < int(0.35 * SAMPLE_RATE):
                 continue
             rms = float(np.sqrt(np.mean(chunk ** 2) + 1e-12))
             peak = float(np.max(np.abs(chunk)))
-            if rms >= 0.008 and 0.015 < peak < 0.85:
+            # Drop low-energy residual noise / quiet breathing
+            if rms < 0.0042 or peak < 0.015:
+                continue
+            if rms >= 0.006 and 0.015 < peak < 0.85:
                 chunk = chunk * min(2.0, 0.88 / peak)
             items.append(
                 {
@@ -760,7 +758,7 @@ class ClassroomLanguageAnalyzer:
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """Fast 1-step batched Whisper acoustic gate:
         1. Reject non-speech chunks (music/clapping/noise) via <|nospeech|> probability.
-        2. Route genuine speech into EN vs VI buckets and flag low EN/VI acoustic share as 'unknown' candidate.
+        2. Route genuine speech into EN vs VI buckets.
         """
         en_tid, vi_tid, no_speech_tid, all_lang_tids, start_id = _resolve_whisper_control_token_ids(
             model, tokenizer
@@ -770,9 +768,7 @@ class ClassroomLanguageAnalyzer:
 
         is_cuda = device.type == "cuda"
         lang_bs = self.config.lang_id_batch_size_cuda if is_cuda else 2
-        vi_thresh = self.config.vi_route_threshold
         no_speech_thresh = self.config.no_speech_threshold
-        min_en_vi_share = self.config.min_en_vi_acoustic_share
 
         en_bucket: List[Dict[str, Any]] = []
         vi_bucket: List[Dict[str, Any]] = []
@@ -802,21 +798,21 @@ class ClassroomLanguageAnalyzer:
                 probs_full = F.softmax(logits_full, dim=-1).cpu().numpy()
 
                 for item, p_row in zip(batch_items, probs_full):
-                    # 1. Drop non-speech audio (music, applause, ambient noise, silence)
-                    if no_speech_tid is not None and no_speech_tid < p_row.shape[0]:
-                        if float(p_row[no_speech_tid]) >= no_speech_thresh:
-                            continue
-
                     p_en = float(p_row[en_tid])
                     p_vi = float(p_row[vi_tid])
-                    lang_sum = float(np.sum(p_row[all_lang_tids])) if all_lang_tids else (p_en + p_vi)
-                    en_vi_share = (p_en + p_vi) / (lang_sum + 1e-8)
+                    p_nospeech = (
+                        float(p_row[no_speech_tid])
+                        if no_speech_tid is not None and no_speech_tid < p_row.shape[0]
+                        else 0.0
+                    )
 
-                    # Flag chunks where Whisper does not confidently hear EN or VI
-                    item["acoustic_unknown"] = en_vi_share < min_en_vi_share
+                    # Only drop if Whisper is overwhelmingly confident it's no-speech (> 0.70)
+                    if p_nospeech > no_speech_thresh and (p_en + p_vi) < 0.05:
+                        continue
 
-                    rel_vi = p_vi / (p_en + p_vi + 1e-8)
-                    if rel_vi >= vi_thresh:
+                    # Determine target bucket based on EN vs VI relative likelihood
+                    target_lang = "vi" if p_vi > (p_en * 0.90) else "en"
+                    if target_lang == "vi":
                         vi_bucket.append(item)
                     else:
                         en_bucket.append(item)
@@ -875,7 +871,7 @@ class ClassroomLanguageAnalyzer:
                 "num_beams": num_beams,
                 "do_sample": False,
                 "max_new_tokens": cfg.max_new_tokens,
-                "no_repeat_ngram_size": 6,
+                "no_repeat_ngram_size": 5,
             }
             if attn_mask is not None:
                 gen_kwargs["attention_mask"] = attn_mask

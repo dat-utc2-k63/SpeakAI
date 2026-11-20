@@ -911,6 +911,17 @@ function resolveClassroomSegLang(seg: ClassroomSegment): 'en' | 'vi' | 'unknown'
   return Number(seg.vi_percent || 0) >= 50 ? 'vi' : 'en';
 }
 
+interface TimelineBlock {
+  key: string;
+  isSilence: boolean;
+  start_sec: number;
+  end_sec: number;
+  duration_sec: number;
+  language: 'en' | 'vi' | 'unknown' | 'silence';
+  word_count: number;
+  transcript: string;
+}
+
 /* ── CLASSROOM TIMELINE SEGMENTATION STRIP ──────────────── */
 export function ClassroomTimelineStrip({
   segments,
@@ -922,23 +933,87 @@ export function ClassroomTimelineStrip({
   audioUrl?: string | null;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const activeBoundsRef = useRef<{ index: number; start: number; end: number } | null>(null);
+  const activeBoundsRef = useRef<{ key: string; start: number; end: number } | null>(null);
 
-  const [selectedSeg, setSelectedSeg] = useState<ClassroomSegment | null>(
-    segments.length > 0 ? segments[0] : null,
+  const safeTotal = Math.max(
+    totalAudioSec || 0,
+    segments.reduce((m, s) => Math.max(m, Number(s.end_sec || 0)), 0),
+    1,
   );
-  const [playingSegIdx, setPlayingSegIdx] = useState<number | null>(null);
+
+  // Compute all contiguous blocks including both speech and silence regions
+  const allBlocks = useMemo(() => {
+    if (!segments || segments.length === 0) return [];
+    const sorted = [...segments].sort((a, b) => Number(a.start_sec) - Number(b.start_sec));
+    const list: TimelineBlock[] = [];
+    let cursor = 0;
+    let silenceCount = 0;
+
+    for (let i = 0; i < sorted.length; i++) {
+      const seg = sorted[i];
+      const sStart = Math.max(0, Number(seg.start_sec || 0));
+      const sEnd = Math.max(sStart + 0.05, Number(seg.end_sec || sStart + Number(seg.duration_sec || 0)));
+
+      // If gap before this speech segment is at least 0.25s, register it as a silence block
+      if (sStart - cursor >= 0.25) {
+        list.push({
+          key: `silence-${silenceCount++}`,
+          isSilence: true,
+          start_sec: cursor,
+          end_sec: sStart,
+          duration_sec: sStart - cursor,
+          language: 'silence',
+          word_count: 0,
+          transcript: '',
+        });
+      }
+
+      const segLang = resolveClassroomSegLang(seg);
+      list.push({
+        key: `speech-${seg.index ?? i}`,
+        isSilence: false,
+        start_sec: sStart,
+        end_sec: sEnd,
+        duration_sec: Math.max(0.1, sEnd - sStart),
+        language: segLang,
+        word_count: seg.word_count ?? seg.total_words ?? 0,
+        transcript: seg.transcript || '',
+      });
+
+      cursor = Math.max(cursor, sEnd);
+    }
+
+    // Trailing silence after last segment up to total audio duration
+    if (safeTotal - cursor >= 0.25) {
+      list.push({
+        key: `silence-${silenceCount++}`,
+        isSilence: true,
+        start_sec: cursor,
+        end_sec: safeTotal,
+        duration_sec: safeTotal - cursor,
+        language: 'silence',
+        word_count: 0,
+        transcript: '',
+      });
+    }
+
+    return list;
+  }, [segments, safeTotal]);
+
+  const [selectedBlock, setSelectedBlock] = useState<TimelineBlock | null>(null);
+  const [playingBlockKey, setPlayingBlockKey] = useState<string | null>(null);
   const [playheadSec, setPlayheadSec] = useState<number | null>(null);
 
   useEffect(() => {
-    setSelectedSeg(segments.length > 0 ? segments[0] : null);
-    setPlayingSegIdx(null);
+    const firstSpeech = allBlocks.find((b) => !b.isSilence);
+    setSelectedBlock(firstSpeech || (allBlocks.length > 0 ? allBlocks[0] : null));
+    setPlayingBlockKey(null);
     setPlayheadSec(null);
     activeBoundsRef.current = null;
     if (audioRef.current) {
       audioRef.current.pause();
     }
-  }, [segments, audioUrl]);
+  }, [allBlocks, audioUrl]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -951,25 +1026,25 @@ export function ClassroomTimelineStrip({
     const audio = audioRef.current;
     if (audio) audio.pause();
     activeBoundsRef.current = null;
-    setPlayingSegIdx(null);
+    setPlayingBlockKey(null);
     setPlayheadSec(null);
   };
 
-  const handlePlayOrToggleSegment = (seg: ClassroomSegment) => {
-    setSelectedSeg(seg);
+  const handlePlayOrToggleBlock = (block: TimelineBlock) => {
+    setSelectedBlock(block);
     const audio = audioRef.current;
     if (!audioUrl || !audio) return;
 
-    // Clicking the currently playing segment toggles pause
-    if (playingSegIdx === seg.index && !audio.paused) {
+    // Clicking the currently playing block toggles pause
+    if (playingBlockKey === block.key && !audio.paused) {
       stopPlayback();
       return;
     }
 
-    const start = Math.max(0, Number(seg.start_sec || 0));
-    const end = Math.max(start + 0.1, Number(seg.end_sec || start + Number(seg.duration_sec || 0)));
-    activeBoundsRef.current = { index: seg.index, start, end };
-    setPlayingSegIdx(seg.index);
+    const start = Math.max(0, Number(block.start_sec || 0));
+    const end = Math.max(start + 0.1, Number(block.end_sec || start + Number(block.duration_sec || 0)));
+    activeBoundsRef.current = { key: block.key, start, end };
+    setPlayingBlockKey(block.key);
     setPlayheadSec(start);
 
     const startFromOffset = () => {
@@ -981,7 +1056,7 @@ export function ClassroomTimelineStrip({
       const p = audio.play();
       if (p && typeof p.catch === 'function') {
         p.catch(() => {
-          setPlayingSegIdx(null);
+          setPlayingBlockKey(null);
         });
       }
     };
@@ -1007,24 +1082,17 @@ export function ClassroomTimelineStrip({
     if (now >= bounds.end - 0.04) {
       audio.pause();
       activeBoundsRef.current = null;
-      setPlayingSegIdx(null);
+      setPlayingBlockKey(null);
       setPlayheadSec(null);
     }
   };
-
-  const safeTotal = Math.max(
-    totalAudioSec || 0,
-    segments.reduce((m, s) => Math.max(m, Number(s.end_sec || 0)), 0),
-    1,
-  );
 
   const hasUnknown = segments.some((s) => resolveClassroomSegLang(s) === 'unknown');
 
   if (!segments || segments.length === 0) return null;
 
-  const selectedLang = selectedSeg ? resolveClassroomSegLang(selectedSeg) : null;
   const isSelectedPlaying =
-    selectedSeg != null && playingSegIdx === selectedSeg.index;
+    selectedBlock != null && playingBlockKey === selectedBlock.key;
   const playheadPct =
     playheadSec != null ? Math.max(0, Math.min(100, (playheadSec / safeTotal) * 100)) : null;
 
@@ -1048,8 +1116,8 @@ export function ClassroomTimelineStrip({
           </div>
           <div className="mt-0.5 text-[11px] text-slate-500">
             {audioUrl
-              ? 'Nhấn vào từng đoạn màu trên thanh để nghe trực tiếp đúng đoạn đó'
-              : 'Nhấn vào từng đoạn màu để xem nội dung (tải lại tệp ghi âm để nghe trực tiếp)'}
+              ? 'Nhấn vào từng đoạn màu hoặc vùng khoảng lặng trên thanh để nghe trực tiếp'
+              : 'Nhấn vào từng đoạn màu hoặc khoảng lặng để xem mốc thời gian'}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-slate-600">
@@ -1065,51 +1133,57 @@ export function ClassroomTimelineStrip({
             </span>
           )}
           <span className="inline-flex items-center gap-1.5">
-            <span className="size-2.5 rounded-sm bg-slate-200 border border-slate-300" /> Khoảng lặng
+            <span className="size-2.5 rounded-sm bg-slate-200 border border-slate-300" /> Khoảng lặng (nghe được)
           </span>
         </div>
       </div>
 
-      <div className="relative h-10 w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
-        {segments.map((seg) => {
-          const leftPct = Math.max(0, Math.min(100, (Number(seg.start_sec) / safeTotal) * 100));
+      <div className="relative h-11 w-full overflow-hidden rounded-lg border border-slate-300 bg-slate-200 shadow-inner">
+        {allBlocks.map((block) => {
+          const leftPct = Math.max(0, Math.min(100, (Number(block.start_sec) / safeTotal) * 100));
           const widthPct = Math.max(
-            0.6,
-            Math.min(100 - leftPct, (Number(seg.duration_sec) / safeTotal) * 100),
+            0.35,
+            Math.min(100 - leftPct, (Number(block.duration_sec) / safeTotal) * 100),
           );
-          const segLang = resolveClassroomSegLang(seg);
-          const bgCls =
-            segLang === 'unknown'
-              ? 'bg-slate-400 hover:bg-slate-500'
-              : segLang === 'vi'
-                ? 'bg-amber-500 hover:bg-amber-600'
-                : 'bg-blue-600 hover:bg-blue-700';
-          const isActive = selectedSeg?.index === seg.index;
-          const isThisPlaying = playingSegIdx === seg.index;
-          const langLabel =
-            segLang === 'unknown'
-              ? 'Không xác định'
-              : segLang === 'vi'
-                ? 'Tiếng Việt (VI)'
-                : 'Tiếng Anh (EN)';
-          const segTitle = `${langLabel} (${formatTimestamp(seg.start_sec)} - ${formatTimestamp(seg.end_sec)})${audioUrl ? ' — Nhấn để nghe' : ''}`;
+          const isThisPlaying = playingBlockKey === block.key;
+          const isActive = selectedBlock?.key === block.key;
+
+          let bgCls = '';
+          let langLabel = '';
+          if (block.isSilence) {
+            bgCls = 'bg-slate-200 hover:bg-slate-300 border-r border-slate-300/40';
+            langLabel = 'Khoảng lặng';
+          } else if (block.language === 'unknown') {
+            bgCls = 'bg-slate-400 hover:bg-slate-500';
+            langLabel = 'Không xác định';
+          } else if (block.language === 'vi') {
+            bgCls = 'bg-amber-500 hover:bg-amber-600';
+            langLabel = 'Tiếng Việt (VI)';
+          } else {
+            bgCls = 'bg-blue-600 hover:bg-blue-700';
+            langLabel = 'Tiếng Anh (EN)';
+          }
+
+          const blockTitle = `${langLabel} (${formatTimestamp(block.start_sec)} - ${formatTimestamp(block.end_sec)})${audioUrl ? ' — Nhấn để nghe' : ''}`;
 
           return (
             <button
-              key={seg.index}
+              key={block.key}
               type="button"
               onMouseEnter={() => {
-                if (playingSegIdx === null) setSelectedSeg(seg);
+                if (playingBlockKey === null) setSelectedBlock(block);
               }}
-              onClick={() => handlePlayOrToggleSegment(seg)}
-              title={segTitle}
-              aria-label={segTitle}
+              onClick={() => handlePlayOrToggleBlock(block)}
+              title={blockTitle}
+              aria-label={blockTitle}
               className={`absolute top-0 bottom-0 cursor-pointer transition-opacity duration-150 ${bgCls} ${
                 isThisPlaying
-                  ? 'ring-2 ring-slate-900 z-20 opacity-100'
+                  ? 'ring-2 ring-slate-900 z-20 opacity-100 shadow-md'
                   : isActive
                     ? 'ring-2 ring-slate-800/80 z-10 opacity-100'
-                    : 'opacity-90'
+                    : block.isSilence
+                      ? 'opacity-85 hover:opacity-100'
+                      : 'opacity-90 hover:opacity-100'
               }`}
               style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
             />
@@ -1119,7 +1193,7 @@ export function ClassroomTimelineStrip({
         {playheadPct != null && (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute top-0 bottom-0 z-30 w-0.5 bg-slate-900"
+            className="pointer-events-none absolute top-0 bottom-0 z-30 w-0.5 bg-slate-900 shadow-sm"
             style={{ left: `${playheadPct}%` }}
           />
         )}
@@ -1131,32 +1205,38 @@ export function ClassroomTimelineStrip({
         <span>{formatTimestamp(safeTotal)}</span>
       </div>
 
-      {selectedSeg && selectedLang && (
+      {selectedBlock && (
         <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-xs">
           <div className="min-w-0 flex-1 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <span
                 className={`rounded-md px-2 py-0.5 text-[10px] font-semibold border ${
-                  selectedLang === 'unknown'
+                  selectedBlock.isSilence
                     ? 'bg-slate-100 text-slate-700 border-slate-300'
-                    : selectedLang === 'vi'
-                      ? 'bg-amber-50 text-amber-800 border-amber-200'
-                      : 'bg-blue-50 text-blue-700 border-blue-200'
+                    : selectedBlock.language === 'unknown'
+                      ? 'bg-slate-100 text-slate-700 border-slate-300'
+                      : selectedBlock.language === 'vi'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        : 'bg-blue-50 text-blue-700 border-blue-200'
                 }`}
               >
-                {selectedLang === 'unknown'
-                  ? 'Không xác định'
-                  : selectedLang === 'vi'
-                    ? 'VI · Tiếng Việt'
-                    : 'EN · Tiếng Anh'}
+                {selectedBlock.isSilence
+                  ? 'Khoảng lặng'
+                  : selectedBlock.language === 'unknown'
+                    ? 'Không xác định'
+                    : selectedBlock.language === 'vi'
+                      ? 'VI · Tiếng Việt'
+                      : 'EN · Tiếng Anh'}
               </span>
               <span className="font-mono text-slate-500 tabular-nums">
-                {formatTimestamp(selectedSeg.start_sec)} – {formatTimestamp(selectedSeg.end_sec)} (
-                {Number(selectedSeg.duration_sec || 0).toFixed(1)}s)
+                {formatTimestamp(selectedBlock.start_sec)} – {formatTimestamp(selectedBlock.end_sec)} (
+                {Number(selectedBlock.duration_sec || 0).toFixed(1)}s)
               </span>
-              <span className="text-slate-500 font-medium tabular-nums">
-                {selectedSeg.word_count ?? selectedSeg.total_words ?? 0} từ
-              </span>
+              {!selectedBlock.isSilence && (
+                <span className="text-slate-500 font-medium tabular-nums">
+                  {selectedBlock.word_count} từ
+                </span>
+              )}
               {isSelectedPlaying && playheadSec != null && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 tabular-nums">
                   <Volume2 className="size-3" />
@@ -1164,13 +1244,19 @@ export function ClassroomTimelineStrip({
                 </span>
               )}
             </div>
-            <p className="text-slate-700 leading-relaxed text-pretty">&ldquo;{selectedSeg.transcript}&rdquo;</p>
+            {selectedBlock.isSilence ? (
+              <p className="text-slate-500 italic text-pretty">
+                (Khoảng lặng — Không có giọng nói tiếng Anh hay tiếng Việt)
+              </p>
+            ) : (
+              <p className="text-slate-700 leading-relaxed text-pretty">&ldquo;{selectedBlock.transcript}&rdquo;</p>
+            )}
           </div>
 
           {audioUrl && (
             <button
               type="button"
-              onClick={() => handlePlayOrToggleSegment(selectedSeg)}
+              onClick={() => handlePlayOrToggleBlock(selectedBlock)}
               className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors duration-150 ${
                 isSelectedPlaying
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
@@ -1185,7 +1271,7 @@ export function ClassroomTimelineStrip({
               ) : (
                 <>
                   <Play className="size-3.5" />
-                  Nghe đoạn này
+                  {selectedBlock.isSilence ? 'Nghe đoạn im lặng' : 'Nghe đoạn này'}
                 </>
               )}
             </button>
