@@ -10,7 +10,7 @@
 --
 -- LƯU Ý AN TOÀN:
 --   - Giữ nguyên 100% tài khoản Quản trị viên (role = 'admin', status = 'active').
---   - Giữ nguyên 100% cấu hình `public.global_settings` (đường dẫn AI & Gemini Key).
+--   - Giữ nguyên 100% cấu hình `public.global_settings` (đường dẫn AI & LLM Key).
 --   - Nếu muốn dọn thêm file ghi âm cũ trên Storage, vào Supabase Dashboard -> Storage
 --     và xóa thủ công trong các bucket (Supabase không cho DELETE trực tiếp bảng storage.objects).
 -- ==============================================================================

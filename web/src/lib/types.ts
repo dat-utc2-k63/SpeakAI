@@ -48,8 +48,6 @@ export interface PublicRuntimeConfig {
   api_url?: string | null;
   llm_api_url?: string | null;
   llm_model?: string | null;
-  gemini_api_url?: string | null;
-  gemini_model?: string | null;
 }
 
 export interface QuestionSet {
@@ -199,7 +197,6 @@ export interface AssessmentResultJson {
   };
   ai_eval?: AiEvalResult | null;
   llm_eval?: AiEvalResult | null;
-  gemini_eval?: AiEvalResult | null;
   llm_feedback?: string | null;
   score_total?: number;
   score_accuracy?: number;

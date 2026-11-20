@@ -245,7 +245,7 @@ export function PracticeSessionRunner({
     setCurrentIndex(idx);
   };
 
-  // Helper to evaluate a recorded answer against GPU + Gemini
+  // Helper to evaluate a recorded answer against GPU + LLM
   const evaluateRecordedBlob = useCallback(
     async (q: Question, blob: Blob): Promise<LocalAnswerEntry> => {
       const vad = await detectVoiceActivity(blob);
@@ -263,12 +263,6 @@ export function PracticeSessionRunner({
           audio_url: null,
           result_json: {
             llm_eval: {
-              score_total: 1.0,
-              grammar_errors: [],
-              feedback_summary: vad.reason || 'Không phát hiện giọng nói hợp lệ trong bản thu.',
-              better_expression: '',
-            },
-            gemini_eval: {
               score_total: 1.0,
               grammar_errors: [],
               feedback_summary: vad.reason || 'Không phát hiện giọng nói hợp lệ trong bản thu.',
@@ -313,7 +307,6 @@ export function PracticeSessionRunner({
       const mergedResultJson: AssessmentResultJson = {
         ...gpuRes,
         llm_eval: llmEval,
-        gemini_eval: llmEval,
       };
 
       const pronScore = Number(
@@ -733,7 +726,7 @@ export function PracticeSessionRunner({
           </h3>
           <div className="space-y-3">
             {entries.map((entry, i) => {
-              const gem = entry.result_json?.llm_eval || entry.result_json?.gemini_eval;
+              const gem = entry.result_json?.llm_eval;
               return (
                 <div
                   key={entry.question.id}
@@ -960,7 +953,7 @@ export function PracticeSessionRunner({
   // ACTIVE PRACTICE RUNNER (HABLAYA VOICE STUDIO LAYOUT)
   // =========================================================================
   const answeredCount = Object.keys(answersMap).length;
-  const aiFeedback = currentSavedAnswer?.result_json?.llm_eval || currentSavedAnswer?.result_json?.gemini_eval;
+  const aiFeedback = currentSavedAnswer?.result_json?.llm_eval;
   const otfTips = currentSavedAnswer?.result_json?.overall_transformer_feedback?.tips || [];
   const grammarErrors = aiFeedback?.grammar_errors || [];
 

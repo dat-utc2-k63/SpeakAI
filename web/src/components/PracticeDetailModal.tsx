@@ -318,7 +318,7 @@ export function PracticeDetailModal({
             </h4>
 
             {(detail.answers || []).map((a, idx) => {
-              const aiEval = a.result_json?.llm_eval || a.result_json?.gemini_eval;
+              const aiEval = a.result_json?.llm_eval;
               const errors = aiEval?.grammar_errors || [];
               const gramScore = a.score_grammar ?? aiEval?.score_grammar ?? null;
               const ctxScore = a.score_context ?? aiEval?.score_context ?? null;

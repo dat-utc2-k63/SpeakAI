@@ -167,9 +167,6 @@ export async function handleAiEvalRequest(req: Request, deps: AiEvalDependencies
     llm_api_key?: string;
     llm_api_url?: string;
     llm_model?: string;
-    gemini_api_key?: string;
-    gemini_api_url?: string;
-    gemini_model?: string;
   } | null = null;
   const settingsBearer = serviceRoleKey || (profile.role === 'admin' ? jwt : '');
   const settingsApiKeyHeader = serviceRoleKey || supabaseAnonKey;
@@ -177,7 +174,7 @@ export async function handleAiEvalRequest(req: Request, deps: AiEvalDependencies
   if (settingsBearer) {
     try {
       const gsRes = await fetchImpl(
-        `${supabaseUrl}/rest/v1/global_settings?id=eq.1&select=llm_api_key,llm_api_url,llm_model,gemini_api_key,gemini_api_url,gemini_model&limit=1`,
+        `${supabaseUrl}/rest/v1/global_settings?id=eq.1&select=llm_api_key,llm_api_url,llm_model&limit=1`,
         {
           method: 'GET',
           headers: {
@@ -192,9 +189,6 @@ export async function handleAiEvalRequest(req: Request, deps: AiEvalDependencies
           llm_api_key?: string;
           llm_api_url?: string;
           llm_model?: string;
-          gemini_api_key?: string;
-          gemini_api_url?: string;
-          gemini_model?: string;
         }>;
         storedSettings = Array.isArray(gsRows) ? gsRows[0] || null : null;
       }
@@ -205,23 +199,17 @@ export async function handleAiEvalRequest(req: Request, deps: AiEvalDependencies
 
   const defaultEndpoint = String(
     storedSettings?.llm_api_url ||
-      storedSettings?.gemini_api_url ||
       env.DEFAULT_LLM_ENDPOINT ||
-      env.DEFAULT_GEMINI_ENDPOINT ||
       DEFAULT_ENDPOINT,
   ).trim();
   const defaultModel = String(
     storedSettings?.llm_model ||
-      storedSettings?.gemini_model ||
       env.DEFAULT_LLM_MODEL ||
-      env.DEFAULT_GEMINI_MODEL ||
       DEFAULT_MODEL,
   ).trim();
   const storedApiKey = String(
     storedSettings?.llm_api_key ||
-      storedSettings?.gemini_api_key ||
       env.LLM_API_KEY ||
-      env.GEMINI_API_KEY ||
       '',
   ).trim();
 

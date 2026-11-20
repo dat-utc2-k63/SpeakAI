@@ -4,15 +4,10 @@ export const APP_CONFIG = {
   SUPABASE_URL: (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/\/+$/, ''),
   SUPABASE_ANON_KEY: (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim(),
   DEFAULT_LLM_ENDPOINT:
-    (process.env.NEXT_PUBLIC_DEFAULT_LLM_ENDPOINT || process.env.NEXT_PUBLIC_DEFAULT_GEMINI_ENDPOINT || '').trim() ||
+    (process.env.NEXT_PUBLIC_DEFAULT_LLM_ENDPOINT || '').trim() ||
     'https://revidapi.com/v1/chat/completions',
   DEFAULT_LLM_MODEL:
-    (process.env.NEXT_PUBLIC_DEFAULT_LLM_MODEL || process.env.NEXT_PUBLIC_DEFAULT_GEMINI_MODEL || '').trim() || 'deepseek-v4.1-flash',
-  DEFAULT_GEMINI_ENDPOINT:
-    (process.env.NEXT_PUBLIC_DEFAULT_LLM_ENDPOINT || process.env.NEXT_PUBLIC_DEFAULT_GEMINI_ENDPOINT || '').trim() ||
-    'https://revidapi.com/v1/chat/completions',
-  DEFAULT_GEMINI_MODEL:
-    (process.env.NEXT_PUBLIC_DEFAULT_LLM_MODEL || process.env.NEXT_PUBLIC_DEFAULT_GEMINI_MODEL || '').trim() || 'deepseek-v4.1-flash',
+    (process.env.NEXT_PUBLIC_DEFAULT_LLM_MODEL || '').trim() || 'deepseek-v4.1-flash',
   SPEAKAI_API_URL: (process.env.NEXT_PUBLIC_SPEAKAI_API_URL || '').trim().replace(/\/+$/, ''),
 };
 

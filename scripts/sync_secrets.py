@@ -37,6 +37,7 @@ def render_env_local(cfg: dict[str, str]) -> str:
         f'NEXT_PUBLIC_DEFAULT_LLM_ENDPOINT={_quote_env(cfg.get("DEFAULT_LLM_ENDPOINT", ""))}',
         f'NEXT_PUBLIC_DEFAULT_LLM_MODEL={_quote_env(cfg.get("DEFAULT_LLM_MODEL", ""))}',
         f'NEXT_PUBLIC_SPEAKAI_API_URL={_quote_env(cfg.get("SPEAKAI_API_URL", ""))}',
+        f'SUPABASE_SERVICE_ROLE_KEY={_quote_env(cfg.get("SUPABASE_SERVICE_ROLE_KEY", ""))}',
         "",
     ]
     return "\n".join(lines)

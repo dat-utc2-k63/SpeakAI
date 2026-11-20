@@ -281,7 +281,7 @@ run_cells.append(md_cell([
     "- **Pronunciation Scoring**: `SpeechOcean762` (WavLM-Large + Phoneme Graph Attention GAT)\n",
     "- **Phonological Error Diagnosis**: `L2-MDD` (WavLM-Large + CTC Forced Alignment theo chuẩn ASHA)\n",
     "- **ASR Error Correction & Linguistic Scoring**: `deepseek-v4.1-flash` + `spaCy (en_core_web_sm)` + `LanguageTool` + `wordfreq`\n",
-    "- **Classroom Language Timeline**: `DeepFilterNet3 Denoise -> RmsVad Speech Gate -> Whisper Turbo (num_beams=2, <|nospeech|> gate) -> Lingua+Wordfreq (EN / VI / Unknown)`\n",
+    "- **Classroom Language Timeline**: `DeepFilterNet3 Denoise -> RmsVad Speech Gate -> Whisper Turbo Batched 1-Step Acoustic LID (EN / VI / Silence, Zero Hallucination)`\n",
     "\n",
     "Mã nguồn, models và checkpoint được đọc trực tiếp từ Kaggle Dataset hoặc tải tự động.\n"
 ]))
@@ -304,7 +304,7 @@ run_cells.append(code_cell([
     "    'addict', 'modelscope', 'speechbrain>=1.0.0', 'huggingface_hub>=0.23.0',\n",
     "    'hf-transfer', 'safetensors>=0.4.0', 'fastapi', 'uvicorn',\n",
     "    'python-multipart', 'requests>=2.31.0', 'nest-asyncio',\n",
-    "    'language-tool-python', 'spacy', 'wordfreq', 'lingua-language-detector>=2.0.0',\n",
+    "    'language-tool-python', 'spacy', 'wordfreq',\n",
     "]\n",
     "os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '1'\n",
     "subprocess.run([sys.executable, '-m', 'pip', 'install', '-q'] + pkgs, check=True)\n",
@@ -329,7 +329,6 @@ run_cells.append(md_cell(["---\n", "## Khởi tạo Pipeline từ Kaggle Input"]
 run_cells.append(code_cell([
     "import sys, os, types\n",
     f"os.environ['LLM_API_KEY'] = {_KAGGLE_LLM_API_KEY!r}\n",
-    f"os.environ['GEMINI_API_KEY'] = {_KAGGLE_LLM_API_KEY!r}\n",
     "try:\n",
     "    import peft.import_utils\n",
     "    peft.import_utils.is_torchao_available = lambda: False\n",
@@ -490,7 +489,6 @@ run_cells.append(code_cell([
     "# Khởi chạy Cloudflare Tunnel & FastAPI Server (Không cần key Supabase)\n",
     "import os\n",
     f"os.environ['LLM_API_KEY'] = {_KAGGLE_LLM_API_KEY!r}\n",
-    f"os.environ['GEMINI_API_KEY'] = {_KAGGLE_LLM_API_KEY!r}\n",
     "\n",
     "import env_config\n",
     "import backend_api\n",

@@ -1,17 +1,15 @@
-"""Diarization-Free Classroom Language Timeline Analysis (Whisper Word Timestamps + Lingua EN/VI)."""
+"""Diarization-Free Classroom Language Timeline Analysis (Whisper Acoustic LID EN/VI/Silence)."""
 
 from classroom_lang.analyzer import (
     ClassroomAnalysisConfig,
     ClassroomLanguageAnalyzer,
     analyze_classroom_audio,
-    detect_word_languages_with_lingua,
-    group_words_into_language_timeline,
+    group_acoustic_chunks_into_timeline,
 )
 
 __all__ = [
     "ClassroomAnalysisConfig",
     "ClassroomLanguageAnalyzer",
     "analyze_classroom_audio",
-    "detect_word_languages_with_lingua",
-    "group_words_into_language_timeline",
+    "group_acoustic_chunks_into_timeline",
 ]

@@ -32,7 +32,6 @@ export default function AuthLandingPage() {
   useEffect(() => {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('speakai_llm_key');
-      localStorage.removeItem('speakai_gemini_key');
     }
 
     if (!isSupabaseConfigured || !supabase) {

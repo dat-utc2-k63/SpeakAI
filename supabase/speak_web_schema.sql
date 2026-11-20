@@ -614,9 +614,10 @@ $$;
 revoke all on function public.get_collaborator_teachers() from public, anon;
 grant execute on function public.get_collaborator_teachers() to authenticated;
 
--- 5.4. Lấy cấu hình runtime công khai (TUYỆT ĐỐI KHÔNG TRẢ gemini_api_key)
+-- 5.4. Lấy cấu hình runtime công khai (TUYỆT ĐỐI KHÔNG TRẢ llm_api_key)
+drop function if exists public.get_public_runtime_config();
 create or replace function public.get_public_runtime_config()
-returns table (api_url text, llm_api_url text, llm_model text, gemini_api_url text, gemini_model text)
+returns table (api_url text, llm_api_url text, llm_model text)
 language sql
 stable
 security definer
@@ -625,9 +626,7 @@ as $$
   select
     gs.api_url,
     coalesce(gs.llm_api_url, 'https://revidapi.com/v1/chat/completions') as llm_api_url,
-    coalesce(gs.llm_model, 'deepseek-v4.1-flash') as llm_model,
-    coalesce(gs.llm_api_url, 'https://revidapi.com/v1/chat/completions') as gemini_api_url,
-    coalesce(gs.llm_model, 'deepseek-v4.1-flash') as gemini_model
+    coalesce(gs.llm_model, 'deepseek-v4.1-flash') as llm_model
   from public.global_settings gs
   where gs.id = 1;
 $$;

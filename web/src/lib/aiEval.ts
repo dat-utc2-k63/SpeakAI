@@ -2,23 +2,17 @@ import { getAccessToken, getPublicRuntimeConfig } from './auth';
 import { APP_CONFIG } from './supabase';
 import type { AiEvalResult, DialogueTurn, PronunciationScores } from './types';
 
-export const DEFAULT_LLM_ENDPOINT = APP_CONFIG.DEFAULT_LLM_ENDPOINT || APP_CONFIG.DEFAULT_GEMINI_ENDPOINT;
-export const DEFAULT_LLM_MODEL = APP_CONFIG.DEFAULT_LLM_MODEL || APP_CONFIG.DEFAULT_GEMINI_MODEL;
-export const DEFAULT_GEMINI_ENDPOINT = DEFAULT_LLM_ENDPOINT;
-export const DEFAULT_GEMINI_MODEL = DEFAULT_LLM_MODEL;
+export const DEFAULT_LLM_ENDPOINT = APP_CONFIG.DEFAULT_LLM_ENDPOINT || 'https://revidapi.com/v1/chat/completions';
+export const DEFAULT_LLM_MODEL = APP_CONFIG.DEFAULT_LLM_MODEL || 'deepseek-v4.1-flash';
 
 let cachedRuntimeUrls: {
   apiUrl: string;
   llmApiUrl: string;
   llmModel: string;
-  geminiApiUrl: string;
-  geminiModel: string;
 } = {
   apiUrl: APP_CONFIG.SPEAKAI_API_URL || '',
   llmApiUrl: DEFAULT_LLM_ENDPOINT,
   llmModel: DEFAULT_LLM_MODEL,
-  geminiApiUrl: DEFAULT_LLM_ENDPOINT,
-  geminiModel: DEFAULT_LLM_MODEL,
 };
 
 let runtimePromise: Promise<void> | null = null;
@@ -27,12 +21,9 @@ export async function syncLlmConfigFromSupabase(force = false): Promise<{
   apiUrl: string;
   llmApiUrl: string;
   llmModel: string;
-  geminiApiUrl: string;
-  geminiModel: string;
 }> {
   if (typeof localStorage !== 'undefined') {
     localStorage.removeItem('speakai_llm_key');
-    localStorage.removeItem('speakai_gemini_key');
   }
   if (!force && cachedRuntimeUrls.llmApiUrl && cachedRuntimeUrls.llmModel && !runtimePromise) {
     if (cachedRuntimeUrls.apiUrl) return cachedRuntimeUrls;
@@ -44,13 +35,11 @@ export async function syncLlmConfigFromSupabase(force = false): Promise<{
         if (data) {
           const endpoint = (
             data.llm_api_url ||
-            data.gemini_api_url ||
             cachedRuntimeUrls.llmApiUrl ||
             DEFAULT_LLM_ENDPOINT
           ).trim();
           const model = (
             data.llm_model ||
-            data.gemini_model ||
             cachedRuntimeUrls.llmModel ||
             DEFAULT_LLM_MODEL
           ).trim();
@@ -58,8 +47,6 @@ export async function syncLlmConfigFromSupabase(force = false): Promise<{
             apiUrl: (data.api_url || cachedRuntimeUrls.apiUrl || '').trim().replace(/\/+$/, ''),
             llmApiUrl: endpoint,
             llmModel: model,
-            geminiApiUrl: endpoint,
-            geminiModel: model,
           };
         }
       } catch (err) {
@@ -72,8 +59,6 @@ export async function syncLlmConfigFromSupabase(force = false): Promise<{
   await runtimePromise;
   return cachedRuntimeUrls;
 }
-
-export const syncGeminiConfigFromSupabase = syncLlmConfigFromSupabase;
 
 export function setRuntimeGpuUrl(apiUrl: string) {
   cachedRuntimeUrls = {
@@ -393,7 +378,7 @@ PR=${rawPronTotal.toFixed(1)}/9.0`;
     });
 
     const rawContent = data.content || '';
-    const usedModel = data.model || runtime.llmModel || runtime.geminiModel;
+    const usedModel = data.model || runtime.llmModel;
 
     let parsed: Record<string, unknown> | null = null;
     try {
@@ -489,8 +474,6 @@ PR=${rawPronTotal.toFixed(1)}/9.0`;
     return fb;
   }
 }
-
-export const evaluateAnswerWithGemini = evaluateAnswerWithLlm;
 
 function buildDialogueExaminerSystemPrompt(hasBeIelts4: boolean): string {
   if (hasBeIelts4) {
@@ -650,7 +633,7 @@ export async function evaluateConversationWithAi({
     });
 
     const rawContent = data.content || '';
-    const usedModel = data.model || runtime.llmModel || runtime.geminiModel;
+    const usedModel = data.model || runtime.llmModel;
 
     let parsed: Record<string, unknown> | null = null;
     try {

@@ -28,9 +28,6 @@ from env_config import (
     DEFAULT_LLM_MODEL,
     get_llm_api_key,
     get_secret,
-    DEFAULT_GEMINI_ENDPOINT,
-    DEFAULT_GEMINI_MODEL,
-    get_gemini_api_key,
 )
 
 # -------------------------------------------------------------
@@ -286,19 +283,15 @@ def call_single_llm_assessment(
         endpoint
         or get_secret("DEFAULT_LLM_ENDPOINT")
         or get_secret("LLM_API_URL")
-        or get_secret("DEFAULT_GEMINI_ENDPOINT")
-        or get_secret("GEMINI_API_URL")
         or DEFAULT_LLM_ENDPOINT
     )
     model = (
         model
         or get_secret("DEFAULT_LLM_MODEL")
         or get_secret("LLM_MODEL")
-        or get_secret("DEFAULT_GEMINI_MODEL")
-        or get_secret("GEMINI_MODEL")
         or DEFAULT_LLM_MODEL
     )
-    api_key = api_key or get_llm_api_key() or get_secret("LLM_API_KEY") or get_secret("GEMINI_API_KEY")
+    api_key = api_key or get_llm_api_key() or get_secret("LLM_API_KEY")
 
     if not api_key:
         return {}

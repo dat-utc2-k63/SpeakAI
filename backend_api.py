@@ -52,10 +52,7 @@ from fastapi.staticfiles import StaticFiles
 from env_config import (
     DEFAULT_LLM_ENDPOINT,
     DEFAULT_LLM_MODEL,
-    DEFAULT_GEMINI_ENDPOINT,
-    DEFAULT_GEMINI_MODEL,
     get_llm_api_key,
-    get_gemini_api_key,
     get_supabase_config,
     get_supabase_service_config,
     load_project_env,
@@ -1015,7 +1012,7 @@ async def ai_eval_proxy_api(request: Request, user: dict = Depends(require_activ
                 f"{base_url}/rest/v1/global_settings",
                 params={
                     "id": "eq.1",
-                    "select": "llm_api_key,llm_api_url,llm_model,gemini_api_key,gemini_api_url,gemini_model",
+                    "select": "llm_api_key,llm_api_url,llm_model",
                     "limit": "1",
                 },
                 headers={"apikey": hdr_apikey, "Authorization": f"Bearer {hdr_bearer}"},
@@ -1029,17 +1026,14 @@ async def ai_eval_proxy_api(request: Request, user: dict = Depends(require_activ
 
     endpoint = str(
         (gs_row or {}).get("llm_api_url")
-        or (gs_row or {}).get("gemini_api_url")
         or DEFAULT_LLM_ENDPOINT
     ).strip()
     model = str(
         (gs_row or {}).get("llm_model")
-        or (gs_row or {}).get("gemini_model")
         or DEFAULT_LLM_MODEL
     ).strip()
     stored_key = str(
         (gs_row or {}).get("llm_api_key")
-        or (gs_row or {}).get("gemini_api_key")
         or get_llm_api_key()
         or ""
     ).strip()
