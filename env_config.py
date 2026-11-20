@@ -19,8 +19,12 @@ from typing import Dict, Tuple
 ROOT = Path(__file__).resolve().parent
 DEFAULT_ENV_FILE = ROOT / ".env"
 
-DEFAULT_GEMINI_ENDPOINT = "https://revidapi.com/v1/chat/completions"
-DEFAULT_GEMINI_MODEL = "deepseek-v4.1-flash"
+DEFAULT_LLM_ENDPOINT = "https://revidapi.com/v1/chat/completions"
+DEFAULT_LLM_MODEL = "deepseek-v4.1-flash"
+
+# Backward compatibility aliases
+DEFAULT_GEMINI_ENDPOINT = DEFAULT_LLM_ENDPOINT
+DEFAULT_GEMINI_MODEL = DEFAULT_LLM_MODEL
 
 _ENV_LOADED = False
 
@@ -110,9 +114,16 @@ def get_supabase_service_config() -> Tuple[str, str]:
     return url, service_key
 
 
-def get_gemini_api_key() -> str:
-    """Return optional server-side fallback Gemini/LLM API key."""
-    return get_secret("GEMINI_API_KEY", aliases=("SPEAKAI_GEMINI_API_KEY",))
+def get_llm_api_key() -> str:
+    """Return optional server-side fallback LLM API key."""
+    return get_secret(
+        "LLM_API_KEY",
+        aliases=("SPEAKAI_LLM_API_KEY", "GEMINI_API_KEY", "SPEAKAI_GEMINI_API_KEY"),
+    )
+
+
+# Backward compatibility alias
+get_gemini_api_key = get_llm_api_key
 
 
 def get_hf_token() -> str:
@@ -123,11 +134,16 @@ def get_hf_token() -> str:
 def get_frontend_config() -> Dict[str, str]:
     """Return strictly public-safe settings for static frontend generation."""
     load_project_env()
+    llm_endpoint = get_secret("DEFAULT_LLM_ENDPOINT", aliases=("DEFAULT_GEMINI_ENDPOINT",), default=DEFAULT_LLM_ENDPOINT)
+    llm_model = get_secret("DEFAULT_LLM_MODEL", aliases=("DEFAULT_GEMINI_MODEL",), default=DEFAULT_LLM_MODEL)
     return {
         "SUPABASE_URL": get_secret("SUPABASE_URL").rstrip("/"),
         "SUPABASE_ANON_KEY": get_secret("SUPABASE_ANON_KEY", aliases=("SUPABASE_KEY",)),
-        "DEFAULT_GEMINI_ENDPOINT": get_secret("DEFAULT_GEMINI_ENDPOINT", DEFAULT_GEMINI_ENDPOINT),
-        "DEFAULT_GEMINI_MODEL": get_secret("DEFAULT_GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
+        "DEFAULT_LLM_ENDPOINT": llm_endpoint,
+        "DEFAULT_LLM_MODEL": llm_model,
+        # Backward compatibility
+        "DEFAULT_GEMINI_ENDPOINT": llm_endpoint,
+        "DEFAULT_GEMINI_MODEL": llm_model,
         "SPEAKAI_API_URL": get_secret("SPEAKAI_API_URL").rstrip("/"),
     }
 

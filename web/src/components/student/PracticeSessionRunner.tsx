@@ -22,7 +22,7 @@ import {
   Trash2,
   Volume2,
 } from 'lucide-react';
-import { evaluateAnswerWithGemini } from '@/lib/aiEval';
+import { evaluateAnswerWithLlm } from '@/lib/aiEval';
 import {
   assessSingleAnswer,
   calculateBandScore,
@@ -262,6 +262,12 @@ export function PracticeSessionRunner({
           score_lexical: q.task_type === 'read_aloud' ? null : 1.0,
           audio_url: null,
           result_json: {
+            llm_eval: {
+              score_total: 1.0,
+              grammar_errors: [],
+              feedback_summary: vad.reason || 'Không phát hiện giọng nói hợp lệ trong bản thu.',
+              better_expression: '',
+            },
             gemini_eval: {
               score_total: 1.0,
               grammar_errors: [],
@@ -292,7 +298,7 @@ export function PracticeSessionRunner({
       const transcript = (sData.transcript || '').trim();
       const rawScores = sData.scores || { total: 0, accuracy: 0, fluency: 0, prosodic: 0 };
 
-      const geminiEval = await evaluateAnswerWithGemini({
+      const llmEval = await evaluateAnswerWithLlm({
         questionText: q.question_text,
         partTitle: q.part_title || '',
         examType: questionSet.exam_type,
@@ -306,7 +312,8 @@ export function PracticeSessionRunner({
 
       const mergedResultJson: AssessmentResultJson = {
         ...gpuRes,
-        gemini_eval: geminiEval,
+        llm_eval: llmEval,
+        gemini_eval: llmEval,
       };
 
       const pronScore = Number(
@@ -316,13 +323,13 @@ export function PracticeSessionRunner({
       return {
         question: q,
         transcript,
-        score_total: Number(geminiEval.score_total ?? rawScores.overall ?? rawScores.total ?? 0),
+        score_total: Number(llmEval.score_total ?? rawScores.overall ?? rawScores.total ?? 0),
         score_accuracy: pronScore,
-        score_fluency: Number(geminiEval.score_fluency_coherence ?? rawScores.fc ?? rawScores.fluency ?? 0),
+        score_fluency: Number(llmEval.score_fluency_coherence ?? rawScores.fc ?? rawScores.fluency ?? 0),
         score_prosodic: Number(rawScores.prosodic ?? pronScore),
-        score_grammar: geminiEval.score_grammar ?? rawScores.gra ?? rawScores.score_grammar ?? null,
-        score_context: geminiEval.score_context ?? geminiEval.score_fluency_coherence ?? rawScores.fc ?? null,
-        score_lexical: geminiEval.score_lexical ?? rawScores.lr ?? rawScores.score_lexical ?? null,
+        score_grammar: llmEval.score_grammar ?? rawScores.gra ?? rawScores.score_grammar ?? null,
+        score_context: llmEval.score_context ?? llmEval.score_fluency_coherence ?? rawScores.fc ?? null,
+        score_lexical: llmEval.score_lexical ?? rawScores.lr ?? rawScores.score_lexical ?? null,
         audio_url: audioUrl,
         result_json: mergedResultJson,
       };
@@ -726,7 +733,7 @@ export function PracticeSessionRunner({
           </h3>
           <div className="space-y-3">
             {entries.map((entry, i) => {
-              const gem = entry.result_json?.gemini_eval;
+              const gem = entry.result_json?.llm_eval || entry.result_json?.gemini_eval;
               return (
                 <div
                   key={entry.question.id}
@@ -953,9 +960,9 @@ export function PracticeSessionRunner({
   // ACTIVE PRACTICE RUNNER (HABLAYA VOICE STUDIO LAYOUT)
   // =========================================================================
   const answeredCount = Object.keys(answersMap).length;
-  const geminiFeedback = currentSavedAnswer?.result_json?.gemini_eval;
+  const aiFeedback = currentSavedAnswer?.result_json?.llm_eval || currentSavedAnswer?.result_json?.gemini_eval;
   const otfTips = currentSavedAnswer?.result_json?.overall_transformer_feedback?.tips || [];
-  const grammarErrors = geminiFeedback?.grammar_errors || [];
+  const grammarErrors = aiFeedback?.grammar_errors || [];
 
   const studioStatusText = submittingAnswer
     ? 'AI đang phân tích phát âm và ngữ pháp...'
@@ -1249,9 +1256,9 @@ export function PracticeSessionRunner({
             </div>
           )}
 
-          {geminiFeedback?.feedback_summary && (
+          {aiFeedback?.feedback_summary && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3.5 text-xs leading-relaxed text-amber-900">
-              <strong>Nhận xét AI:</strong> {geminiFeedback.feedback_summary}
+              <strong>Nhận xét AI:</strong> {aiFeedback.feedback_summary}
             </div>
           )}
 
@@ -1274,13 +1281,13 @@ export function PracticeSessionRunner({
             </div>
           )}
 
-          {geminiFeedback?.better_expression && (
+          {aiFeedback?.better_expression && (
             <div className="rounded-2xl border border-sky-200 bg-sky-50/75 p-3.5 text-xs text-slate-700">
               <div className="mb-1 flex items-center gap-1.5 font-bold text-sky-800">
                 <Lightbulb className="h-3.5 w-3.5" />
                 Câu mẫu gợi ý:
               </div>
-              <span className="italic">&ldquo;{geminiFeedback.better_expression}&rdquo;</span>
+              <span className="italic">&ldquo;{aiFeedback.better_expression}&rdquo;</span>
             </div>
           )}
 

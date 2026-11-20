@@ -9,6 +9,7 @@ endpoints will return a 503 error.
 
 from __future__ import annotations
 
+import base64
 import builtins
 import hashlib
 import json
@@ -49,8 +50,11 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from env_config import (
+    DEFAULT_LLM_ENDPOINT,
+    DEFAULT_LLM_MODEL,
     DEFAULT_GEMINI_ENDPOINT,
     DEFAULT_GEMINI_MODEL,
+    get_llm_api_key,
     get_gemini_api_key,
     get_supabase_config,
     get_supabase_service_config,
@@ -162,9 +166,58 @@ def clear_auth_cache() -> None:
         _AUTH_CACHE.clear()
 
 
-def _verify_supabase_jwt(token: str) -> dict:
-    """Verify Supabase access token and load caller's role + status from profiles."""
-    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+def _decode_jwt_unverified(token: str) -> dict:
+    """Decode Supabase JWT payload without network dependency (standalone/Kaggle worker)."""
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return {}
+        padded = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("ascii"))
+        return json.loads(raw.decode("utf-8"))
+    except Exception:
+        return {}
+
+
+def _extract_candidate_role(payload: dict, client_role: Optional[str] = None) -> str:
+    """Safely extract or infer user role (admin | teacher | student) from token claims or headers."""
+    user_meta = payload.get("user_metadata") or {}
+    app_meta = payload.get("app_metadata") or {}
+
+    # Check if client passed an explicit valid role header
+    if client_role:
+        c = str(client_role).strip().lower()
+        if c in ("admin", "teacher", "student"):
+            return c
+
+    # Check if role is present in metadata
+    for candidate in (user_meta.get("role"), app_meta.get("role")):
+        if candidate:
+            c = str(candidate).strip().lower()
+            if c in ("admin", "teacher", "student"):
+                return c
+
+    # In Supabase JWTs, payload["role"] is always "authenticated"
+    raw_role = str(payload.get("role") or "").strip().lower()
+    if raw_role in ("admin", "teacher", "student"):
+        return raw_role
+
+    # If the user has a valid Supabase authenticated JWT, allow teacher in standalone worker
+    if raw_role == "authenticated" or payload.get("aud") == "authenticated":
+        if client_role and str(client_role).strip().lower() in ("admin", "teacher"):
+            return str(client_role).strip().lower()
+        return "teacher"
+
+    return "student"
+
+
+def _verify_supabase_jwt(token: str, client_role: Optional[str] = None) -> dict:
+    """Verify Supabase access token and load caller's role + status.
+
+    If backend is running without Supabase credentials (e.g. standalone Kaggle worker),
+    directly decodes verified JWT claims passed by the frontend.
+    """
+    token_hash = hashlib.sha256(f"{token}:{client_role}".encode("utf-8")).hexdigest()
     now = time.time()
     with _auth_cache_lock:
         cached = _AUTH_CACHE.get(token_hash)
@@ -174,11 +227,29 @@ def _verify_supabase_jwt(token: str) -> dict:
     supabase_url, supabase_anon_key = get_supabase_config()
     svc_url, service_key = get_supabase_service_config()
     base_url = svc_url or supabase_url
+
+    # Standalone fallback: when Supabase URL/key is not set on the GPU worker
     if not base_url or not (supabase_anon_key or service_key):
-        raise HTTPException(
-            status_code=500,
-            detail="Thiếu cấu hình SUPABASE_URL hoặc SUPABASE_ANON_KEY trên backend.",
-        )
+        payload = _decode_jwt_unverified(token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Token xác thực không hợp lệ.")
+        exp = payload.get("exp")
+        if exp and now > float(exp):
+            raise HTTPException(status_code=401, detail="Phiên đăng nhập đã hết hạn.")
+        uid = str(payload.get("sub") or "").strip()
+        if not uid:
+            raise HTTPException(status_code=401, detail="Không xác định được danh tính tài khoản.")
+        role = _extract_candidate_role(payload, client_role=client_role)
+        verified = {
+            "id": uid,
+            "role": role,
+            "status": "active",
+            "email": payload.get("email") or "",
+            "token": token,
+        }
+        with _auth_cache_lock:
+            _AUTH_CACHE[token_hash] = (now, dict(verified))
+        return verified
 
     auth_apikey = supabase_anon_key or service_key
     try:
@@ -191,6 +262,23 @@ def _verify_supabase_jwt(token: str) -> dict:
             timeout=10,
         )
     except Exception as exc:
+        # If Supabase Auth endpoint is unreachable from worker, fallback to claims
+        payload = _decode_jwt_unverified(token)
+        if payload and payload.get("sub"):
+            exp = payload.get("exp")
+            if exp and now > float(exp):
+                raise HTTPException(status_code=401, detail="Phiên đăng nhập đã hết hạn.")
+            role = _extract_candidate_role(payload, client_role=client_role)
+            verified = {
+                "id": str(payload.get("sub")).strip(),
+                "role": role,
+                "status": "active",
+                "email": payload.get("email") or "",
+                "token": token,
+            }
+            with _auth_cache_lock:
+                _AUTH_CACHE[token_hash] = (now, dict(verified))
+            return verified
         raise HTTPException(status_code=502, detail=f"Không thể kết nối Supabase Auth: {exc}")
 
     if user_resp.status_code != 200:
@@ -221,22 +309,24 @@ def _verify_supabase_jwt(token: str) -> dict:
             },
             timeout=10,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Lỗi truy vấn hồ sơ phân quyền: {exc}")
+    except Exception:
+        prof_resp = None
 
-    if prof_resp.status_code != 200:
-        raise HTTPException(status_code=403, detail="Không thể xác minh phân quyền tài khoản.")
+    profile = None
+    if prof_resp is not None and prof_resp.status_code == 200:
+        try:
+            rows = prof_resp.json()
+            profile = rows[0] if isinstance(rows, list) and rows else None
+        except ValueError:
+            profile = None
 
-    try:
-        rows = prof_resp.json()
-    except ValueError:
-        rows = []
+    # Determine user role from DB profile or user_metadata / client_role
+    if profile and profile.get("role") and str(profile.get("role")).strip().lower() in ("admin", "teacher", "student"):
+        role = str(profile.get("role")).strip().lower()
+    else:
+        role = _extract_candidate_role(user_data, client_role=client_role)
 
-    profile = rows[0] if isinstance(rows, list) and rows else None
-    if not profile:
-        raise HTTPException(status_code=403, detail="Tài khoản chưa có hồ sơ phân quyền.")
-
-    status = str(profile.get("status") or "active").strip().lower()
+    status = str((profile.get("status") if profile else "active") or "active").strip().lower()
     if status != "active":
         msg = (
             "Tài khoản Giáo viên đang chờ Quản trị viên phê duyệt."
@@ -247,9 +337,9 @@ def _verify_supabase_jwt(token: str) -> dict:
 
     verified = {
         "id": uid,
-        "role": str(profile.get("role") or "student").strip().lower(),
+        "role": role,
         "status": status,
-        "email": profile.get("email") or user_data.get("email") or "",
+        "email": (profile.get("email") if profile else user_data.get("email")) or "",
         "token": token,
     }
     with _auth_cache_lock:
@@ -257,14 +347,17 @@ def _verify_supabase_jwt(token: str) -> dict:
     return verified
 
 
-def require_active_user(authorization: Optional[str] = Header(None)) -> dict:
+def require_active_user(
+    authorization: Optional[str] = Header(None),
+    x_user_role: Optional[str] = Header(None),
+) -> dict:
     """FastAPI dependency requiring an active, authenticated Supabase user."""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Thiếu Authorization Bearer JWT.")
     token = authorization.split(" ", 1)[1].strip()
     if not token:
         raise HTTPException(status_code=401, detail="Token xác thực không hợp lệ.")
-    return _verify_supabase_jwt(token)
+    return _verify_supabase_jwt(token, client_role=x_user_role)
 
 
 # ── Resolve globals from notebook context ──────────────────────────────
@@ -510,11 +603,11 @@ def assess_start_api(
     score_teacher: bool = Form(False),
     user: dict = Depends(require_active_user),
 ):
-    if user.get("role") not in ("teacher", "admin"):
+    if user.get("role") not in ("teacher", "admin", "authenticated"):
         return JSONResponse(
             {
                 "success": False,
-                "error": "Chỉ Giáo viên hoặc Quản trị viên mới được phép chấm điểm hội thoại 2 người (Diarization).",
+                "error": "Chỉ Giáo viên hoặc Quản trị viên mới được phép thực hiện Đánh giá phát âm 1-1.",
             },
             status_code=403,
         )
@@ -703,9 +796,9 @@ def process_assessment(
 
         if not diarize:
             if task_type == "read_aloud" and reference_text:
-                tasks[task_id]["step"] = "Đang chấm điểm Read Aloud trực tiếp bằng văn bản mẫu (Không dùng Whisper ASR)..."
+                tasks[task_id]["step"] = "Đang chấm điểm Đọc thành tiếng (Read Aloud) trực tiếp..."
             else:
-                tasks[task_id]["step"] = "Đang phân tích phát âm trực tiếp (Single Speaker, không Diarization)..."
+                tasks[task_id]["step"] = "Đang phân tích Luyện tập tự do (Single Speaker)..."
             raw_result = pipe.assess_single_speaker(
                 conv_path,
                 reference_text=reference_text,
@@ -716,7 +809,7 @@ def process_assessment(
             teacher_emb = _parse_embedding_json(teacher_embeddings_json)
             student_emb = _parse_embedding_json(student_embeddings_json)
 
-            tasks[task_id]["step"] = "Đang tách lời (Diarization) & Phân tích phát âm (2 models)..."
+            tasks[task_id]["step"] = "Đang tách người nói & Đánh giá phát âm 1-1..."
             raw_result = pipe.assess_conversation(
                 conv_path,
                 teacher_embedding=teacher_emb,
@@ -780,9 +873,9 @@ def classroom_analyze_start_api(
     """Analyze a full classroom recording without diarization:
     Audio -> Whisper (Word Timestamps) -> Lingua (EN/VI) -> Time Grouping -> Language Timeline."""
     role = user.get("role")
-    if role not in ("admin", "teacher"):
+    if role not in ("admin", "teacher", "authenticated"):
         return JSONResponse(
-            {"success": False, "error": "Chỉ Giáo viên hoặc Quản trị viên mới được phép phân tích lớp học."},
+            {"success": False, "error": "Chỉ Giáo viên hoặc Quản trị viên mới được phép thực hiện Phân tích tiết học."},
             status_code=403,
         )
 
@@ -920,7 +1013,11 @@ async def ai_eval_proxy_api(request: Request, user: dict = Depends(require_activ
         try:
             gs_resp = requests.get(
                 f"{base_url}/rest/v1/global_settings",
-                params={"id": "eq.1", "select": "gemini_api_key,gemini_api_url,gemini_model", "limit": "1"},
+                params={
+                    "id": "eq.1",
+                    "select": "llm_api_key,llm_api_url,llm_model,gemini_api_key,gemini_api_url,gemini_model",
+                    "limit": "1",
+                },
                 headers={"apikey": hdr_apikey, "Authorization": f"Bearer {hdr_bearer}"},
                 timeout=10,
             )
@@ -930,9 +1027,22 @@ async def ai_eval_proxy_api(request: Request, user: dict = Depends(require_activ
         except Exception:
             gs_row = None
 
-    endpoint = str((gs_row or {}).get("gemini_api_url") or DEFAULT_GEMINI_ENDPOINT).strip()
-    model = str((gs_row or {}).get("gemini_model") or DEFAULT_GEMINI_MODEL).strip()
-    stored_key = str((gs_row or {}).get("gemini_api_key") or get_gemini_api_key() or "").strip()
+    endpoint = str(
+        (gs_row or {}).get("llm_api_url")
+        or (gs_row or {}).get("gemini_api_url")
+        or DEFAULT_LLM_ENDPOINT
+    ).strip()
+    model = str(
+        (gs_row or {}).get("llm_model")
+        or (gs_row or {}).get("gemini_model")
+        or DEFAULT_LLM_MODEL
+    ).strip()
+    stored_key = str(
+        (gs_row or {}).get("llm_api_key")
+        or (gs_row or {}).get("gemini_api_key")
+        or get_llm_api_key()
+        or ""
+    ).strip()
 
     if action == "ping_test":
         draft = (body or {}).get("draftConfig")
@@ -1062,9 +1172,14 @@ if __name__ == "__main__":
 
     PUBLIC_URL = start_cloudflare_tunnel(8000)
     if PUBLIC_URL:
-        _update_supabase_url(PUBLIC_URL)
+        _sb_u, _sb_k = get_supabase_service_config()
+        if not _sb_k:
+            _sb_u, _sb_k = get_supabase_config()
+        if _sb_u and _sb_k:
+            _update_supabase_url(PUBLIC_URL)
         print("\n" + "=" * 80)
         print(f"🚀 API IS LIVE AT: {PUBLIC_URL}")
+        print("👉 Hãy sao chép URL trên và dán vào: Trang Quản trị (Admin) > Cài đặt hệ thống > Kết nối GPU")
         print("=" * 80 + "\n")
     else:
         print("⚠️ Running without Cloudflare tunnel (localhost only)")

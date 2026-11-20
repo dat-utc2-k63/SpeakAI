@@ -111,18 +111,36 @@ alter table public.assessments
   add column if not exists teacher_note text;
 
 -- 2.3. TABLE: global_settings
--- Cấu hình hệ thống (GPU Backend URL & AI Evaluator API — Key AI chỉ Admin/Service Role đọc)
+-- Cấu hình hệ thống (GPU Backend URL & AI Evaluator / LLM API — Key LLM chỉ Admin/Service Role đọc)
 create table if not exists public.global_settings (
   id integer primary key default 1,
   api_url text,
-  gemini_api_key text,
-  gemini_api_url text default 'https://revidapi.com/v1/chat/completions',
-  gemini_model text default 'gemini-3.8-flash',
+  llm_api_key text,
+  llm_api_url text default 'https://revidapi.com/v1/chat/completions',
+  llm_model text default 'deepseek-v4.1-flash',
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );
 
-insert into public.global_settings (id, api_url, gemini_api_url, gemini_model)
-values (1, '', 'https://revidapi.com/v1/chat/completions', 'gemini-3.8-flash')
+-- Đồng bộ cột mới nếu chạy trên database đã tồn tại
+alter table public.global_settings
+  add column if not exists llm_api_key text,
+  add column if not exists llm_api_url text default 'https://revidapi.com/v1/chat/completions',
+  add column if not exists llm_model text default 'deepseek-v4.1-flash';
+
+-- Tự động migrate dữ liệu cũ nếu trước đó dùng cột gemini_*
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'global_settings' and column_name = 'gemini_api_key') then
+    update public.global_settings
+    set llm_api_key = coalesce(llm_api_key, gemini_api_key),
+        llm_api_url = coalesce(nullif(llm_api_url, ''), gemini_api_url, 'https://revidapi.com/v1/chat/completions'),
+        llm_model = coalesce(nullif(llm_model, ''), case when gemini_model = 'gemini-3.8-flash' then 'deepseek-v4.1-flash' else gemini_model end, 'deepseek-v4.1-flash')
+    where id = 1;
+  end if;
+end $$;
+
+insert into public.global_settings (id, api_url, llm_api_url, llm_model)
+values (1, '', 'https://revidapi.com/v1/chat/completions', 'deepseek-v4.1-flash')
 on conflict (id) do nothing;
 
 -- 2.4. TABLE: question_sets
@@ -598,13 +616,18 @@ grant execute on function public.get_collaborator_teachers() to authenticated;
 
 -- 5.4. Lấy cấu hình runtime công khai (TUYỆT ĐỐI KHÔNG TRẢ gemini_api_key)
 create or replace function public.get_public_runtime_config()
-returns table (api_url text, gemini_api_url text, gemini_model text)
+returns table (api_url text, llm_api_url text, llm_model text, gemini_api_url text, gemini_model text)
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select gs.api_url, gs.gemini_api_url, gs.gemini_model
+  select
+    gs.api_url,
+    coalesce(gs.llm_api_url, 'https://revidapi.com/v1/chat/completions') as llm_api_url,
+    coalesce(gs.llm_model, 'deepseek-v4.1-flash') as llm_model,
+    coalesce(gs.llm_api_url, 'https://revidapi.com/v1/chat/completions') as gemini_api_url,
+    coalesce(gs.llm_model, 'deepseek-v4.1-flash') as gemini_model
   from public.global_settings gs
   where gs.id = 1;
 $$;

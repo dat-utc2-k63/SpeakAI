@@ -45,15 +45,32 @@ export async function getAccessToken(): Promise<string> {
   return session?.access_token || '';
 }
 
-export async function getAuthHeaders(): Promise<Record<string, string>> {
+let cachedUserRole: string | null = null;
+
+export function setCachedUserRole(role: string | null) {
+  cachedUserRole = role;
+}
+
+export async function getAuthHeaders(role?: string): Promise<Record<string, string>> {
   const token = await getAccessToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const effectiveRole = role || cachedUserRole;
+  if (effectiveRole) {
+    headers['X-User-Role'] = effectiveRole;
+  }
+  return headers;
 }
 
 export async function getProfile(userId: string): Promise<Profile> {
   const client = getSupabaseClient();
   const { data, error } = await client.from('profiles').select('*').eq('id', userId).single();
   if (error) throw error;
+  if (data?.role) {
+    setCachedUserRole(data.role);
+  }
   return data as Profile;
 }
 

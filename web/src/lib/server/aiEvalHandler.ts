@@ -163,14 +163,21 @@ export async function handleAiEvalRequest(req: Request, deps: AiEvalDependencies
   }
 
   // 4. Load server-side AI API key from global_settings (with env fallback)
-  let storedSettings: { gemini_api_key?: string; gemini_api_url?: string; gemini_model?: string } | null = null;
+  let storedSettings: {
+    llm_api_key?: string;
+    llm_api_url?: string;
+    llm_model?: string;
+    gemini_api_key?: string;
+    gemini_api_url?: string;
+    gemini_model?: string;
+  } | null = null;
   const settingsBearer = serviceRoleKey || (profile.role === 'admin' ? jwt : '');
   const settingsApiKeyHeader = serviceRoleKey || supabaseAnonKey;
 
   if (settingsBearer) {
     try {
       const gsRes = await fetchImpl(
-        `${supabaseUrl}/rest/v1/global_settings?id=eq.1&select=gemini_api_key,gemini_api_url,gemini_model&limit=1`,
+        `${supabaseUrl}/rest/v1/global_settings?id=eq.1&select=llm_api_key,llm_api_url,llm_model,gemini_api_key,gemini_api_url,gemini_model&limit=1`,
         {
           method: 'GET',
           headers: {
@@ -182,6 +189,9 @@ export async function handleAiEvalRequest(req: Request, deps: AiEvalDependencies
       );
       if (gsRes.ok) {
         const gsRows = (await gsRes.json()) as Array<{
+          llm_api_key?: string;
+          llm_api_url?: string;
+          llm_model?: string;
           gemini_api_key?: string;
           gemini_api_url?: string;
           gemini_model?: string;
@@ -194,12 +204,26 @@ export async function handleAiEvalRequest(req: Request, deps: AiEvalDependencies
   }
 
   const defaultEndpoint = String(
-    storedSettings?.gemini_api_url || env.DEFAULT_GEMINI_ENDPOINT || DEFAULT_ENDPOINT,
+    storedSettings?.llm_api_url ||
+      storedSettings?.gemini_api_url ||
+      env.DEFAULT_LLM_ENDPOINT ||
+      env.DEFAULT_GEMINI_ENDPOINT ||
+      DEFAULT_ENDPOINT,
   ).trim();
   const defaultModel = String(
-    storedSettings?.gemini_model || env.DEFAULT_GEMINI_MODEL || DEFAULT_MODEL,
+    storedSettings?.llm_model ||
+      storedSettings?.gemini_model ||
+      env.DEFAULT_LLM_MODEL ||
+      env.DEFAULT_GEMINI_MODEL ||
+      DEFAULT_MODEL,
   ).trim();
-  const storedApiKey = String(storedSettings?.gemini_api_key || env.GEMINI_API_KEY || '').trim();
+  const storedApiKey = String(
+    storedSettings?.llm_api_key ||
+      storedSettings?.gemini_api_key ||
+      env.LLM_API_KEY ||
+      env.GEMINI_API_KEY ||
+      '',
+  ).trim();
 
   if (action === 'ping_test') {
     const draft =

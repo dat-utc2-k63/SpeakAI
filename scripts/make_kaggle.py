@@ -321,19 +321,15 @@ run_cells.append(code_cell([
     "    subprocess.run('chmod +x /usr/local/bin/cloudflared', shell=True, check=True)\n",
 ]))
 
-from env_config import get_frontend_config, get_gemini_api_key
+from env_config import get_llm_api_key
 
-_PUBLIC_CFG = get_frontend_config()
-_KAGGLE_SUPABASE_URL = _PUBLIC_CFG.get("SUPABASE_URL", "")
-_KAGGLE_SUPABASE_ANON_KEY = _PUBLIC_CFG.get("SUPABASE_ANON_KEY", "")
-_KAGGLE_GEMINI_API_KEY = get_gemini_api_key()
+_KAGGLE_LLM_API_KEY = get_llm_api_key()
 
 run_cells.append(md_cell(["---\n", "## Khởi tạo Pipeline từ Kaggle Input"]))
 run_cells.append(code_cell([
     "import sys, os, types\n",
-    f"os.environ['SUPABASE_URL'] = {_KAGGLE_SUPABASE_URL!r}\n",
-    f"os.environ['SUPABASE_ANON_KEY'] = {_KAGGLE_SUPABASE_ANON_KEY!r}\n",
-    f"os.environ['GEMINI_API_KEY'] = {_KAGGLE_GEMINI_API_KEY!r}\n",
+    f"os.environ['LLM_API_KEY'] = {_KAGGLE_LLM_API_KEY!r}\n",
+    f"os.environ['GEMINI_API_KEY'] = {_KAGGLE_LLM_API_KEY!r}\n",
     "try:\n",
     "    import peft.import_utils\n",
     "    peft.import_utils.is_torchao_available = lambda: False\n",
@@ -485,40 +481,40 @@ run_cells.append(code_cell([
 run_cells.append(md_cell([
     "---\n",
     "## Khởi chạy Backend API (FastAPI + Cloudflare Tunnel)\n",
-    "- Tự động cập nhật Cloudflare tunnel URL vào Supabase `global_settings`.\n",
-    "- Đã hardcode sẵn `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GEMINI_API_KEY` trực tiếp trong notebook (không cần `.env` hay Kaggle Secrets).\n",
+    "- Khởi tạo Cloudflare Tunnel công khai kết nối máy chủ AI.\n",
+    "- **Không cần cấu hình key Supabase trên Kaggle**: Sao chép link Cloudflare in ra ở bên dưới và dán vào: Trang Quản Trị (Admin) > Cài Đặt Hệ Thống > Kết Nối GPU.\n",
 ]))
 
 # Pre-backend cell: start tunnel and register globals
 run_cells.append(code_cell([
-    "# Cấu hình Supabase & LLM hardcode trực tiếp trong Kaggle Notebook\n",
+    "# Khởi chạy Cloudflare Tunnel & FastAPI Server (Không cần key Supabase)\n",
     "import os\n",
-    f"os.environ['SUPABASE_URL'] = {_KAGGLE_SUPABASE_URL!r}\n",
-    f"os.environ['SUPABASE_ANON_KEY'] = {_KAGGLE_SUPABASE_ANON_KEY!r}\n",
-    f"os.environ['GEMINI_API_KEY'] = {_KAGGLE_GEMINI_API_KEY!r}\n",
+    f"os.environ['LLM_API_KEY'] = {_KAGGLE_LLM_API_KEY!r}\n",
+    f"os.environ['GEMINI_API_KEY'] = {_KAGGLE_LLM_API_KEY!r}\n",
     "\n",
     "import env_config\n",
     "import backend_api\n",
     "import builtins\n",
     "\n",
-    "_sb_url, _sb_key = env_config.get_supabase_config()\n",
-    "_gem_key = env_config.get_gemini_api_key()\n",
+    "_llm_key = env_config.get_llm_api_key()\n",
     "try:\n",
     "    import spacy\n",
     "    spacy.load('en_core_web_sm')\n",
     "    _spacy_ok = True\n",
     "except Exception:\n",
     "    _spacy_ok = False\n",
-    "print(f'Preflight -> SUPABASE: {bool(_sb_url and _sb_key)} | GEMINI_API_KEY ({env_config.DEFAULT_GEMINI_MODEL}): {bool(_gem_key)} | spaCy en_core_web_sm: {_spacy_ok}')\n",
+    "print(f'Preflight -> LLM_API_KEY ({env_config.DEFAULT_LLM_MODEL}): {bool(_llm_key)} | spaCy en_core_web_sm: {_spacy_ok}')\n",
     "\n",
     "# Start Cloudflare Tunnel\n",
     "PUBLIC_URL = backend_api.start_cloudflare_tunnel(8000)\n",
     "backend_api.PUBLIC_URL = PUBLIC_URL\n",
     "if PUBLIC_URL:\n",
-    "    backend_api._update_supabase_url(PUBLIC_URL)\n",
-    "    print(f'🚀 API IS LIVE AT: {PUBLIC_URL}')\n",
+    "    print('\\n' + '=' * 80)\n",
+    "    print(f'🚀 CLOUDFLARE PUBLIC API URL: {PUBLIC_URL}')\n",
+    "    print('👉 Hãy sao chép URL trên và dán vào: Web SpeakAI > Quản trị (Admin) > Cài đặt hệ thống > Kết nối GPU')\n",
+    "    print('=' * 80 + '\\n')\n",
     "else:\n",
-    "    print('Running without Cloudflare tunnel')\n",
+    "    print('⚠️ Running without Cloudflare tunnel (localhost only)')\n",
     "\n",
     "# Register notebook globals so backend_api can find them\n",
     "builtins.pipeline = pipeline\n",
@@ -530,7 +526,7 @@ run_cells.append(code_cell([
     "server = uvicorn.Server(config)\n",
     "server_thread = threading.Thread(target=server.run, daemon=True)\n",
     "server_thread.start()\n",
-    "print('FastAPI Server is running!')\n",
+    "print('✅ FastAPI Server is running!')\n",
     "import time\n",
     "try:\n",
     "    while server_thread.is_alive():\n",

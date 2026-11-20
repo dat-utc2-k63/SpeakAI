@@ -15,8 +15,14 @@ function readRootPublicEnvFallback(): Record<string, string> {
     'SUPABASE_KEY',
     'NEXT_PUBLIC_SUPABASE_URL',
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'DEFAULT_LLM_ENDPOINT',
+    'DEFAULT_LLM_MODEL',
     'DEFAULT_GEMINI_ENDPOINT',
     'DEFAULT_GEMINI_MODEL',
+    'NEXT_PUBLIC_DEFAULT_LLM_ENDPOINT',
+    'NEXT_PUBLIC_DEFAULT_LLM_MODEL',
+    'NEXT_PUBLIC_DEFAULT_GEMINI_ENDPOINT',
+    'NEXT_PUBLIC_DEFAULT_GEMINI_MODEL',
     'SPEAKAI_API_URL',
     'NEXT_PUBLIC_SPEAKAI_API_URL',
   ]);
@@ -68,17 +74,43 @@ const nextConfig: NextConfig = {
       fallback.SUPABASE_KEY ||
       ''
     ).trim(),
-    NEXT_PUBLIC_DEFAULT_GEMINI_ENDPOINT: (
+    NEXT_PUBLIC_DEFAULT_LLM_ENDPOINT: (
+      process.env.NEXT_PUBLIC_DEFAULT_LLM_ENDPOINT ||
+      process.env.DEFAULT_LLM_ENDPOINT ||
       process.env.NEXT_PUBLIC_DEFAULT_GEMINI_ENDPOINT ||
       process.env.DEFAULT_GEMINI_ENDPOINT ||
+      fallback.NEXT_PUBLIC_DEFAULT_LLM_ENDPOINT ||
+      fallback.DEFAULT_LLM_ENDPOINT ||
+      fallback.DEFAULT_GEMINI_ENDPOINT ||
+      'https://revidapi.com/v1/chat/completions'
+    ).trim(),
+    NEXT_PUBLIC_DEFAULT_LLM_MODEL: (
+      process.env.NEXT_PUBLIC_DEFAULT_LLM_MODEL ||
+      process.env.DEFAULT_LLM_MODEL ||
+      process.env.NEXT_PUBLIC_DEFAULT_GEMINI_MODEL ||
+      process.env.DEFAULT_GEMINI_MODEL ||
+      fallback.NEXT_PUBLIC_DEFAULT_LLM_MODEL ||
+      fallback.DEFAULT_LLM_MODEL ||
+      fallback.DEFAULT_GEMINI_MODEL ||
+      'deepseek-v4.1-flash'
+    ).trim(),
+    NEXT_PUBLIC_DEFAULT_GEMINI_ENDPOINT: (
+      process.env.NEXT_PUBLIC_DEFAULT_LLM_ENDPOINT ||
+      process.env.DEFAULT_LLM_ENDPOINT ||
+      process.env.NEXT_PUBLIC_DEFAULT_GEMINI_ENDPOINT ||
+      process.env.DEFAULT_GEMINI_ENDPOINT ||
+      fallback.DEFAULT_LLM_ENDPOINT ||
       fallback.DEFAULT_GEMINI_ENDPOINT ||
       'https://revidapi.com/v1/chat/completions'
     ).trim(),
     NEXT_PUBLIC_DEFAULT_GEMINI_MODEL: (
+      process.env.NEXT_PUBLIC_DEFAULT_LLM_MODEL ||
+      process.env.DEFAULT_LLM_MODEL ||
       process.env.NEXT_PUBLIC_DEFAULT_GEMINI_MODEL ||
       process.env.DEFAULT_GEMINI_MODEL ||
+      fallback.DEFAULT_LLM_MODEL ||
       fallback.DEFAULT_GEMINI_MODEL ||
-      'gemini-3.8-flash'
+      'deepseek-v4.1-flash'
     ).trim(),
     NEXT_PUBLIC_SPEAKAI_API_URL: (
       process.env.NEXT_PUBLIC_SPEAKAI_API_URL ||

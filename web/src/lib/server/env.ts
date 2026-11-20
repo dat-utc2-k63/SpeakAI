@@ -49,14 +49,46 @@ export function getServerEnv(customEnv?: Record<string, string | undefined>): Re
       fallback.SUPABASE_ANON_KEY ||
       fallback.SUPABASE_KEY,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || fallback.SUPABASE_SERVICE_ROLE_KEY,
-    GEMINI_API_KEY: process.env.GEMINI_API_KEY || process.env.SPEAKAI_GEMINI_API_KEY || fallback.GEMINI_API_KEY,
-    DEFAULT_GEMINI_ENDPOINT:
+    LLM_API_KEY:
+      process.env.LLM_API_KEY ||
+      process.env.SPEAKAI_LLM_API_KEY ||
+      process.env.GEMINI_API_KEY ||
+      process.env.SPEAKAI_GEMINI_API_KEY ||
+      fallback.LLM_API_KEY ||
+      fallback.GEMINI_API_KEY,
+    DEFAULT_LLM_ENDPOINT:
+      process.env.DEFAULT_LLM_ENDPOINT ||
+      process.env.NEXT_PUBLIC_DEFAULT_LLM_ENDPOINT ||
       process.env.DEFAULT_GEMINI_ENDPOINT ||
       process.env.NEXT_PUBLIC_DEFAULT_GEMINI_ENDPOINT ||
+      fallback.DEFAULT_LLM_ENDPOINT ||
       fallback.DEFAULT_GEMINI_ENDPOINT,
-    DEFAULT_GEMINI_MODEL:
+    DEFAULT_LLM_MODEL:
+      process.env.DEFAULT_LLM_MODEL ||
+      process.env.NEXT_PUBLIC_DEFAULT_LLM_MODEL ||
       process.env.DEFAULT_GEMINI_MODEL ||
       process.env.NEXT_PUBLIC_DEFAULT_GEMINI_MODEL ||
+      fallback.DEFAULT_LLM_MODEL ||
+      fallback.DEFAULT_GEMINI_MODEL,
+    GEMINI_API_KEY:
+      process.env.LLM_API_KEY ||
+      process.env.GEMINI_API_KEY ||
+      process.env.SPEAKAI_GEMINI_API_KEY ||
+      fallback.LLM_API_KEY ||
+      fallback.GEMINI_API_KEY,
+    DEFAULT_GEMINI_ENDPOINT:
+      process.env.DEFAULT_LLM_ENDPOINT ||
+      process.env.DEFAULT_GEMINI_ENDPOINT ||
+      process.env.NEXT_PUBLIC_DEFAULT_LLM_ENDPOINT ||
+      process.env.NEXT_PUBLIC_DEFAULT_GEMINI_ENDPOINT ||
+      fallback.DEFAULT_LLM_ENDPOINT ||
+      fallback.DEFAULT_GEMINI_ENDPOINT,
+    DEFAULT_GEMINI_MODEL:
+      process.env.DEFAULT_LLM_MODEL ||
+      process.env.DEFAULT_GEMINI_MODEL ||
+      process.env.NEXT_PUBLIC_DEFAULT_LLM_MODEL ||
+      process.env.NEXT_PUBLIC_DEFAULT_GEMINI_MODEL ||
+      fallback.DEFAULT_LLM_MODEL ||
       fallback.DEFAULT_GEMINI_MODEL,
   };
 }

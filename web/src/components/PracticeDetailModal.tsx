@@ -318,11 +318,11 @@ export function PracticeDetailModal({
             </h4>
 
             {(detail.answers || []).map((a, idx) => {
-              const gemini = a.result_json?.gemini_eval;
-              const errors = gemini?.grammar_errors || [];
-              const gramScore = a.score_grammar ?? gemini?.score_grammar ?? null;
-              const ctxScore = a.score_context ?? gemini?.score_context ?? null;
-              const lexScore = a.score_lexical ?? gemini?.score_lexical ?? null;
+              const aiEval = a.result_json?.llm_eval || a.result_json?.gemini_eval;
+              const errors = aiEval?.grammar_errors || [];
+              const gramScore = a.score_grammar ?? aiEval?.score_grammar ?? null;
+              const ctxScore = a.score_context ?? aiEval?.score_context ?? null;
+              const lexScore = a.score_lexical ?? aiEval?.score_lexical ?? null;
               const prScore = a.score_accuracy ?? a.score_total ?? 0;
 
               return (
@@ -384,14 +384,14 @@ export function PracticeDetailModal({
                     </div>
                   )}
 
-                  {gemini?.feedback_summary && (
+                  {aiEval?.feedback_summary && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                       <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-800">
                         <Lightbulb className="size-3.5" />
                         Nhận xét chi tiết:
                       </div>
                       <p className="text-xs leading-relaxed text-slate-700">
-                        {gemini.feedback_summary}
+                        {aiEval.feedback_summary}
                       </p>
                     </div>
                   )}
@@ -420,14 +420,14 @@ export function PracticeDetailModal({
                     </div>
                   )}
 
-                  {gemini?.better_expression && (
+                  {aiEval?.better_expression && (
                     <div className="rounded-xl border border-sky-200 bg-sky-50/80 p-3">
                       <div className="mb-1 flex items-center gap-1.5 text-xs font-bold text-sky-800">
                         <Lightbulb className="h-3.5 w-3.5" />
                         Gợi ý diễn đạt tự nhiên hơn:
                       </div>
                       <p className="text-xs italic text-slate-700">
-                        &ldquo;{gemini.better_expression}&rdquo;
+                        &ldquo;{aiEval.better_expression}&rdquo;
                       </p>
                     </div>
                   )}

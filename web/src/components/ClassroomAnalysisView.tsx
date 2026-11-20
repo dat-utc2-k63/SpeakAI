@@ -237,7 +237,8 @@ export function ClassroomAnalysisView({
       formData.append('audio', audioFile);
 
       const cleanApi = gpuUrl.trim().replace(/\/+$/, '');
-      const authHeaders = await getAuthHeaders();
+      const userRole = lockedProfile?.role || (mode === 'admin' ? 'admin' : 'teacher');
+      const authHeaders = await getAuthHeaders(userRole);
       const startRes = await fetch(`${cleanApi}/classroom_analyze_start`, {
         method: 'POST',
         headers: authHeaders,
@@ -260,7 +261,7 @@ export function ClassroomAnalysisView({
       while (true) {
         await new Promise((r) => setTimeout(r, 2000));
         const pollRes = await fetch(`${cleanApi}/classroom_status/${taskId}`, {
-          headers: await getAuthHeaders(),
+          headers: await getAuthHeaders(userRole),
         });
         const pollJson = (await pollRes.json().catch(() => ({}))) as {
           success?: boolean;

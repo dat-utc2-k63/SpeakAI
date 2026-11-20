@@ -273,9 +273,10 @@ export function TeacherAssessView({
       formData.append('score_teacher', scoreTeacher ? 'true' : 'false');
 
       const cleanApi = gpuUrl.trim().replace(/\/+$/, '');
+      const userRole = currentUser?.role || 'teacher';
       const startRes = await fetch(`${cleanApi}/assess_start`, {
         method: 'POST',
-        headers: await getAuthHeaders(),
+        headers: await getAuthHeaders(userRole),
         body: formData,
       });
 
@@ -296,7 +297,7 @@ export function TeacherAssessView({
       while (true) {
         await new Promise((r) => setTimeout(r, 2000));
         const pollRes = await fetch(`${cleanApi}/assess_status/${taskId}`, {
-          headers: await getAuthHeaders(),
+          headers: await getAuthHeaders(userRole),
         });
         const pollJson = (await pollRes.json().catch(() => ({}))) as {
           success?: boolean;

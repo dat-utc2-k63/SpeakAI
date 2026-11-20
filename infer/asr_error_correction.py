@@ -70,9 +70,9 @@ class AsrErrorCorrector:
         if self.enable_llm and not self.api_key:
             try:
                 import env_config
-                self.api_key = env_config.get_gemini_api_key()
-                self.endpoint = self.endpoint or env_config.get_secret("DEFAULT_GEMINI_ENDPOINT", env_config.DEFAULT_GEMINI_ENDPOINT)
-                self.model = env_config.get_secret("DEFAULT_GEMINI_MODEL", "deepseek-v4.1-flash")
+                self.api_key = env_config.get_llm_api_key()
+                self.endpoint = self.endpoint or env_config.get_secret("DEFAULT_LLM_ENDPOINT", env_config.DEFAULT_LLM_ENDPOINT)
+                self.model = env_config.get_secret("DEFAULT_LLM_MODEL", env_config.DEFAULT_LLM_MODEL)
             except Exception:
                 pass
 

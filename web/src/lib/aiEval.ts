@@ -2,26 +2,39 @@ import { getAccessToken, getPublicRuntimeConfig } from './auth';
 import { APP_CONFIG } from './supabase';
 import type { AiEvalResult, DialogueTurn, PronunciationScores } from './types';
 
-export const DEFAULT_GEMINI_ENDPOINT = APP_CONFIG.DEFAULT_GEMINI_ENDPOINT;
-export const DEFAULT_GEMINI_MODEL = APP_CONFIG.DEFAULT_GEMINI_MODEL;
+export const DEFAULT_LLM_ENDPOINT = APP_CONFIG.DEFAULT_LLM_ENDPOINT || APP_CONFIG.DEFAULT_GEMINI_ENDPOINT;
+export const DEFAULT_LLM_MODEL = APP_CONFIG.DEFAULT_LLM_MODEL || APP_CONFIG.DEFAULT_GEMINI_MODEL;
+export const DEFAULT_GEMINI_ENDPOINT = DEFAULT_LLM_ENDPOINT;
+export const DEFAULT_GEMINI_MODEL = DEFAULT_LLM_MODEL;
 
-let cachedRuntimeUrls: { apiUrl: string; geminiApiUrl: string; geminiModel: string } = {
+let cachedRuntimeUrls: {
+  apiUrl: string;
+  llmApiUrl: string;
+  llmModel: string;
+  geminiApiUrl: string;
+  geminiModel: string;
+} = {
   apiUrl: APP_CONFIG.SPEAKAI_API_URL || '',
-  geminiApiUrl: DEFAULT_GEMINI_ENDPOINT,
-  geminiModel: DEFAULT_GEMINI_MODEL,
+  llmApiUrl: DEFAULT_LLM_ENDPOINT,
+  llmModel: DEFAULT_LLM_MODEL,
+  geminiApiUrl: DEFAULT_LLM_ENDPOINT,
+  geminiModel: DEFAULT_LLM_MODEL,
 };
 
 let runtimePromise: Promise<void> | null = null;
 
-export async function syncGeminiConfigFromSupabase(force = false): Promise<{
+export async function syncLlmConfigFromSupabase(force = false): Promise<{
   apiUrl: string;
+  llmApiUrl: string;
+  llmModel: string;
   geminiApiUrl: string;
   geminiModel: string;
 }> {
   if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('speakai_llm_key');
     localStorage.removeItem('speakai_gemini_key');
   }
-  if (!force && cachedRuntimeUrls.geminiApiUrl && cachedRuntimeUrls.geminiModel && !runtimePromise) {
+  if (!force && cachedRuntimeUrls.llmApiUrl && cachedRuntimeUrls.llmModel && !runtimePromise) {
     if (cachedRuntimeUrls.apiUrl) return cachedRuntimeUrls;
   }
   if (!runtimePromise || force) {
@@ -29,10 +42,24 @@ export async function syncGeminiConfigFromSupabase(force = false): Promise<{
       try {
         const data = await getPublicRuntimeConfig();
         if (data) {
+          const endpoint = (
+            data.llm_api_url ||
+            data.gemini_api_url ||
+            cachedRuntimeUrls.llmApiUrl ||
+            DEFAULT_LLM_ENDPOINT
+          ).trim();
+          const model = (
+            data.llm_model ||
+            data.gemini_model ||
+            cachedRuntimeUrls.llmModel ||
+            DEFAULT_LLM_MODEL
+          ).trim();
           cachedRuntimeUrls = {
             apiUrl: (data.api_url || cachedRuntimeUrls.apiUrl || '').trim().replace(/\/+$/, ''),
-            geminiApiUrl: (data.gemini_api_url || cachedRuntimeUrls.geminiApiUrl || DEFAULT_GEMINI_ENDPOINT).trim(),
-            geminiModel: (data.gemini_model || cachedRuntimeUrls.geminiModel || DEFAULT_GEMINI_MODEL).trim(),
+            llmApiUrl: endpoint,
+            llmModel: model,
+            geminiApiUrl: endpoint,
+            geminiModel: model,
           };
         }
       } catch (err) {
@@ -45,6 +72,8 @@ export async function syncGeminiConfigFromSupabase(force = false): Promise<{
   await runtimePromise;
   return cachedRuntimeUrls;
 }
+
+export const syncGeminiConfigFromSupabase = syncLlmConfigFromSupabase;
 
 export function setRuntimeGpuUrl(apiUrl: string) {
   cachedRuntimeUrls = {
@@ -66,7 +95,7 @@ async function callAiProxy({ action, messages, temperature = 0.2, gpuUrlFallback
     throw new Error('Chưa đăng nhập hoặc phiên làm việc đã hết hạn.');
   }
 
-  const runtime = await syncGeminiConfigFromSupabase();
+  const runtime = await syncLlmConfigFromSupabase();
   const gpuBase = (gpuUrlFallback || runtime.apiUrl || '').trim().replace(/\/+$/, '');
 
   const headers = {
@@ -287,7 +316,7 @@ function fallbackHeuristicEval({
   };
 }
 
-export async function evaluateAnswerWithGemini({
+export async function evaluateAnswerWithLlm({
   questionText,
   partTitle = '',
   examType = 'general',
@@ -308,7 +337,7 @@ export async function evaluateAnswerWithGemini({
   pronunciationScores?: Partial<PronunciationScores>;
   gpuUrlFallback?: string;
 }): Promise<AiEvalResult> {
-  const runtime = await syncGeminiConfigFromSupabase();
+  const runtime = await syncLlmConfigFromSupabase();
   const cleanTranscript = (transcript || '').trim();
   const acc = Number(pronunciationScores.p ?? pronunciationScores.score_pronunciation ?? pronunciationScores.accuracy) || 0;
   const flu = Number(pronunciationScores.fc ?? pronunciationScores.fluency) || 0;
@@ -364,7 +393,7 @@ PR=${rawPronTotal.toFixed(1)}/9.0`;
     });
 
     const rawContent = data.content || '';
-    const usedModel = data.model || runtime.geminiModel;
+    const usedModel = data.model || runtime.llmModel || runtime.geminiModel;
 
     let parsed: Record<string, unknown> | null = null;
     try {
@@ -460,6 +489,8 @@ PR=${rawPronTotal.toFixed(1)}/9.0`;
     return fb;
   }
 }
+
+export const evaluateAnswerWithGemini = evaluateAnswerWithLlm;
 
 function buildDialogueExaminerSystemPrompt(hasBeIelts4: boolean): string {
   if (hasBeIelts4) {
@@ -559,7 +590,7 @@ export async function evaluateConversationWithAi({
   pronunciationScores?: Partial<PronunciationScores>;
   gpuUrlFallback?: string;
 }): Promise<AiEvalResult> {
-  const runtime = await syncGeminiConfigFromSupabase();
+  const runtime = await syncLlmConfigFromSupabase();
   const hasBeIelts4 =
     pronunciationScores.p != null &&
     pronunciationScores.fc != null &&
@@ -619,7 +650,7 @@ export async function evaluateConversationWithAi({
     });
 
     const rawContent = data.content || '';
-    const usedModel = data.model || runtime.geminiModel;
+    const usedModel = data.model || runtime.llmModel || runtime.geminiModel;
 
     let parsed: Record<string, unknown> | null = null;
     try {
@@ -682,4 +713,5 @@ export async function evaluateConversationWithAi({
     return fb;
   }
 }
+
 
